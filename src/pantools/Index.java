@@ -13,6 +13,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.FileOutputStream;
 import java.io.FileInputStream;
+import java.io.File;
+import java.util.Arrays;
+import org.apache.commons.lang3.ArrayUtils;
 import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
@@ -23,353 +26,414 @@ import static pantools.Pantools.Genomes;
 import static pantools.Pantools.sequence_length;
 import static pantools.Pantools.binary;
 import static pantools.Pantools.graphDb;
+import java.io.RandomAccessFile;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import static pantools.Pantools.graphDb;
+import static pantools.Pantools.index;
 
 /**
  *
  * @author siavashs
  */
 public class Index {
-    char sym[]={ 'A', 'C', 'G' , 'T' , 'N'};
-    public pointer[][] pointers;
-    public long totallength;
-    public int[] length;
-    public int parts;
-    public int dim;
-    private String path;
-    private String name;
-    private int genome,sequence,K;
-    private int position,seq_len;
-    private int f_bin,r_bin;
-    private pointer f_kmer,r_kmer,kmer;
-    private boolean canonical;
-    private boolean finish;
-
-
-    public Index(String file, String p, String n, int K_size)throws IOException
+    private char sym[]={ 'A', 'C', 'G' , 'T' , 'N'};
+    private byte[] key;
+    private long kmers_num;
+    private int dim;
+    private long[] prefix_ptr;
+    private int ptr_parts_num;
+    private long[] ptr_parts_size;
+    private int suf_parts_num;
+    private long[] suf_parts_size;
+    private int max_byte;
+    private int K;
+    private int header_pos;
+    private int pre_len;
+    private int suf_len;
+    private int ctr_size;
+    private int suf_start_index;
+    private int suf_rec_size;
+    private int ptr_len;
+    private RandomAccessFile suf_file;
+    private RandomAccessFile pre_file;
+    private MappedByteBuffer[] suf_buff;
+    private RandomAccessFile ptr_file;
+    private MappedByteBuffer[] ptr_buff;
+    public long length()
     {
-        int mod,cores=Runtime.getRuntime().availableProcessors();
-        String line;
-        parallel_sort ps;
-        path=p;
-        name=n;
+        return kmers_num;
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public Index(String path,String file, int K_size)throws IOException
+    {
+        int cores;
+        int j,k;
+        long p;
+        cores=Runtime.getRuntime().availableProcessors()/2+1;
         K=K_size;
-        dim=(int)Math.ceil(K/16.0);
-        int j,k,mini;
-        long i=0;
-        int[] inx;
-        if(K<10)
+        dim=K<10?4:(int)Math.ceil(K/4.0);
+        key=new byte[dim];
+        if(K>=10)
         {
-            generate_short_kmers();
-        }
-        else
-        {
-            System.out.println("Running KMC2...");
-            String output=Pantools.executeCommand("kmc -r -k"+K+" -t"+cores+" -ci1 -fm "+file+" "+path+"/tmp "+path+name);
+            System.out.println("Running KMC2...                      ");
+            String output=Pantools.executeCommand("kmc -r -k"+K+" -t"+cores+" -ci1 -fm "+file+" "+path+"/kmers "+path);
+            Pantools.executeCommand("kmc_tools sort "+path+"/kmers "+path+"/sorted");
             String[] fields=output.split(" +");
             for(j=0;!fields[j].equals("unique");++j);
-            totallength=Long.parseLong(fields[j+3].trim());//
-            System.out.println("Indexing "+totallength+" kmers...");
-            Pantools.executeCommand("kmc_dump -r -cx0 "+path+"/tmp "+path+name);
-            try(BufferedReader in = new BufferedReader(new FileReader(path+name))){
-            parts=(int)(totallength/2100000000)+1;
-            inx=new int[parts];
-            pointers=new pointer[parts][];
-            length=new int[parts];
-            for(k=0;k<parts;++k)
+            kmers_num=Long.parseLong(fields[j+3].trim());//2860097365L;//
+            max_byte=2100000000;
+            System.out.println("Indexing "+kmers_num+" kmers...");
+            pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");
+            pre_file.seek(pre_file.length()-8);
+            header_pos=read_int(pre_file);
+            pre_file.seek(pre_file.length()-4-header_pos+8);
+            pre_len=read_int(pre_file);
+            ctr_size=read_int(pre_file);
+            pre_file.seek(4);
+            int q,len=1<<(2*pre_len);
+            prefix_ptr=new long[len];
+            MappedByteBuffer pre_buff;
+            for(q=0,p=0;p<8;++p)
             {
-                length[k]=k<parts-1?2100000000:(int)(totallength%2100000000);
-                pointers[k]=new pointer[length[k]];
+                pre_buff=pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4+p*len, len);
+                for(k=0;k<len/8;++k,++q)
+                    prefix_ptr[q]=read_long(pre_buff);
             }
-            mod=(16-K%16)%16;
-            for(i=0,line=in.readLine();i<totallength;line=in.readLine(),++i)
+            pre_file.close();
+            pre_buff=null;
+            suf_len=K-pre_len;
+            suf_start_index=dim-suf_len/4;
+            System.out.println("initializing suffix file buffers...");
+            suf_rec_size=ctr_size+suf_len/4;
+            max_byte=max_byte/suf_rec_size*suf_rec_size;
+            suf_parts_num=(int)((kmers_num*suf_rec_size)%max_byte==0?(kmers_num*suf_rec_size)/max_byte:(kmers_num*suf_rec_size)/max_byte+1);
+            suf_parts_size=new long[suf_parts_num];
+            suf_file = new RandomAccessFile(path+"/sorted.kmc_suf","r");
+            suf_buff= new MappedByteBuffer[suf_parts_num];
+            for(k=0;k<suf_parts_num;++k)
             {
-                pointers[(int)(i/2100000000)][(int)(i%2100000000)]=new pointer(dim);
-                for(j=mod;j<K+mod;++j)
-                    pointers[(int)(i/2100000000)][(int)(i%2100000000)].kmer[j/16]=(pointers[(int)(i/2100000000)][(int)(i%2100000000)].kmer[j/16]<<2 | binary[line.charAt(j-mod)]); 
-                if(i%(totallength/100+1)==0) 
-                    System.out.print((long)i*100/totallength+1+"%\r");
+                suf_parts_size[k]=(int)(k==suf_parts_num-1?(kmers_num*suf_rec_size)%max_byte:max_byte);
+                //System.out.println("Buffer "+k+" "+suf_parts_size[k]);
+                suf_buff[k]=suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4+k*suf_parts_size[0], suf_parts_size[k]);
             }
-            in.close();
-            Pantools.executeCommand("rm "+path+"/tmp.txt.kmc_pre");
-            Pantools.executeCommand("rm "+path+"/tmp.txt.kmc_suf");
-            Pantools.executeCommand("rm "+path+name);
-            System.out.println("Sorting index...");
-            for(k=0;k<parts;++k) // sort each part
+            System.out.println("initializing pointer file buffers...");
+            ptr_len=21;
+            max_byte=max_byte/ptr_len*ptr_len;
+            ptr_parts_num=(int)((kmers_num*ptr_len)%max_byte==0?(kmers_num*ptr_len)/max_byte:(kmers_num*ptr_len)/max_byte+1);
+            ptr_parts_size=new long[ptr_parts_num];
+            ptr_file = new RandomAccessFile(path+"/pointers.bin", "rw");
+            ptr_buff= new MappedByteBuffer[ptr_parts_num];
+            byte[] minus_one=new byte[max_byte];
+            Arrays.fill( minus_one, (byte) -1 );
+            for(k=0;k<ptr_parts_num;++k)
             {
-                ps=new parallel_sort(pointers[k],length[k],dim,cores);
-                if(length[k]<10000)
-                   ps.sort();
-                else
-                   ps.psort();
+                ptr_parts_size[k]=(int)(k==ptr_parts_num-1?(kmers_num*ptr_len)%max_byte:max_byte);
+                ptr_buff[k]=ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, k*ptr_parts_size[0], ptr_parts_size[k]);
+                //System.out.println(ptr_buff[k].position()+" Buffer "+k+" "+ptr_parts_size[k]);
+                ptr_buff[k].put(minus_one,0,(int)ptr_parts_size[k]);
             }
-            if(parts>1)
-            {
-                pointer[][] tmp_pointers=new pointer[parts][];
-                for(k=0;k<parts;++k)
-                    tmp_pointers[k]=new pointer[length[k]];
-                for(i=0;i<totallength;++i) // sort array of arrays
-                {
-                    for(mini=0;mini<parts && inx[mini]==length[mini];++mini)
-                       {}
-                    for(k=0;k<parts;++k)
-                        if(inx[k]<length[k] && pointers[k][inx[k]].compare_kmer(pointers[mini][inx[mini]],dim)==-1)
-                            mini=k;
-                    tmp_pointers[(int)(i/2100000000)][(int)(i%2100000000)]=pointers[mini][inx[mini]];
-                    pointers[mini][inx[mini]]=null;
-                    ++inx[mini];
-                    if(inx[mini]==length[mini])
-                        pointers[mini]=null;
-                }
-                pointers=tmp_pointers;
-            }
-            }
-            catch(IOException ioe){
-               System.out.println("Failed to open "+path+name);  
-               System.exit(1);
-            } 
         }
     }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public Index(String index_file, long n, int K_size)throws IOException
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public Index(String path,long n, int K_size) throws IOException
     {
-        totallength=n;
+        int k;
+        kmers_num=n;
         K=K_size;
-        dim=(int)Math.ceil(K/16.0);
-        read(index_file,totallength);
-        System.out.println(totallength+" kmers loaded.");
-    }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public Index(Index old_index, Index new_index, GraphDatabaseService graphDb, int K_size)
-    {
-        int k,comp;
-        long i,j,inx,new_kmer_num,old_kmer_num;
-        pointer[][] tmp_pointers;
-        new_kmer_num=new_index.totallength;
-        old_kmer_num=old_index.totallength;
-        totallength=new_kmer_num+old_kmer_num;
-        K=K_size;
-        dim=(int)Math.ceil(K/16.0);
-        parts=(int)(totallength/2100000000)+1;
-        tmp_pointers=new pointer[parts][];
-        length=new int[parts];
-        for(k=0;k<parts;++k)
+        dim=(int)Math.ceil(K/4.0);
+        key=new byte[dim];
+        ptr_len=ptr_len+dim;
+        max_byte=2100000000;
+        pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");
+        pre_file.seek(pre_file.length()-8);
+        header_pos=read_int(pre_file);
+        pre_file.seek(pre_file.length()-4-header_pos+8);
+        pre_len=read_int(pre_file);
+        ctr_size=read_int(pre_file);
+        prefix_ptr=new long[1<<(2*pre_len)];
+        pre_file.seek(4);
+        for(k=0;k<prefix_ptr.length;++k)
+            prefix_ptr[k]=read_long(pre_file);
+        pre_file.close();
+        suf_len=K-pre_len;
+        suf_start_index=dim-suf_len/4;
+    // initial suffix file buffers
+        suf_rec_size=ctr_size+suf_len/4;
+        suf_parts_num=(int)(kmers_num*suf_rec_size%max_byte==0?kmers_num*suf_rec_size/max_byte:kmers_num*suf_rec_size/max_byte+1);
+        suf_parts_size=new long[suf_parts_num];
+        suf_file = new RandomAccessFile(path+"/sorted.kmc_suf","r");
+        suf_buff= new MappedByteBuffer[suf_parts_num];
+        for(k=0;k<suf_parts_num;++k)
         {
-            length[k]=k<parts-1?2100000000:(int)(totallength%2100000000);
-            tmp_pointers[k]=new pointer[length[k]];
+            suf_parts_size[k]=(int)(k==suf_parts_num-1?kmers_num*suf_rec_size%max_byte:max_byte);
+            suf_buff[k]=suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4+k*suf_parts_size[0], suf_parts_size[k]);
         }
-        System.out.println("merging indexes...");
-        for(i=j=inx=0;i<new_kmer_num && j<old_kmer_num;inx++)
+    // initial pointer file buffers
+        ptr_len=21;
+        ptr_parts_num=(int)(kmers_num*ptr_len%max_byte==0?kmers_num*ptr_len/max_byte:kmers_num*ptr_len/max_byte+1);
+        ptr_parts_size=new long[ptr_parts_num];
+        ptr_file = new RandomAccessFile(path+"/pointers.bin", "rw");
+        ptr_buff= new MappedByteBuffer[ptr_parts_num];
+        for(k=0;k<ptr_parts_num;++k)
         {
-            comp=new_index.pointers[(int)(i/2100000000)][(int)(i%2100000000)].compare_kmer(old_index.pointers[(int)(j/2100000000)][(int)(j%2100000000)],dim);
-            if(comp==-1)
-            {
-                tmp_pointers[(int)(inx/2100000000)][(int)(inx%2100000000)]=new_index.pointers[(int)(i/2100000000)][(int)(i%2100000000)];
-                ++i;
-            }
-            else if(comp==1)
-            {
-                tmp_pointers[(int)(inx/2100000000)][(int)(inx%2100000000)]=old_index.pointers[(int)(j/2100000000)][(int)(j%2100000000)];
-                ++j;
-            }
-            else
-            {
-                tmp_pointers[(int)(inx/2100000000)][(int)(inx%2100000000)]=old_index.pointers[(int)(j/2100000000)][(int)(j%2100000000)];
-                ++i;
-                ++j;
-            }
+            ptr_parts_size[k]=(int)(k==ptr_parts_num-1?kmers_num*ptr_len%max_byte:max_byte);
+            ptr_buff[k]=ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, k*ptr_parts_size[0], ptr_parts_size[k]);
         }
-        while(i<new_kmer_num)
-            {
-                tmp_pointers[(int)(inx/2100000000)][(int)(inx%2100000000)]=new_index.pointers[(int)(i/2100000000)][(int)(i%2100000000)];
-                ++i;
-                ++inx;
-            }
-        while(j<old_kmer_num)
-            {
-                tmp_pointers[(int)(inx/2100000000)][(int)(inx%2100000000)]=old_index.pointers[(int)(j/2100000000)][(int)(j%2100000000)];
-                ++j;
-                ++inx;
-            }
-        totallength=inx;
-        parts=(int)(totallength/2100000000)+1;
-        pointers=new pointer[parts][];
-        length=new int[parts];
-        for(k=0;k<parts;++k)
-        {
-            length[k]=k<parts-1?2100000000:(int)(totallength%2100000000);
-            pointers[k]=new pointer[length[k]];
-        }
-        for(inx=0;inx<totallength;++inx)
-            pointers[(int)(inx/2100000000)][(int)(inx%2100000000)]=tmp_pointers[(int)(inx/2100000000)][(int)(inx%2100000000)];
-        for(k=0;k<parts;++k)
-            tmp_pointers[k]=null;
-        System.out.println(totallength+" kmers indexed.");
-        tmp_pointers=null;
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    long find(pointer k_mer)
+    public Index(String path,String file, GraphDatabaseService graphDb, long n, int K_size) throws IOException
     {
-        int low, high,i=0;
-        for(i=0;i<parts && k_mer.compare_kmer(pointers[i][length[i]-1], dim)==1;++i);
-        low=0;
-        high=length[i]-1; 
-        int mid;
-        int comp;
+        int i,j,inx;
+        long c_index,p_index,l;
+        Node node;
+        ResourceIterator<Node> nodes;
+        Pantools.executeCommand("mkdir "+path+"/old_index");
+        Pantools.executeCommand("mkdir "+path+"/new_index");
+        Pantools.executeCommand("mv "+path+"/kmers* "+path+"/old_index/");
+        Pantools.executeCommand("mv "+path+"/pointers.bin "+path+"/old_index/");
+        K=K_size;
+        dim=(int)Math.ceil(K/4.0);
+        key=new byte[dim];
+        ptr_len=ptr_len+dim;
+        Index old_index=new Index(path+"/old_index",n,K);
+        Index new_index=new Index(path+"/new_index",file,K);
+        Pantools.executeCommand("kmc_tools union "+path+"/old_index/kmers "+path+"/new_index/kmers "+path+"/kmers");
+        String output=Pantools.executeCommand("kmc_tools sort "+path+"/kmers "+path+"/sorted");
+        String[] fields=output.split(" +");
+        for(j=0;!fields[j].equals("unique");++j);
+        kmers_num=Long.parseLong(fields[j+3].trim());
+        System.out.println(kmers_num+" kmers indexed.");
+        System.out.println("Updating pointers...");
+        try(Transaction tx = graphDb.beginTx()){
+        nodes = graphDb.findNodes( DynamicLabel.label( "node" ));
+        for(j=1;nodes.hasNext();++j)
+        {
+            node=nodes.next();
+            l=(long)node.getProperty("first_kmer");
+            p_index=find(old_index.get_kmer(l).bytes);
+            node.setProperty("first_kmer", p_index);
+            for(l=old_index.get_next_index(l);l!=-1L;l=old_index.get_next_index(l))
+            {
+                c_index=find(old_index.get_kmer(l).bytes);
+                put_next_index(c_index,p_index);
+                p_index=c_index;
+            }
+            put_next_index(-1L,p_index);
+            //if(j%(seq_nodes/100+1)==0) 
+               // System.out.print(j*100/seq_nodes+1+"%\r");
+        }
+        tx.success();} 
+        old_index.close();
+        new_index.close();
+        Pantools.executeCommand("rm -r "+path+"/old_index/");
+        Pantools.executeCommand("rm -r "+path+"/new_index/");
+        Runtime.getRuntime().gc();    
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void close() throws IOException
+    {
+        ptr_file.close();
+        suf_file.close();
+        for(int k=0;k<ptr_parts_num;++k)
+            ptr_buff[k]=null;
+        for(int k=0;k<ptr_parts_num;++k)
+            suf_buff[k]=null;
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    int read_int(RandomAccessFile file)throws IOException
+    {
+        int number=0;
+        for (int i=0;i<4;++i)
+            number+=(file.readByte() & 0xFF)<<(8*i);
+        return number;
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    long read_long(RandomAccessFile file)throws IOException
+    {
+        long number=0;
+        for (int i=0;i<8;++i)
+            number+=((long)(file.readByte() & 0xFF))<<(8*i);
+        return number;
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    long read_long(MappedByteBuffer buff)throws IOException
+    {
+        long number=0;
+        for (int i=0;i<8;++i)
+            number+=((long)(buff.get() & 0xFF))<<(8*i);
+        return number;
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public kmer get_kmer(long i)
+    {
+        kmer k_mer=new kmer(dim);
+        int low=0, high=1<<(2*pre_len)-1, mid;
+        int j;
         while(low<=high)
         {
             mid=(low+high)/2;
-            comp=k_mer.compare_kmer(pointers[i][mid],dim);
+            if(i<prefix_ptr[mid])
+                high=mid-1;
+            else if(i>prefix_ptr[mid])
+                low=mid+1;
+            else
+            {
+                low=mid;
+                break;
+            }
+        }
+        byte[] prefix=i2b(low);
+        for(j=0;j<pre_len;++j)
+            k_mer.bytes[suf_start_index-j]=prefix[3-j];
+        suf_buff[(int)(i*suf_rec_size/suf_parts_size[0])].position((int)(i*suf_rec_size%suf_parts_size[0])*dim);
+        suf_buff[(int)(i*suf_rec_size/suf_parts_size[0])].get(k_mer.bytes,suf_start_index,suf_len);
+        return k_mer;
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void put_kmer(kmer k_mer, long i)
+    {
+       // kmer_buff[(int)(i/part_size)].position((int)(i%part_size)*dim);
+        //kmer_buff[(int)(i/part_size)].put(k_mer.bytes,0,dim);
+    }           
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void get_pointer(byte[] b, pointer p, long i)
+    {
+        p.node_id= ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].getLong((int)(i*ptr_len%ptr_parts_size[0]));
+        p.format=ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].get((int)(i*ptr_len%ptr_parts_size[0]+8));
+        p.position=ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].getInt((int)(i*ptr_len%ptr_parts_size[0]+9));
+        p.next_index=ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].getLong((int)(i*ptr_len%ptr_parts_size[0]+13));
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void put_pointer(pointer p, long i)
+    {
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putLong((int)(i*ptr_len%ptr_parts_size[0]), p.node_id);
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].put((int)(i*ptr_len%ptr_parts_size[0]+8),p.format);
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putInt((int)(i*ptr_len%ptr_parts_size[0]+9),p.position);
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putLong((int)(i*ptr_len%ptr_parts_size[0]+13),p.next_index);
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public long get_node_id(long i)
+    {
+        return ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].getLong((int)(i*ptr_len%ptr_parts_size[0]));
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void put_node_id(long node_id, long i)
+    {
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putLong((int)(i*ptr_len%ptr_parts_size[0]), node_id);
+    }     
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public byte get_side(long i)
+    {
+        return ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].get((int)(i*ptr_len%ptr_parts_size[0]+8));
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void put_side(byte side, long i)
+    {
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].put((int)(i*ptr_len%ptr_parts_size[0]+8),side);
+    }     
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public int get_position(long i)
+    {
+        return ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].getInt((int)(i*ptr_len%ptr_parts_size[0]+9));
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void put_position(int pos, long i)
+    {
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putInt((int)(i*ptr_len%ptr_parts_size[0]+9),pos);
+    }  
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public long get_next_index(long i)
+    {
+        return ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].getLong((int)(i*ptr_len%ptr_parts_size[0]+13));
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void put_next_index(long next_index, long i)
+    {
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putLong((int)(i*ptr_len%ptr_parts_size[0]+13),next_index);
+    }       
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    private int compare_kmer(byte[] p1, byte[] p2)
+    {
+        int i;
+        for(i=suf_start_index;i<dim;++i)
+            if(p1[i]!=p2[i])
+                break;
+        if(i==dim)
+            return 0;
+        else if((p1[i] & 0x000000ff) < (p2[i] & 0x000000ff) )
+            return -1;
+        else
+            return 1;        
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    long find(byte[] k_mer) throws IOException
+    {
+        long low, mid, high;
+        int i,j,comp,prefix;
+        for(prefix=i=0;i<suf_start_index;++i)
+            prefix=(prefix<<8) | (k_mer[i] & 0xFF);
+        low=prefix_ptr[prefix];
+        if(prefix==prefix_ptr.length-1)
+            high=kmers_num-1;
+        else
+            high=prefix_ptr[prefix+1]-1;
+        //System.out.println(low+" "+high);
+        while(low<=high)
+        {
+            mid=(low+high)/2;
+            j=(int)(mid*suf_rec_size/suf_parts_size[0]);
+            suf_buff[j].position((int)(mid*suf_rec_size%suf_parts_size[0]));
+            suf_buff[j].get(key, suf_start_index, suf_len/4);
+            comp=compare_kmer(k_mer,key);
             if(comp==-1)
                 high=mid-1;
             else if(comp==1)
                 low=mid+1;
             else
-                return i*2100000000+mid;
+                return mid;
         }
-        System.out.println("Unable to find kmer!");
+        System.out.print("Failed to find kmer: ");
+        new kmer(k_mer).print_kmer(dim, K);
         return -1; // not found
     }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    void jump()
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public int b2i(byte[] b, int i) 
     {
-        int j;
-        f_bin=binary[Genomes[genome][sequence][position]];
-        r_bin=3-f_bin;
-        do{
-            while(f_bin==4 && position<seq_len)
-            {
-                ++position;
-                f_bin=binary[Genomes[genome][sequence][position]];
-                r_bin=3-f_bin;
-            }
-            f_kmer=new pointer(dim);
-            r_kmer=new pointer(dim);
-            f_kmer.next_up_kmer(f_bin,dim,K);
-            r_kmer.next_down_kmer(r_bin,dim,K);
-            for(j=0; j<K-1 && position<seq_len;++j)
-            {
-                ++position;
-                f_bin=binary[Genomes[genome][sequence][position]];
-                r_bin=3-f_bin;
-                if(f_bin==4 )
-                    break;
-                f_kmer.next_up_kmer(f_bin,dim,K);
-                r_kmer.next_down_kmer(r_bin,dim,K);
-            }
-        }while(f_bin==4 && position<seq_len);
-        canonical=f_kmer.compare_kmer(r_kmer,dim)==-1;
-        kmer=canonical?f_kmer:r_kmer;
-        if(position==seq_len)
-            finish=true;
+        return   (b[i+3] & 0xFF) |
+                ((b[i+2] & 0xFF) << 8) |
+                ((b[i+1] & 0xFF) << 16) |
+                ((b[i] & 0xFF) << 24);
     }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    void next_kmer()
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public byte[] i2b(int a)
     {
-        ++position;
-        f_bin=binary[Genomes[genome][sequence][position]];
-        r_bin=3-f_bin;
-        f_kmer.next_up_kmer(f_bin,dim,K);
-        r_kmer.next_down_kmer(r_bin,dim,K);
-        canonical=f_kmer.compare_kmer(r_kmer,dim)==-1;
-        kmer=canonical?f_kmer:r_kmer;
-    }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void initial_kmers()
-    {
-        int i;
-        f_kmer=new pointer(dim);
-        r_kmer=new pointer(dim);
-        for(i=0;i<K && position<seq_len;++i)
-        {
-            if(binary[Genomes[genome][sequence][position+1]]== 4 )
-            {
-                ++position;
-                jump();
-                break;
-            }
-            next_kmer();
-        }   
-        canonical=f_kmer.compare_kmer(r_kmer,dim)==-1;
-        kmer=canonical?f_kmer:r_kmer;
-    }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    private void generate_short_kmers()
-    {
-        int i,j;
-        boolean kmers[]=new boolean[1<<(2*K)];
-        for(i=0;i<kmers.length;++i)
-            kmers[i]=false;
-        totallength=0;
-        for(genome=Pantools.old_num_genomes+1;genome<=Pantools.num_genomes;++genome) 
-            for(sequence=1;sequence<=Pantools.num_sequences[genome];++sequence) 
-            {
-                position=-1;
-                seq_len=Pantools.sequence_length[genome][sequence]-1;
-                initial_kmers();
-                finish=false;
-                while(!finish)
-                {
-                    if(!kmers[kmer.kmer[0]])
-                    {
-                        ++totallength;
-                        kmers[kmer.kmer[0]]=true;
-                    }
-                    if(position==seq_len)
-                        break;
-                    if(binary[Genomes[genome][sequence][position+1]]==4)
-                    {
-                        ++position;
-                        jump();
-                        kmer=canonical?f_kmer:r_kmer;
-                    }
-                    else
-                        next_kmer();
-                }//while
-            }
-        parts=1;
-        pointers=new pointer[parts][];
-        length=new int[parts];
-        length[0]=(int)totallength;
-        pointers[0]=new pointer[length[0]];
-        for(i=j=0;i<kmers.length;++i)
-            if(kmers[i])
-            {
-                pointers[0][j]=new pointer(dim);
-                pointers[0][j++].kmer[0]=i;
-            }
-        kmers=null;
-    }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public int byteArrayToInt(byte[] b) 
-    {
-        return   b[3] & 0xFF |
-                (b[2] & 0xFF) << 8 |
-                (b[1] & 0xFF) << 16 |
-                (b[0] & 0xFF) << 24;
-    }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void intToByteArray(byte[] data, int a)
-    {
+        byte[] data=new byte[4];
         data[0]=(byte) ((a >> 24) & 0xFF);
         data[1]=(byte) ((a >> 16) & 0xFF);
         data[2]=(byte) ((a >> 8) & 0xFF);
         data[3]=(byte) (a & 0xFF);
+        return data;
     } 
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public long byteArrayToLong(byte[] b) 
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public long b2l(byte[] b, int i) 
     {
-        return   b[7] & 0xFF |
-                (b[6] & 0xFF) << 8  |
-                (b[5] & 0xFF) << 16 |
-                (b[4] & 0xFF) << 24 |
-                (b[3] & 0xFF) << 32 |
-                (b[2] & 0xFF) << 40 |
-                (b[1] & 0xFF) << 48 |
-                (b[0] & 0xFF) << 56;
+        return   (b[i+7] & 0xFF) |
+                ((b[i+6] & 0xFF) << 8)  |
+                ((b[i+5] & 0xFF) << 16) |
+                ((b[i+4] & 0xFF) << 24) |
+                ((b[i+3] & 0xFF) << 32) |
+                ((b[i+2] & 0xFF) << 40) |
+                ((b[i+1] & 0xFF) << 48) |
+                ((b[i] & 0xFF) << 56);
     }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void longtToByteArray(byte[] data, long a)
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public byte[] l2b(long a)
     {
+        byte[] data=new byte[8];
         data[0]=(byte) ((a >> 56) & 0xFF);
         data[1]=(byte) ((a >> 48) & 0xFF);   
         data[2]=(byte) ((a >> 40) & 0xFF);   
@@ -378,81 +442,8 @@ public class Index {
         data[5]=(byte) ((a >> 16) & 0xFF);   
         data[6]=(byte) ((a >> 8) & 0xFF);  
         data[7]=(byte) (a & 0xFF);
+        return data;
     } 
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void write(String index_name) throws IOException
-    {
-        System.out.println("Writing index...");
-        pointer p;
-        int j;
-        long i;
-        byte[] data=new byte[8];
-        try{
-            FileOutputStream index_out = new FileOutputStream(index_name);
-            for(i = 0; i < this.totallength; ++i)
-            {
-                p=this.pointers[(int)(i/2100000000)][(int)(i%2100000000)];
-                for(j=0;j<dim;++j)
-                {
-                    intToByteArray(data,this.pointers[(int)(i/2100000000)][(int)(i%2100000000)].kmer[j]);
-                    index_out.write(data,0,4);
-                }
-                longtToByteArray(data,p.node_id);
-                index_out.write(data,0,8);
-                index_out.write(p.format);
-                intToByteArray(data,p.position);
-                index_out.write(data,0,4);
-                longtToByteArray(data,p.next_index);
-                index_out.write(data,0,8);
-                this.pointers[(int)(i/2100000000)][(int)(i%2100000000)]=null;
-            }
-            index_out.close();
-        }
-        catch(IOException ioe){
-           System.out.println("Failed to read file names!");  
-        }        
-    }
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void read(String index_name, long len) throws IOException
-    {
-        System.out.println("Reading available index...");
-        int j,k;
-        long i;
-        byte[] int_record = new byte[4];
-        byte[] long_record = new byte[8];
-        totallength=len;
-        parts=(int)(totallength/2100000000)+1;
-        pointers=new pointer[parts][];
-        length=new int[parts];
-        for(k=0;k<parts;++k)
-        {
-            length[k]=k<parts-1?2100000000:(int)(totallength%2100000000);
-            pointers[k]=new pointer[length[k]];
-        }
-        try (FileInputStream index_in = new FileInputStream(index_name)) {
-            for(i = 0; i < len; ++i)
-            {
-                pointers[(int)(i/2100000000)][(int)(i%2100000000)]=new pointer(dim);
-                for(j=0;j<dim;++j)
-                {
-                    index_in.read(int_record);
-                    pointers[(int)(i/2100000000)][(int)(i%2100000000)].kmer[j]= byteArrayToInt(int_record);
-                }
-                index_in.read(long_record);
-                pointers[(int)(i/2100000000)][(int)(i%2100000000)].node_id=byteArrayToLong(long_record);
-                pointers[(int)(i/2100000000)][(int)(i%2100000000)].format=(byte)index_in.read();
-                index_in.read(int_record);
-                pointers[(int)(i/2100000000)][(int)(i%2100000000)].position=byteArrayToInt(int_record);
-                index_in.read(long_record);
-                pointers[(int)(i/2100000000)][(int)(i%2100000000)].next_index=byteArrayToLong(long_record);
-                if(i%(len/100+1)==0) 
-                    System.out.print((long)i*100/len+1+"%\r");
-            }
-        }
-        catch(IOException ioe){
-           System.out.println("Failed to read file names!");  
-        }     
-    }  
 }
 
 
