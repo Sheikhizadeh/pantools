@@ -22,8 +22,7 @@ import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
-import static pantools.Pantools.Genomes;
-import static pantools.Pantools.sequence_length;
+import static pantools.Pantools.genomes;
 import static pantools.Pantools.binary;
 import static pantools.Pantools.graphDb;
 import java.io.RandomAccessFile;
@@ -80,7 +79,7 @@ public class Index {
         if(K>=10)
         {
             System.out.println("Running KMC2...                      ");
-            String output=Pantools.executeCommand("kmc -r -k"+K+" -t"+cores+" -ci1 -fm "+file+" "+path+"/kmers "+path);
+            String output=Pantools.executeCommand("kmc -r -k"+K+" -t"+cores+" -ci1 -fm "+(genomes.num_genomes>1?"@"+file.trim():genomes.genome_names[1])+" "+path+"/kmers "+path);
             Pantools.executeCommand("kmc_tools sort "+path+"/kmers "+path+"/sorted");
             String[] fields=output.split(" +");
             for(j=0;!fields[j].equals("unique");++j);
@@ -125,7 +124,7 @@ public class Index {
             max_byte=max_byte/ptr_len*ptr_len;
             ptr_parts_num=(int)((kmers_num*ptr_len)%max_byte==0?(kmers_num*ptr_len)/max_byte:(kmers_num*ptr_len)/max_byte+1);
             ptr_parts_size=new long[ptr_parts_num];
-            ptr_file = new RandomAccessFile(path+"/pointers.bin", "rw");
+            ptr_file = new RandomAccessFile(path+"/pointers.db", "rw");
             ptr_buff= new MappedByteBuffer[ptr_parts_num];
             byte[] minus_one=new byte[max_byte];
             Arrays.fill( minus_one, (byte) -1 );
@@ -398,6 +397,7 @@ public class Index {
         }
         System.out.print("Failed to find kmer: ");
         new kmer(k_mer).print_kmer(dim, K);
+        System.exit(0);
         return -1; // not found
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
