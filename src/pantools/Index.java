@@ -39,7 +39,7 @@ import static pantools.Pantools.index;
  * @author siavashs
  */
 public class Index {
-    private char sym[]={ 'A', 'C', 'G' , 'T' , 'N'};
+    private char sym[]={ 'A', 'C', 'G' , 'T' , 'M','R','W','S','Y','K','V','H','D','B','N'};
     private byte[] key;
     private long kmers_num;
     private int dim;
@@ -83,7 +83,7 @@ public class Index {
             Pantools.executeCommand("kmc_tools sort "+path+"/kmers "+path+"/sorted");
             String[] fields=output.split(" +");
             for(j=0;!fields[j].equals("unique");++j);
-            kmers_num=Long.parseLong(fields[j+3].trim());//2860097365L;//
+            kmers_num=Long.parseLong(fields[j+3].trim());
             max_byte=2100000000;
             System.out.println("Indexing "+kmers_num+" kmers...");
             pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");

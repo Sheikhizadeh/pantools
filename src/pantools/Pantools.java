@@ -185,10 +185,10 @@ public class Pantools {
     private static int gene_nodes;
     private static int num_edges;
     private static int num_bases;
-    public static byte[] binary;
-    public static byte[] complement;
+    public static int[] binary;
+    public static int[] complement;
 
-    public static char sym[]={ 'A', 'C', 'G' , 'T', 'N'};
+    public static char sym[]={ 'A', 'C', 'G' , 'T', 'M','R','W','S','Y','K','V','H','D','B','N'};
     
     private kmer f_kmer,r_kmer,k_mer;
     private long seq_len;
@@ -228,29 +228,38 @@ public class Pantools {
         } 
         int i;
         Pantools program=new Pantools();
-        binary=new byte[124];
-        complement=new byte[124];
-        for(i=0;i<124;++i)
-            binary[i]=(byte)(i-62);
-        binary[65] = binary[97]= 0; // A , a
-        binary[67] = binary[99]= 1; // C , c
-        binary[71] = binary[103]= 2;// G , g
-        binary[84] = binary[116]= 3;// T , t
-        complement[0]=3; // A T
-        complement[3]=0; // T A
-        complement[1]=2; // C G
-        complement[2]=1; // G C
-        complement[20]=27; // R Y
-        complement[27]=20; // Y R
-        complement[21]=21; // S S
-        complement[25]=25; // W W
-        complement[13]=15; // K M
-        complement[15]=13; // M K
-        complement[4]=24; // B V
-        complement[24]=4; // V B
-        complement[6]=10; // D H
-        complement[10]=6; // H D
-        complement[16]=16; // N N 
+        binary=new int[256];
+        complement=new int[15];
+        binary['A'] = 0; 
+        binary['C'] = 1; 
+        binary['G'] = 2; 
+        binary['T'] = 3; 
+        binary['M'] = 4;  
+        binary['R'] = 5;  
+        binary['W'] = 6;  
+        binary['S'] = 7;  
+        binary['Y'] = 8;  
+        binary['K'] = 9;  
+        binary['V'] = 10; 
+        binary['H'] = 11; 
+        binary['D'] = 12; 
+        binary['B'] = 13; 
+        binary['N'] = 14; 
+        complement[0]=3;
+        complement[1]=2;
+        complement[2]=1;
+        complement[3]=0;
+        complement[4]=9;
+        complement[5]=8;
+        complement[6]=6;
+        complement[7]=7;
+        complement[8]=5;
+        complement[9]=4;
+        complement[10]=13;
+        complement[11]=12;
+        complement[12]=11;
+        complement[13]=10;
+        complement[14]=14; 
         System.out.println("------------------------------- PanTools -------------------------------");        
         switch (args[0]) {
             case "build":
@@ -894,7 +903,7 @@ public class Pantools {
     private void append_fwd(StringBuilder seq, byte[] s, int from, int to)
     {
         for(int i=from;i<=to;++i) 
-            seq.append((char)s[i]);
+            seq.append(sym[s[i]]);
         
     }
     /*
@@ -903,7 +912,7 @@ public class Pantools {
     private void append_rev(StringBuilder seq, byte[] s, int from, int to)
     {
         for(int i=to;i>=from;--i) 
-            seq.append((char)complement[s[i]]);            
+            seq.append(sym[complement[s[i]]]);            
     }
     /*
     This function returns the "location" (node, side, position) where a region located at "position" in "genoeme" and "sequence"
@@ -1023,10 +1032,6 @@ public class Pantools {
     }
     /*
     This function returns the number of the sequence from genome "g" whose name contains "prefix".
-    */  
-    
-    /*
-    This function returns the number of the sequence from genome "g" whose name contains "prefix".
     */    
     int find_sequence(String prefix, int g)
     {
@@ -1114,7 +1119,7 @@ public class Pantools {
             s_seq=s_add[1];
             s_loc=s_add[2];
             s_base=s_side==0?genomes.get(s_gen,s_seq,s_loc+s_len-K):(3-genomes.get(s_gen,s_seq,s_loc+K-1));
-            if(s_base<0 || s_base>4)
+            if(s_base<0 || s_base>3)
                 s_base=4;
         }
         d_len= (int)des.getProperty("length") ;
@@ -1123,7 +1128,7 @@ public class Pantools {
         d_seq=d_add[1];
         d_loc=d_add[2];
         d_base=d_side==0?genomes.get(d_gen,d_seq,d_loc+K-1):(3-genomes.get(d_gen,d_seq,d_loc+d_len-K));
-        if(d_base<0 || d_base>4)
+        if(d_base<0 || d_base>3)
             d_base=4;
         //System.out.println(s_base);
         //System.out.println(d_base);
