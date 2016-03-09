@@ -229,7 +229,7 @@ public class Pantools {
         int i;
         Pantools program=new Pantools();
         binary=new int[256];
-        complement=new int[15];
+        complement=new int[]{3,2,1,0,9,8,6,7,5,4,13,12,11,10,14};
         binary['A'] = 0; 
         binary['C'] = 1; 
         binary['G'] = 2; 
@@ -245,25 +245,15 @@ public class Pantools {
         binary['D'] = 12; 
         binary['B'] = 13; 
         binary['N'] = 14; 
-        complement[0]=3;
-        complement[1]=2;
-        complement[2]=1;
-        complement[3]=0;
-        complement[4]=9;
-        complement[5]=8;
-        complement[6]=6;
-        complement[7]=7;
-        complement[8]=5;
-        complement[9]=4;
-        complement[10]=13;
-        complement[11]=12;
-        complement[12]=11;
-        complement[13]=10;
-        complement[14]=14; 
         System.out.println("------------------------------- PanTools -------------------------------");        
         switch (args[0]) {
             case "build":
                 K=Integer.parseInt(args[1]);
+                if(K<10)
+                {
+                    System.out.println("K should be greater than 9!");
+                    System.exit(1);
+                }
                 PATH=args[2];
                 program.build(args[3]);
                 break;
@@ -358,9 +348,6 @@ public class Pantools {
     */      
     private void add(String file) throws IOException
     {
-        int i;
-        long kmer_num=0;
-        ResourceIterator<Node> nodes;
         if (new File(PATH+DATABASE).exists()) 
         {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(PATH+DATABASE)
@@ -378,10 +365,9 @@ public class Pantools {
                 dim=(int)Math.ceil(K/4.0);
                 seq_nodes=(int)db_node.getProperty("num_nodes");
                 num_edges=(int)db_node.getProperty("num_edges");
-                kmer_num=(long)db_node.getProperty("num_k_mers");
                 gene_nodes=(int)db_node.getProperty("num_genes");
                 genomes=new genome_bank(file);
-                index=new Index(PATH,file, graphDb,kmer_num, K);
+                index=new Index(PATH,file, graphDb);
             tx.success();} 
             construct_pangenome();
             System.out.println("Number of kmers:   "+index.length());
@@ -1847,8 +1833,8 @@ public class Pantools {
                 if(K1!=K2 || sq_num1!=sq_num2 || sq_num1!=sq_num2 || ed_num1!=ed_num2 || ng1!=ng2 || knum1!=knum2)
                     return false;
                 try{
-                    index1=new Index(path1,knum1,K1);
-                    index2=new Index(path2,knum2,K2);
+                    index1=new Index(path1,null,0);
+                    index2=new Index(path2,null,0);
                 }
                 catch(IOException ioe){
                     System.out.println("Failed to open a file!");  

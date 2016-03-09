@@ -17,6 +17,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import static pantools.Pantools.PATH;
 import static pantools.Pantools.executeCommand;
+import static pantools.Pantools.sym;
 
 /**
  *
@@ -43,7 +44,7 @@ public class genome_bank {
     {
         int g,s,i;
         previous_num_genomes=0;
-        complement=new int[15];
+        complement=new int[]{3,2,1,0,9,8,6,7,5,4,13,12,11,10,14};
         binary=new int[256];
         for(i=0;i<256;++i)
             binary[i]=14;
@@ -62,26 +63,10 @@ public class genome_bank {
         binary['D'] = 12; 
         binary['B'] = 13; 
         binary['N'] = 14; 
-        complement[0]=3;
-        complement[1]=2;
-        complement[2]=1;
-        complement[3]=0;
-        complement[4]=9;
-        complement[5]=8;
-        complement[6]=6;
-        complement[7]=7;
-        complement[8]=5;
-        complement[9]=4;
-        complement[10]=13;
-        complement[11]=12;
-        complement[12]=11;
-        complement[13]=10;
-        complement[14]=14;    
+ 
         File f = new File(PATH+"/genomes.db");
         if(f.exists())  
         {
-            genomes_file=new RandomAccessFile(PATH+"/genomes.db","rw");
-            genomes_file.seek(f.length());
             BufferedReader in;
             try{
                 in = new BufferedReader(new FileReader(PATH+"/genomes.info")); 
@@ -98,6 +83,9 @@ public class genome_bank {
                 {
                     genome_length[g]=Long.valueOf(in.readLine().split(":")[1]);
                     num_sequences[g]=Integer.parseInt(in.readLine().split(":")[1]);
+                    sequence_titles[g]=new String[num_sequences[g]+1];
+                    sequence_length[g]=new long[num_sequences[g]+1];
+                    sequence_start[g]=new long[num_sequences[g]+1];
                     for(s=1;s<=num_sequences[g];++s)
                     {
                         sequence_titles[g][s]=in.readLine().split(":")[1];
@@ -114,8 +102,8 @@ public class genome_bank {
         }
         else
         {
-            genomes_file=new RandomAccessFile(PATH+"/genomes.db","rw");
             num_bytes=0;
+            previous_num_genomes=0;
             num_genomes=Integer.parseInt(executeCommand("wc -l "+file).trim().split("\\s")[0]);
             genome_names=new String[num_genomes+1];
             genome_length=new long[num_genomes+1];
@@ -135,12 +123,6 @@ public class genome_bank {
                 sequence_start[g]=new long[num_sequences[g]+1];
             }
             load_genomes();
-        }
-        catch(FileNotFoundException ioe){
-           System.out.println("Failed to read file names: "+ioe);  
-           System.exit(1);
-        } 
-        try{
             BufferedWriter out = new BufferedWriter(new FileWriter(PATH+"/genomes.info"));
             out.write("number_of_bytes:"+num_bytes+"\n");
             out.write("number_of_genomes:"+num_genomes+"\n");
@@ -170,10 +152,10 @@ public class genome_bank {
         String line;
         char carry;
         boolean havecarry;
-        long size=0,byte_number=0;
+        long size=0,byte_number=num_bytes;
         int j,g,s,len,k,max_byte=2100000000;
         BufferedReader in;
-        System.out.println("Reading "+num_genomes+" genomes...");
+        System.out.println("Reading "+(num_genomes-previous_num_genomes)+" genomes...");
         for(g=previous_num_genomes+1;g<=num_genomes;++g) 
         {
             try{
@@ -190,7 +172,7 @@ public class genome_bank {
                         sequence_titles[g][s]=line.substring(1);
                         if(size%2==1)
                             ++size;
-                        sequence_start[g][s]=size/2;
+                        sequence_start[g][s]=num_bytes+size/2;
                     }
                     else
                     {
@@ -209,9 +191,8 @@ public class genome_bank {
                 System.exit(1);
             }
         } 
-        if(size%2==1)
-            ++size; 
         num_bytes+=size/2;
+        genomes_file=new RandomAccessFile(PATH+"/genomes.db","rw");
         parts_num=(int)(num_bytes%max_byte==0?num_bytes/max_byte:num_bytes/max_byte+1);
         parts_size=new long[parts_num];
         genomes_buff= new MappedByteBuffer[parts_num];
@@ -220,6 +201,7 @@ public class genome_bank {
             parts_size[k]=(int)(k==parts_num-1?num_bytes%max_byte:max_byte);
             genomes_buff[k]=genomes_file.getChannel().map(FileChannel.MapMode.READ_WRITE, k*parts_size[0], parts_size[k]);
         } 
+        genomes_buff[(int)(byte_number/parts_size[0])].position((int)(byte_number%parts_size[0]));
         for(g=previous_num_genomes+1;g<=num_genomes;++g) 
         {
             try{
@@ -283,6 +265,14 @@ public class genome_bank {
             return (b >> 4) & 0x0f;
         else
             return (b & 0x0f);
+    }
+    ///////////////////////////////////////////////////////////////
+    public String get_sequence(int[] a,int l)
+    {
+        StringBuilder seq=new StringBuilder();
+        for(int i=0;i<l;++i)
+            seq.append(sym[get(a[0],a[1],a[2]+i)]);
+        return seq.toString();
     }
     /*
     This function determines the equality of two subsequences of s1 and s2 of length len starting at start1 and start2, respectively.
