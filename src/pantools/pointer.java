@@ -4,10 +4,6 @@
  * and open the template in the editor.
  */
 package pantools;
-
-import pantools.*;
-import java.nio.MappedByteBuffer;
-
 /**
  *
  * @author siavashs
@@ -15,8 +11,8 @@ import java.nio.MappedByteBuffer;
 public class pointer {
     public long node_id;
     public int position;
-    public long next_index;
     public byte format;
+    public long next_index;
     public pointer()
     {
         node_id=-1L;

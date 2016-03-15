@@ -9,85 +9,108 @@ package pantools;
  * @author sheik005
  */
 public class kmer {
-    public byte[] bytes;
-    public kmer(int d)
+    public int K;
+    public int pre_len;
+    public int suf_len;
+    public int mask;
+    public int shift;
+    public int prefix;
+    public byte[] suffix;
+    public boolean canonical;
+    public kmer(int k, int p, int s)
     {
-        bytes=new byte[d];
-        for(int i=0;i<d;++i)
-            bytes[i]=0;
+        K=k;
+        pre_len=p;
+        suf_len=s;
+        mask=(1<<(2*pre_len))-1;
+        shift=2*(pre_len-1);
+        suffix=new byte[suf_len/4];
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public kmer(byte[] b)
+    public kmer(kmer k_mer)
     {
-        bytes=b;
+        K=k_mer.K;
+        pre_len=k_mer.pre_len;
+        suf_len=k_mer.suf_len;
+        mask=k_mer.mask;
+        shift=k_mer.shift;
+        prefix=k_mer.prefix;
+        suffix=k_mer.suffix;
+        canonical=k_mer.canonical;
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void reset(int d)
+    public void reset()
     {
-        for(int i=0;i<d;++i)
-            bytes[i]=0;
+        prefix=0;
+        for(int i=0;i<suffix.length;++i)
+            suffix[i]=0;
+        canonical=false;
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public int compare(kmer k_mer, int d)
+    public int compare_suffix(kmer k_mer)
     {
         int i;
-        for(i=0;i<d;++i)
-            if(bytes[i]!=k_mer.bytes[i])
+        for(i=0;i<suffix.length;++i)
+            if(suffix[i]!=k_mer.suffix[i])
                 break;
-        if(i==d)
+        if(i==suffix.length)
             return 0;
-        else if((bytes[i] & 0x000000ff) < (k_mer.bytes[i] & 0x000000ff) )
+        else if((suffix[i] & 0x0ff) < (k_mer.suffix[i] & 0x0ff) )
             return -1;
         else
             return 1;
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void next_up_kmer(int code, int dim, int K)
+    public int compare(kmer k_mer)
     {
-        int i;
-        int frame,left_code;
-        frame=K%4==0?255:(1<<(K%4*2))-1;
-        left_code=3<<6;
-        for(i=0;i<dim;++i)
-        {
-            bytes[i]=(byte)(bytes[i]<<2);  
-            if(i==0)
-                bytes[0]=(byte)(bytes[0] & frame); 
-            if(i==dim-1)
-                bytes[i]=(byte)(bytes[i] | code); 
-            else
-                bytes[i]=(byte)(bytes[i] | ((( bytes[i+1] & left_code )>>6) & 0x00000003)); 
-        }
+        if(prefix<k_mer.prefix)
+            return -1;
+        else if(prefix>k_mer.prefix)
+            return 1;
+        else
+            return compare_suffix(k_mer);
+
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void next_down_kmer(int code, int dim, int K)
+    public void next_up_kmer(int code)
     {
         int i;
-        int shift;
-        shift=(K%4==0?6:(K%4-1)*2);
-        for(i=dim-1;i>0;--i)
-        {
-            bytes[i]=(byte)((bytes[i]>>2) & 0x0000003f);  
-            bytes[i]=(byte)(bytes[i] | ((bytes[i-1] & 3 )<<6)); 
-        }
-        bytes[0]=(byte)((bytes[0]>>2) & 0x0000003f);  
-        bytes[0]=(byte)(bytes[0] | (code<<shift)); 
+        prefix=((prefix<<2) & mask) | ((suffix[0]>>6) & 0x03 );
+        for(i=0;i<suffix.length-1;++i)
+           suffix[i]=(byte)((suffix[i]<<2) | (( suffix[i+1]>>6) & 0x03)); 
+        suffix[i]=(byte)((suffix[i]<<2) | code); 
+        //if(prefix<0)
+          //  System.out.println("Up: "+toString());
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void next_down_kmer(int code)
+    {
+        int i;
+        for(i=suffix.length-1;i>0;--i)
+            suffix[i]=(byte)(((suffix[i]>>2) & 0x03f) | ((suffix[i-1] & 0x03 )<<6)); 
+        suffix[i]=(byte)(((suffix[i]>>2) & 0x03f) | ((prefix & 0x03 )<<6)); 
+        prefix=(prefix>>2) | (code<<shift); 
+        //if(prefix<0)
+          //  System.out.println("Do: "+toString());
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    void print_kmer(int dim,int K)
+    @Override
+    public String toString()
     {
-        print_byte(bytes[0] & 0x000000ff,K%4==0?4:K%4);
-        for(int i=1;i<dim;++i)
-            print_byte(bytes[i],4);
-        System.out.print("\n");
+        char[] sym=new char[]{ 'A', 'C', 'G' , 'T', 'M','R','W','S','Y','K','V','H','D','B','N'};
+        StringBuilder seq=new StringBuilder(K);
+        append_word(sym, prefix, pre_len,seq);
+        for(int i=0;i<suffix.length;++i)
+            append_word(sym, suffix[i],4,seq);
+        return seq.toString();
     }  
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    void print_byte(int word,int k)
+    private void append_word(char[] sym, int word,int k, StringBuilder seq )
     {
         if(k>0)
         {
-            print_byte(word>>2,k-1);
-            System.out.print(Pantools.sym[word & 0x00000003]);
+            append_word(sym, word>>2,k-1,seq);
+            seq.append(sym[word & 0x00000003]);
         }
     } 
 }
