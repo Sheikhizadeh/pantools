@@ -113,7 +113,7 @@ public class genome_database {
     public genome_database(String path, String file, boolean adding)
     {
         int g,s,i;
-        BufferedReader file_paths,in;
+        BufferedReader in;
         String line;
         List<String> genome_list=new LinkedList();
         initalize();
@@ -122,8 +122,11 @@ public class genome_database {
         {
             try{
                 in = new BufferedReader(new FileReader(file));
-                while ((line=in.readLine()) != null) 
+                while (in.ready()) 
                 {
+                    line=in.readLine();
+                    if (line.equals("")) 
+                        continue;
                     genome_list.add(line);
                     num_genomes++;
                 }
@@ -164,8 +167,11 @@ public class genome_database {
             num_bytes=0;
             try{
                 in = new BufferedReader(new FileReader(file));
-                while ((line=in.readLine()) != null) 
+                while (in.ready()) 
                 {
+                    line=in.readLine();
+                    if (line.equals("")) 
+                        continue;                    
                     genome_list.add(line);
                     num_genomes++;
                 }                
@@ -188,9 +194,14 @@ public class genome_database {
             genome_names[g]=itr.next();
             try{
                 in = new BufferedReader(new FileReader(genome_names[g]));
-                while ((line=in.readLine())!= null) 
+                while (in.ready()) 
+                {
+                    line=in.readLine();
+                    if (line.equals("")) 
+                        continue;
                     if(line.charAt(0)=='>')
                         num_sequences[g]++;
+                }
                 in.close(); 
             }catch(IOException e){
                 System.out.println(e.getMessage());  
@@ -244,7 +255,7 @@ public class genome_database {
                 while(in.ready())
                 {
                     line=in.readLine();
-                    if (line==null) 
+                    if (line.equals("")) 
                         continue;
                     if(line.charAt(0)=='>')
                     {
@@ -302,7 +313,7 @@ public class genome_database {
                 while(in.ready())
                 {
                     line=in.readLine();
-                    if (line==null) 
+                    if (line.equals("")) 
                         continue;
                     if(line.charAt(0)!='>' && havecarry)
                         line=carry+line;

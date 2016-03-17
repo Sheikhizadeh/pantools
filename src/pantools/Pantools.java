@@ -89,14 +89,49 @@ public class Pantools {
     Some shared attributes
     */    
 
+    /**
+     *
+     */
     public static String PATH;
+
+    /**
+     *
+     */
     public static String GRAPH_DATABASE_PATH="/graph.db/";
+
+    /**
+     *
+     */
     public static String INDEX_DATABASE_PATH="/index.db/";
+
+    /**
+     *
+     */
     public static String GENOME_DATABASE_PATH="/genome.db/";
+
+    /**
+     *
+     */
     public static GraphDatabaseService graphDb;
+
+    /**
+     *
+     */
     public static index_database indexDb;
+
+    /**
+     *
+     */
     public static genome_database genomeDb;
+
+    /**
+     *
+     */
     public final int trsc_limit=1000;    //   The number of transactions to be committed in batch
+
+    /**
+     *
+     */
     public final int anchor_distance=100; // Distance between two anchor nodes
     
     /*
@@ -139,6 +174,8 @@ public class Pantools {
     private Node degenerate_node;
     private pointer pointer=new pointer();
     private byte[] byte_pointer=new byte[21];
+    private String[][] fwd_locations;
+    private String[][] rev_locations;
     
     private int fwd_code,rev_code;
     //private boolean canonical;//,annotate_canonical;
@@ -212,6 +249,7 @@ public class Pantools {
     */  
     private void build(String file) throws IOException
     {
+        int i,j;
         File theDir = new File(PATH);
         if (theDir.exists()) 
             FileUtils.deleteRecursively( new File( PATH+GRAPH_DATABASE_PATH ) ); // deletes old files
@@ -238,6 +276,18 @@ public class Pantools {
         tx.success();}
         genomeDb=new genome_database(PATH+GENOME_DATABASE_PATH,file,false); // adding = false
         indexDb=new index_database(PATH+INDEX_DATABASE_PATH,file,K,genomeDb);
+        fwd_locations=new String[genomeDb.num_genomes+1][];
+        rev_locations=new String[genomeDb.num_genomes+1][];
+        for(i=1;i<=genomeDb.num_genomes;++i)
+        {
+            fwd_locations[i]=new String[genomeDb.num_sequences[i]+1];
+            rev_locations[i]=new String[genomeDb.num_sequences[i]+1];
+            for(j=1;j<=genomeDb.num_sequences[i];++j)
+            {
+                fwd_locations[i][j]="F"+i+"_"+j;
+                rev_locations[i][j]="R"+i+"_"+j;
+            }
+        }
         construct_pangenome();
         System.out.println("Number of kmers:   "+indexDb.length());
         System.out.println("Number of nodes:   "+seq_nodes);
@@ -257,7 +307,7 @@ public class Pantools {
         graphDb.shutdown();  
         System.out.println("Total time : "+(System.currentTimeMillis()-startTime)/1000+"."+(System.currentTimeMillis()-startTime)%1000+" seconds");
         print_peak_memory();
-        for(int i=0;Files.exists(Paths.get(PATH+GRAPH_DATABASE_PATH+"/neostore.transaction.db."+i));++i)
+        for(i=0;Files.exists(Paths.get(PATH+GRAPH_DATABASE_PATH+"/neostore.transaction.db."+i));++i)
             Files.delete(Paths.get(PATH+GRAPH_DATABASE_PATH+"/neostore.transaction.db."+i));
         System.out.println("graph.db size: "+getFolderSize(new File(PATH+GRAPH_DATABASE_PATH))+" MB");
         System.out.println("index.db size: "+getFolderSize(new File(PATH+INDEX_DATABASE_PATH))+" MB");
@@ -269,6 +319,7 @@ public class Pantools {
     */      
     private void add(String file) throws IOException
     {
+        int i,j;
         if (new File(PATH+GRAPH_DATABASE_PATH).exists()) 
         {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(PATH+GRAPH_DATABASE_PATH)
@@ -289,6 +340,18 @@ public class Pantools {
                 genomeDb=new genome_database(PATH+GENOME_DATABASE_PATH,file,true); // adding = true
                 indexDb=new index_database(PATH+INDEX_DATABASE_PATH,file, genomeDb,graphDb);
             tx.success();} 
+            fwd_locations=new String[genomeDb.num_genomes+1][];
+            rev_locations=new String[genomeDb.num_genomes+1][];
+            for(i=1;i<=genomeDb.num_genomes;++i)
+            {
+                fwd_locations[i]=new String[genomeDb.num_sequences[i]+1];
+                rev_locations[i]=new String[genomeDb.num_sequences[i]+1];
+                for(j=1;j<=genomeDb.num_sequences[i];++j)
+                {
+                    fwd_locations[i][j]="F"+i+"_"+j;
+                    rev_locations[i][j]="R"+i+"_"+j;
+                }
+            }
             construct_pangenome();
             System.out.println("Number of kmers:   "+indexDb.length());
             System.out.println("Number of nodes:   "+seq_nodes);
@@ -308,7 +371,7 @@ public class Pantools {
             graphDb.shutdown(); 
             System.out.println("Total time : "+(System.currentTimeMillis()-startTime)/1000+"."+(System.currentTimeMillis()-startTime)%1000+" seconds");
             print_peak_memory();
-        for(int i=0;Files.exists(Paths.get(PATH+GRAPH_DATABASE_PATH+"/neostore.transaction.db."+i));++i)
+        for(i=0;Files.exists(Paths.get(PATH+GRAPH_DATABASE_PATH+"/neostore.transaction.db."+i));++i)
             Files.delete(Paths.get(PATH+GRAPH_DATABASE_PATH+"/neostore.transaction.db."+i));
         System.out.println("graph.db size: "+getFolderSize(new File(PATH+GRAPH_DATABASE_PATH))+" MB");
         System.out.println("index.db size: "+getFolderSize(new File(PATH+INDEX_DATABASE_PATH))+" MB");
@@ -358,7 +421,7 @@ public class Pantools {
                  for(g_number=1;gff_files.ready();++g_number)
                     {
                         gff_name=gff_files.readLine();
-                        if(gff_name=="")
+                        if(gff_name.equals(""))
                             continue;
                         genome_node=graphDb.findNode(genome_label, "number", g_number);
                         if(genome_node.hasProperty("annotated"))
@@ -372,6 +435,8 @@ public class Pantools {
                         while(in.ready())
                         {
                             line=in.readLine();
+                            if(line.equals(""))
+                                continue;
                             fields=line.split("\\t");
                             line_len=fields.length;
                             for(i=0;i<line_len && !fields[i].equals("gene");++i)
@@ -471,7 +536,7 @@ public class Pantools {
                     while(in.ready())
                     {
                         line=in.readLine();
-                        if(line=="")
+                        if(line.equals(""))
                             continue;
                         if(line.startsWith(">"))
                         {
@@ -539,13 +604,19 @@ public class Pantools {
             ResourceIterator<Node> gene_nodes;
             Relationship rstart,rstop;
             Node start,stop,gene=null;
-            String prp,gene_record,strand,record;
+            String prp,strand,record;
+            String line;
             int i,j,begin,end,num_genes=0,genome,sequence;
             StringBuilder gene_seq;
             try{
                 in = new BufferedReader(new FileReader(file));
-                while (in.readLine() != null) 
+                while (in.ready()) 
+                {
+                    line=in.readLine();
+                    if(line.equals(""))
+                        continue;
                     num_genes++;
+                }
                 in.close();
             }catch (IOException e) {
                 System.out.println(e.getMessage());
@@ -556,10 +627,13 @@ public class Pantools {
             try{ 
                 in = new BufferedReader(new FileReader(file));
                 BufferedWriter out = new BufferedWriter(new FileWriter(file+".fasta"));
-                for(i=0;i<num_genes;++i)
+                for(i=0;in.ready();)
                 {
-                    gene_record=in.readLine();
-                    records[i]=gene_record;
+                    line=in.readLine();
+                    if(line.equals(""))
+                        continue;                   
+                    records[i]=line;
+                    ++i;
                 }
                 Arrays.sort(records);
                 genomeDb=new genome_database(PATH+GENOME_DATABASE_PATH);
@@ -567,7 +641,7 @@ public class Pantools {
                 {
                     gene=gene_nodes.next();
                     record=(String)gene.getProperty("title");
-                    if(Arrays.binarySearch(records, record) >=0)
+                    if(record!=null && Arrays.binarySearch(records, record) >=0)
                     {
                         rstart=gene.getSingleRelationship(RelTypes.begin, Direction.OUTGOING);
                         rstop=gene.getSingleRelationship(RelTypes.end, Direction.OUTGOING);
@@ -651,8 +725,13 @@ public class Pantools {
             String anchor_sides;
             try{
                 BufferedReader in = new BufferedReader(new FileReader(file));
-                while (in.readLine() != null) 
+                while (in.ready()) 
+                {
+                    line=in.readLine();
+                    if(line.equals(""))
+                        continue;
                     num_regions++;
+                }
                 in.close();
             }catch (IOException e) {
                 System.out.println(e.getMessage());
@@ -664,9 +743,12 @@ public class Pantools {
             try (BufferedReader in = new BufferedReader(new FileReader(file))) {
                 BufferedWriter out = new BufferedWriter(new FileWriter(file+".fasta"));
                 genomeDb=new genome_database(PATH+GENOME_DATABASE_PATH);
-                for(c=0,line=in.readLine();line!=null;line=in.readLine())
+                for(c=0;in.ready();)
                 {
-                   fields=line.split("\\s");
+                    line=in.readLine();
+                    if(line.equals(""))
+                        continue;
+                    fields=line.split("\\s");
                     g= Integer.parseInt(fields[0]);
                     s= Integer.parseInt(fields[1]);
                     from= Integer.parseInt(fields[2]);
@@ -1103,8 +1185,8 @@ public class Pantools {
         //System.out.println("split "+position);
         num_bases+=(K-1);
         int l=(int)node.getProperty("length");
-        int i,k=0,s_id,s_side=0,d_side=0,gen,seq,loc;
-        long j,split_first_kmer,node_last_kmer=0;
+        int i,j,k=0,s_id,s_side=0,d_side=0,gen,seq,loc;
+        long inx,split_first_kmer,node_last_kmer=0;
         int[] address;
         Node neighbor;
         RelationshipType rel_type;
@@ -1140,25 +1222,28 @@ public class Pantools {
                     r.delete();
                 }
             }
+        int[] node_positions;
+        int len;
+        int[] split_positions;
         for(i=1;i<=genome;++i) // initial occurence properties for the split_node
             for(j=1;j<=genomeDb.num_sequences[i];++j)
             {
-                prp="F"+i+"_"+j;
+                prp=fwd_locations[i][j];
                 if(node.hasProperty(prp) )
                 {
-                    int[] node_positions=(int[])node.getProperty(prp);
-                    int len=node_positions.length;
-                    int[] split_positions=new int[len];
+                    node_positions=(int[])node.getProperty(prp);
+                    len=node_positions.length;
+                    split_positions=new int[len];
                     for(k=0;k<len;++k)
                         split_positions[k]=node_positions[k]+pos;
                     split_node.setProperty(prp,split_positions);
                 }
-                prp="R"+i+"_"+j;
+                prp=rev_locations[i][j];
                 if(node.hasProperty(prp) )
                 {
-                    int[] node_positions=(int[])node.getProperty(prp);
-                    int len=node_positions.length;
-                    int[] split_positions=new int[len];
+                    node_positions=(int[])node.getProperty(prp);
+                    len=node_positions.length;
+                    split_positions=new int[len];
                     for(k=0;k<len;++k)
                     {
                         split_positions[k]=node_positions[k];
@@ -1174,10 +1259,10 @@ public class Pantools {
         split_node.setProperty("first_kmer",split_first_kmer);
         split_node.setProperty("last_kmer",node.getProperty("last_kmer"));
         s_id=(int)split_node.getId();
-        for(i=0,j=split_first_kmer;j!=-1L;j=indexDb.get_next_index(j),++i) // update kmer coordinates
+        for(i=0,inx=split_first_kmer;inx!=-1L;inx=indexDb.get_next_index(inx),++i) // update kmer coordinates
         {
-            indexDb.put_node_id(s_id, j);
-            indexDb.put_position(i, j);
+            indexDb.put_node_id(s_id, inx);
+            indexDb.put_position(i, inx);
         }  
         for(Relationship r:node.getRelationships(Direction.OUTGOING))
         {
@@ -1514,6 +1599,12 @@ public class Pantools {
     This function initialize the first K-mer of the "genome", "sequence" at "position". 
     It might jump over the degenerate regions creating a degenerate_node 
     */ 
+
+    /**
+     *
+     * @throws IOException
+     */
+     
     public void initial_kmers() throws IOException
     {
         int i;
@@ -1620,13 +1711,14 @@ public class Pantools {
             tx.success();}
             System.out.println("Running time : " + (System.currentTimeMillis() - phaseTime) / 1000 + " seconds");
         }//genomes
-        Index_genomes();
+        index_genomes();
+        include_sequences();        
     }
     /*
     This function adds list of "anchor_nodes", "anchor_sides" and "anchor_positions" to each sequence_node.
     These properties facilitate extracting genomic regions. 
     */ 
-    void Index_genomes() 
+    void index_genomes() 
     {
         int i,m,loc,node_len,s_side,d_side,count;
         long seq_len;
@@ -1727,6 +1819,46 @@ public class Pantools {
         }//genomes
     }
     /*
+    This function adds "sequence" property to the nodes and writes the K-mer index on disk
+    */ 
+    void include_sequences() throws IOException
+    {
+        int i,len;
+        int[] address;
+        byte[] sequence;
+        ResourceIterator<Node> nodes;
+        Node node;
+        System.out.println("Finalizing the construction...");
+        try(Transaction tx = graphDb.beginTx()){
+        nodes = graphDb.findNodes( node_label );
+        tx.success();}
+        while(nodes.hasNext())
+            try(Transaction tx = graphDb.beginTx()){
+                for(i=0;i<trsc_limit && nodes.hasNext();++i)
+                {
+                    node=nodes.next();
+                    address=(int[])node.getProperty("address");
+                    len=(int)node.getProperty("length");
+                    node.setProperty("sequence",genomeDb.get_sequence(address[0], address[1], address[2], len));
+                }
+            tx.success();}
+        nodes.close();
+        try(Transaction tx = graphDb.beginTx()){
+        nodes = graphDb.findNodes( degenerate_label );
+        tx.success();}
+        while(nodes.hasNext())
+            try(Transaction tx = graphDb.beginTx()){
+                for(i=0;i<trsc_limit && nodes.hasNext();++i)
+                {
+                    node=nodes.next();
+                    address=(int[])node.getProperty("address");
+                    len=(int)node.getProperty("length");
+                    node.setProperty("sequence",genomeDb.get_sequence(address[0], address[1], address[2], len));
+                }
+            tx.success();}
+        nodes.close();
+    }
+    /*
     This function registers the action to be taken if the program halts unexpectedly
     */ 
     private static void registerShutdownHook( final GraphDatabaseService graphDb )
@@ -1748,6 +1880,7 @@ public class Pantools {
         int sq_num1=0,sq_num2=0,ed_num1,ed_num2,K1,K2,ng1,ng2,len1,len2; 
         long k,knum1=0,knum2;
         index_database indexDb1=null,indexDb2=null;
+        genome_database genomeDb1,genomeDb2;
         Node db_node1,db_node2;
         if (new File(path1+GRAPH_DATABASE_PATH).exists() && new File(path2+GRAPH_DATABASE_PATH).exists()) 
         {
@@ -1781,19 +1914,19 @@ public class Pantools {
                 knum2=(long)db_node2.getProperty("num_k_mers");
                 if(K1!=K2 || sq_num1!=sq_num2 || sq_num1!=sq_num2 || ed_num1!=ed_num2 || ng1!=ng2 || knum1!=knum2)
                     return false;
-                indexDb1=new index_database(path1,null,0,genomeDb);
-                indexDb2=new index_database(path2,null,0,genomeDb);
+                genomeDb1=new genome_database(path1+GENOME_DATABASE_PATH);
+                genomeDb2=new genome_database(path2+GENOME_DATABASE_PATH);
+                indexDb1=new index_database(path1+INDEX_DATABASE_PATH,null,0,genomeDb1);
+                indexDb2=new index_database(path2+INDEX_DATABASE_PATH,null,0,genomeDb2);
                 System.out.println("comparing pangenomes...");    
                 K=K1;
                 Node n1,n2;
-                byte[] s1=new byte[21],seq1;
-                byte[] s2=new byte[21],seq2;
-                kmer k_mer1=new kmer(K,indexDb.get_pre_len(),indexDb.get_suf_len());
-                kmer k_mer2=new kmer(K,indexDb.get_pre_len(),indexDb.get_suf_len());
+                byte[] s1=new byte[21];
+                byte[] s2=new byte[21];
+                kmer k_mer1=new kmer(K,indexDb1.get_pre_len(),indexDb1.get_suf_len());
+                kmer k_mer2=new kmer(K,indexDb2.get_pre_len(),indexDb2.get_suf_len());
                 pointer p1=new pointer();
                 pointer p2=new pointer();
-                genome_database genomes1=new genome_database(path1);
-                genome_database genomes2=new genome_database(path2);
                 for(k=0;k<knum1;++k)
                 {
                     k_mer1=indexDb1.get_kmer(k);
@@ -1808,8 +1941,8 @@ public class Pantools {
                         len1=(int)n1.getProperty("length");
                         n2=g2.getNodeById(p2.node_id);
                         len2=(int)n2.getProperty("length");
-                        if(len1!=len2 || (!genomes1.compare(genomes2,(int[])n1.getProperty("address"),(int[])n2.getProperty("address"),len1,true) && 
-                                          !genomes1.compare(genomes2,(int[])n1.getProperty("address"),(int[])n2.getProperty("address"),len1,false)))
+                        if(len1!=len2 || (!genomeDb1.compare(genomeDb2,(int[])n1.getProperty("address"),(int[])n2.getProperty("address"),len1,true) && 
+                                          !genomeDb1.compare(genomeDb2,(int[])n1.getProperty("address"),(int[])n2.getProperty("address"),len1,false)))
                             return false;
                         if(n1.getDegree(Direction.BOTH)!=n2.getDegree(Direction.BOTH))
                             return false;
@@ -1930,7 +2063,13 @@ public class Pantools {
         "groups_file : A FASTA file with titles being names given to the groups "
         + "followed by lines containing annotation titles as they appear in gff files.");
     }
-public static long getFolderSize(File dir) {
+
+    /**
+     *
+     * @param dir
+     * @return
+     */
+    public static long getFolderSize(File dir) {
     long size = 0;
     for (File file : dir.listFiles()) {
         if (file.isFile()) {
