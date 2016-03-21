@@ -332,7 +332,7 @@ public class index_database {
     public void get_pointer(byte[] b, pointer p, long i)
     {
         p.node_id=   ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].getLong((int)(i*ptr_len%ptr_parts_size[0]));
-        p.format=    ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].    get((int)(i*ptr_len%ptr_parts_size[0]+8));
+        p.canonical=    ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].get((int)(i*ptr_len%ptr_parts_size[0]+8))==0;
         p.position=  ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])]. getInt((int)(i*ptr_len%ptr_parts_size[0]+9));
         p.next_index=ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].getLong((int)(i*ptr_len%ptr_parts_size[0]+13));
     }
@@ -340,7 +340,7 @@ public class index_database {
     public void put_pointer(pointer p, long i)
     {
         ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putLong((int)(i*ptr_len%ptr_parts_size[0]),   p.node_id);
-        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].    put((int)(i*ptr_len%ptr_parts_size[0]+8), p.format);
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].    put((int)(i*ptr_len%ptr_parts_size[0]+8), (byte)(p.canonical?0:1));
         ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])]. putInt((int)(i*ptr_len%ptr_parts_size[0]+9), p.position);
         ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putLong((int)(i*ptr_len%ptr_parts_size[0]+13),p.next_index);
     }
@@ -355,14 +355,14 @@ public class index_database {
         ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].putLong((int)(i*ptr_len%ptr_parts_size[0]), node_id);
     }     
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public byte get_side(long i)
+    public boolean get_canonical(long i)
     {
-        return ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].get((int)(i*ptr_len%ptr_parts_size[0]+8));
+        return ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].get((int)(i*ptr_len%ptr_parts_size[0]+8))==0;
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void put_side(byte side, long i)
+    public void put_canonical(boolean side, long i)
     {
-        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].put((int)(i*ptr_len%ptr_parts_size[0]+8),side);
+        ptr_buff[(int)(i*ptr_len/ptr_parts_size[0])].put((int)(i*ptr_len%ptr_parts_size[0]+8),(byte)(side?0:1));
     }     
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
     public int get_position(long i)

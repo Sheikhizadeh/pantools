@@ -11,19 +11,19 @@ package pantools;
 public class pointer {
     public long node_id;
     public int position;
-    public byte format;
+    public boolean canonical;
     public long next_index;
     public pointer()
     {
         node_id=-1L;
-        format=-1;
+        canonical=false;
         position=-1;
         next_index=-1L;
     }
-    public pointer(long id,byte f,int p,long n)
+    public pointer(long id,boolean f,int p,long n)
     {
         node_id=id;
-        format=f;
+        canonical=f;
         position=p;
         next_index=n;
     }
@@ -31,7 +31,7 @@ public class pointer {
     void reset(int d) 
     {
         node_id=-1L;
-        format=-1;
+        canonical=false;
         position=-1;
         next_index=-1L;
     }
