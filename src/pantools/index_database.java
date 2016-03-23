@@ -134,7 +134,7 @@ public class index_database {
         minus_one=null;
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public index_database(String path,String file,genome_database genomeDb, GraphDatabaseService graphDb)
+    public index_database(String path,String file,genome_database genomeDb, GraphDatabaseService graphDb, int previous_num_genomes)
     {
         int cores=Runtime.getRuntime().availableProcessors()/2+1;
         int k,p;
@@ -154,7 +154,7 @@ public class index_database {
             K=old_index.K;
         // make new index for new genomes
             System.out.println("Running KMC2...                      ");
-           executeCommand("kmc -r -k"+K+" -t"+cores+" -ci1 -fm "+(genomeDb.num_genomes-genomeDb.previous_num_genomes>1?"@"+file.trim():genomeDb.genome_names[genomeDb.previous_num_genomes+1])+" "+path+"/new_kmers "+path);
+           executeCommand("kmc -r -k"+K+" -t"+cores+" -ci1 -fm "+(genomeDb.num_genomes-previous_num_genomes>1?"@"+file.trim():genomeDb.genome_names[previous_num_genomes+1])+" "+path+"/new_kmers "+path);
         // merge two indeces    
             executeCommand("kmc_tools union "+path+"/old_index/kmers "+path+"/new_kmers "+path+"/sorted");
             pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");
