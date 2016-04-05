@@ -51,26 +51,87 @@ public class index_database {
     private RandomAccessFile ptr_file;
     private MappedByteBuffer[] ptr_buff;
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public index_database(String path,genome_database genomeDb)
+    {
+        int cores=Runtime.getRuntime().availableProcessors()/2+1;
+        int k;
+        long p;
+        pointer null_pointer=new pointer();
+        try{
+            pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");
+            pre_file.seek(pre_file.length()-8);
+            header_pos=read_int(pre_file);
+            pre_file.seek(pre_file.length()-8-header_pos);
+        // read the index properties    
+            K=read_int(pre_file);
+            mode=read_int(pre_file);
+            ctr_size=read_int(pre_file);
+            pre_len=read_int(pre_file);
+            min_count=read_int(pre_file);
+            max_count=read_int(pre_file);
+            kmers_num=read_long(pre_file);
+            suf_len=K-pre_len;
+            key=new kmer(K,pre_len,suf_len);
+            System.out.println("Indexing "+kmers_num+" kmers...                    ");
+        // load the prefix file into the memory    
+            pre_file.seek(4);
+            int q,len=1<<(2*pre_len);
+            prefix_ptr=new long[len];
+            MappedByteBuffer pre_buff;
+            for(q=0,p=0;p<8;++p)
+            {
+                pre_buff=pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4+p*len, len);
+                for(k=0;k<len/8;++k,++q)
+                {
+                    prefix_ptr[q]=read_long(pre_buff);
+                }
+            }
+            pre_file.close();
+            pre_buff=null;
+        // mapping suffix file into the memory
+            suf_rec_size=ctr_size+suf_len/4;
+            max_byte=max_byte/suf_rec_size*suf_rec_size;
+            suf_parts_num=(int)((kmers_num*suf_rec_size)%max_byte==0?(kmers_num*suf_rec_size)/max_byte:(kmers_num*suf_rec_size)/max_byte+1);
+            suf_parts_size=new long[suf_parts_num];
+            suf_file = new RandomAccessFile(path+"/sorted.kmc_suf","r");
+            suf_buff= new MappedByteBuffer[suf_parts_num];
+            for(k=0;k<suf_parts_num;++k)
+            {
+                suf_parts_size[k]=(int)(k==suf_parts_num-1?(kmers_num*suf_rec_size)%max_byte:max_byte);
+                suf_buff[k]=suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4+k*suf_parts_size[0], suf_parts_size[k]);
+            }
+        // mapping pointers file into the memory
+            max_byte=max_byte/ptr_len*ptr_len;
+            ptr_parts_num=(int)((kmers_num*ptr_len)%max_byte==0?(kmers_num*ptr_len)/max_byte:(kmers_num*ptr_len)/max_byte+1);
+            ptr_parts_size=new long[ptr_parts_num];
+            ptr_file = new RandomAccessFile(path+"/pointers.db", "rw");
+            ptr_buff= new MappedByteBuffer[ptr_parts_num];
+            for(k=0;k<ptr_parts_num;++k)
+            {
+                ptr_parts_size[k]=(int)(k==ptr_parts_num-1?(kmers_num*ptr_len)%max_byte:max_byte);
+                ptr_buff[k]=ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, k*ptr_parts_size[0], ptr_parts_size[k]);
+            }
+        }catch (IOException e) {
+            System.out.println(e.getMessage());
+            System.exit(1);
+        }         
+    }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
     public index_database(String path,String file, int K_size,genome_database genomeDb)
     {
         int cores=Runtime.getRuntime().availableProcessors()/2+1;
         int k;
         long p;
-        byte[] minus_one=null;
+        pointer null_pointer=new pointer();
         try{
-            if(file!=null) // we are not loading an available index
+            Files.createDirectory(Paths.get(path));
+            System.out.println("Running KMC2...                      ");
+            executeCommand("kmc -r -k"+K_size+" -t"+cores+" -ci1 -fm "+(genomeDb.num_genomes>1?"@"+file.trim():genomeDb.genome_names[1])+" "+path+"/kmers "+path);
+            String output=executeCommand("kmc_tools sort "+path+"/kmers "+path+"/sorted");
+            if(output.startsWith("This database contains sorted k-mers already!"))
             {
-                Files.createDirectory(Paths.get(path));
-                System.out.println("Running KMC2...                      ");
-                executeCommand("kmc -r -k"+K_size+" -t"+cores+" -ci1 -fm "+(genomeDb.num_genomes>1?"@"+file.trim():genomeDb.genome_names[1])+" "+path+"/kmers "+path);
-                String output=executeCommand("kmc_tools sort "+path+"/kmers "+path+"/sorted");
-                if(output.startsWith("This database contains sorted k-mers already!"))
-                {
-                    Files.copy(Paths.get(path+"/kmers.kmc_pre"), Paths.get(path+"/sorted.kmc_pre"));
-                    Files.copy(Paths.get(path+"/kmers.kmc_suf"), Paths.get(path+"/sorted.kmc_suf"));
-                }
-                minus_one=new byte[max_byte];
-                Arrays.fill( minus_one, (byte)(-1) );
+                Files.copy(Paths.get(path+"/kmers.kmc_pre"), Paths.get(path+"/sorted.kmc_pre"));
+                Files.copy(Paths.get(path+"/kmers.kmc_suf"), Paths.get(path+"/sorted.kmc_suf"));
             }
             pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");
             pre_file.seek(pre_file.length()-8);
@@ -124,14 +185,13 @@ public class index_database {
             {
                 ptr_parts_size[k]=(int)(k==ptr_parts_num-1?(kmers_num*ptr_len)%max_byte:max_byte);
                 ptr_buff[k]=ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, k*ptr_parts_size[0], ptr_parts_size[k]);
-                if(file!=null) // we are not lading an available index
-                    ptr_buff[k].put(minus_one,0,(int)ptr_parts_size[k]);
             }
+            for(p=0;p<kmers_num;++p)
+                put_pointer(null_pointer,p);
         }catch (IOException e) {
             System.out.println(e.getMessage());
             System.exit(1);
         }         
-        minus_one=null;
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
     public index_database(String path,String file,genome_database genomeDb, GraphDatabaseService graphDb, int previous_num_genomes)
@@ -139,6 +199,7 @@ public class index_database {
         int cores=Runtime.getRuntime().availableProcessors()/2+1;
         int k,p;
         long c_index,p_index,l;
+        pointer null_pointer=new pointer();
         Node node;
         ResourceIterator<Node> nodes;
     // move current index files to directory old_index
@@ -150,7 +211,7 @@ public class index_database {
             Files.move(Paths.get(path+"/sorted.kmc_suf"), Paths.get(path+"/old_index/sorted.kmc_suf"));
             Files.move(Paths.get(path+"/pointers.db"),    Paths.get(path+"/old_index/pointers.db"));
         // load old_index
-            index_database old_index=new index_database(path+"/old_index",null,0,genomeDb);
+            index_database old_index=new index_database(path+"/old_index",genomeDb);
             K=old_index.K;
         // make new index for new genomes
             System.out.println("Running KMC2...                      ");
@@ -206,16 +267,13 @@ public class index_database {
             ptr_parts_size=new long[ptr_parts_num];
             ptr_file = new RandomAccessFile(path+"/pointers.db", "rw");
             ptr_buff= new MappedByteBuffer[ptr_parts_num];
-            byte[] minus_one=new byte[max_byte];
-            Arrays.fill( minus_one, (byte)(-1) );
             for(k=0;k<ptr_parts_num;++k)
             {
                 ptr_parts_size[k]=(int)(k==ptr_parts_num-1?(kmers_num*ptr_len)%max_byte:max_byte);
                 ptr_buff[k]=ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, k*ptr_parts_size[0], ptr_parts_size[k]);
-                ptr_buff[k].put(minus_one,0,(int)ptr_parts_size[k]);
             }
-            minus_one=null;
-
+            for(p=0;p<kmers_num;++p)
+                put_pointer(null_pointer,p);
         // adjusting available pointers
             try(Transaction tx = graphDb.beginTx()){
             nodes = graphDb.findNodes( DynamicLabel.label( "node" ));

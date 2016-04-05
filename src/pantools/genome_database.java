@@ -263,7 +263,7 @@ public class genome_database {
         BufferedReader in;
         byte_number=previous_num_genomes==0?0:num_bytes;
         initalize();
-        System.out.println("Reading "+(num_genomes-previous_num_genomes)+" genomes...");
+        System.out.println("Reading "+(num_genomes-previous_num_genomes)+" genome(s)...");
         for(g=previous_num_genomes+1;g<=num_genomes;++g) 
         {
             try{
@@ -498,7 +498,33 @@ public class genome_database {
     /*
     Returns the binary code of nucleotide at genomic position (g,s,p) 
     */ 
-    public int get(int g, int s, int p)
+    public char get_symbol(int g, int s, int p)
+    {
+        byte b;
+        long position=sequence_start[g][s]+p/2;
+        b=genomes_buff[(int)(position/parts_size[0])].get((int)(position%parts_size[0]));
+        if(p%2==0)
+            return sym[(b >> 4) & 0x0f];
+        else
+            return sym[b & 0x0f];
+    }
+    /*
+    Returns the complement of binary code of nucleotide at genomic position (g,s,p) 
+    */ 
+    public char get_complement_symbol(int g, int s, int p)
+    {
+        byte b;
+        long position=sequence_start[g][s]+p/2;
+        b=genomes_buff[(int)(position/parts_size[0])].get((int)(position%parts_size[0]));
+        if(p%2==0)
+            return sym[complement[(b >> 4) & 0x0f]];
+        else
+            return sym[complement[(b & 0x0f)]];
+    }    
+    /*
+    Returns the binary code of nucleotide at genomic position (g,s,p) 
+    */ 
+    public int get_code(int g, int s, int p)
     {
         byte b;
         long position=sequence_start[g][s]+p/2;
@@ -511,7 +537,7 @@ public class genome_database {
     /*
     Returns the complement of binary code of nucleotide at genomic position (g,s,p) 
     */ 
-    public int get_complement(int g, int s, int p)
+    public int get_complement_code(int g, int s, int p)
     {
         byte b;
         long position=sequence_start[g][s]+p/2;
@@ -520,7 +546,7 @@ public class genome_database {
             return complement[(b >> 4) & 0x0f];
         else
             return complement[(b & 0x0f)];
-    }    
+    }   
     /*
     Returns the forward or reverse_complement sequence at genomic position (g,s,p) 
     */ 
@@ -530,28 +556,38 @@ public class genome_database {
         int i;
         if(forward)
             for(i=0;i<l;++i)
-                seq.append(sym[get(g,s,p+i)]);
+                seq.append(get_symbol(g,s,p+i));
         else
             for(i=l-1;i>=0;--i)
-                seq.append(sym[get_complement(g,s,p+i)]);            
+                seq.append(get_complement_symbol(g,s,p+i));            
         return seq.toString();
     }
     /*
     Determines the equality of two subsequences of s1 and s2 of length len starting at start1 and start2, respectively.
     forward determines the direction of comparion.
     */
-    public boolean compare(genome_database second, int[] a1, int[] a2, int len, boolean forward)
+    public boolean compare(genome_database second, int[] a1, int[] a2, int offset1, int offset2, int len, boolean forward)
     {
+        if(a1[2]+offset1+len-1>=sequence_length[a1[0]][a1[1]] || a2[2]+offset2+len-1>=second.sequence_length[a2[0]][a2[1]])
+            return false;
         int i;
-        boolean equal=true;
+        boolean equal;
         if(forward)
-            for(i=0;i<len && equal;++i)
-                if(get(a1[0],a1[1],a1[2]+i)!=second.get(a2[0],a2[1],a2[2]+i))
+        {
+            for(equal=true,i=0;i<len && equal;++i)
+                if(get_code(a1[0],a1[1],a1[2]+offset1+i)!=second.get_code(a2[0],a2[1],a2[2]+offset2+i))
+                {
                     equal=false;
+                }
+        }
         else
-            for(i=0;i<len && equal;++i)
-                if(get(a1[0],a1[1],a1[2]+i)!=complement[second.get(a2[0],a2[1],a2[2]+len-i-1)])
+        {
+            for(equal=true,i=0;i<len && equal;++i)
+                if(get_code(a1[0],a1[1],a1[2]+offset1+i)!=second.get_complement_code(a2[0],a2[1],a2[2]+offset2+len-i-1))
+                {
                     equal=false;
+                }        
+        }
         return equal;
     }
     /*
