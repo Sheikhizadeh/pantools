@@ -1440,7 +1440,7 @@ public class Pantools {
         if(pos>0 )
         {
             split(node,pos);
-            if(curr_node.equals(node))// && curr_side==0) // is always 0
+            if(curr_node.equals(node) && curr_side==0) 
                    curr_node=split_node;
             node=split_node;
         }
@@ -1505,7 +1505,7 @@ public class Pantools {
         if(pos<(int)node.getProperty("length")-K) 
         {
             split(node,pos+1);
-            if(curr_node.equals(node))// && curr_side==0)// always 0
+            if(curr_node.equals(node) && curr_side==0)
                curr_node=split_node;
         }
         connect(curr_node,node,curr_side,1);                
@@ -1602,32 +1602,15 @@ public class Pantools {
     void create_degenerate(int begin)
     {
         //System.out.println("create_degenerate "+position);
-        Node node=null;
-        boolean exist=false;
         address[0]=genome;
         address[1]=sequence;
         address[2]=begin;        
-        for(Relationship r:curr_node.getRelationships(Direction.OUTGOING))
-        {
-            node=r.getEndNode();
-            if(node.hasLabel(degenerate_label) && 
-            genomeDb.compare(genomeDb, address, (int[])node.getProperty("address"), (int)node.getProperty("length"), true)) 
-            {
-                exist=true;
-                degenerate_node=node;
-                break;
-            }
-        }      
-        if(!exist)
-        {
-            ++degenerate_nodes;
-            degenerate_node=graphDb.createNode(degenerate_label);
-            //degenerate_node.setProperty("genome",genome);
-            degenerate_node.setProperty("address",address);
-            degenerate_node.setProperty("length",position-begin);
-            connect(curr_node,degenerate_node,curr_side,0);
-            num_bases+=(position-begin);
-        }
+        ++degenerate_nodes;
+        degenerate_node=graphDb.createNode(degenerate_label);
+        degenerate_node.setProperty("address",address);
+        degenerate_node.setProperty("length",position-begin);
+        connect(curr_node,degenerate_node,curr_side,0);
+        num_bases+=(position-begin);
         if(!finish)
         {
             curr_index=indexDb.find(k_mer);
@@ -1781,7 +1764,7 @@ public class Pantools {
         long[] anchor_nodes;
         int[] anchor_positions;
         int[] initial_coordinate=new int[1];
-        Node node,neighbor,seq_node;
+        Node node,neighbor=null,seq_node;
         StringBuilder nds=new StringBuilder();
         StringBuilder pos=new StringBuilder();
         StringBuilder sds=new StringBuilder();
@@ -1803,13 +1786,13 @@ public class Pantools {
                 for(address[2]=0;address[2]+K-1<seq_len && found;) // K-1 bases of the last node not added
                 {
                     found=false;
-                    //System.out.println("out");
                     for(Relationship r:node.getRelationships(Direction.OUTGOING))
                     {
                         neighbor=r.getEndNode();
                         neighbor_side=(r.getType().name().charAt(2)-48)%2;
-                        if(neighbor.hasProperty("address") && 
-                        genomeDb.compare(genomeDb, (int[])neighbor.getProperty("address"), address, (int)neighbor.getProperty("length"), neighbor_side==0) ) 
+                        if((neighbor.hasLabel(node_label) && 
+                        genomeDb.compare(genomeDb, (int[])neighbor.getProperty("address"), address, (int)neighbor.getProperty("length"), neighbor_side==0) ) ||
+                        (neighbor.hasLabel(degenerate_label) &&  Arrays.equals(((int[])neighbor.getProperty("address")),address)) )
                         {
                             found=true;
                             prp=neighbor_side==0?fwd_locations[address[0]][address[1]]:rev_locations[address[0]][address[1]];
@@ -1843,12 +1826,11 @@ public class Pantools {
                     }
                     if(!found)
                     {
-                    //System.out.println("in ");
                         for(Relationship r:node.getRelationships(Direction.INCOMING))
                         {
                             neighbor=r.getStartNode();
                             neighbor_side=(r.getType().name().charAt(2)-48)/2;
-                            if(neighbor.hasProperty("address") && genomeDb.compare(genomeDb, (int[])neighbor.getProperty("address"), address, (int)neighbor.getProperty("length"), neighbor_side==1)  ) 
+                            if(neighbor.hasLabel(node_label) && genomeDb.compare(genomeDb, (int[])neighbor.getProperty("address"), address, (int)neighbor.getProperty("length"), neighbor_side==1)  ) 
                             {
                                 found=true;
                                 prp=neighbor_side==1?fwd_locations[address[0]][address[1]]:rev_locations[address[0]][address[1]];
