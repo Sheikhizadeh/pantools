@@ -566,16 +566,16 @@ public class genome_database {
     Determines the equality of two subsequences of s1 and s2 of length len starting at start1 and start2, respectively.
     forward determines the direction of comparion.
     */
-    public boolean compare(genome_database second, int[] a1, int[] a2, int offset1, int offset2, int len, boolean forward)
+    public boolean compare(genome_database second, int[] a1, int[] a2, int len, boolean forward)
     {
-        if(a1[2]+offset1+len-1>=sequence_length[a1[0]][a1[1]] || a2[2]+offset2+len-1>=second.sequence_length[a2[0]][a2[1]])
+        if(a1[2]+len-1>=sequence_length[a1[0]][a1[1]] || a2[2]+len-1>=second.sequence_length[a2[0]][a2[1]])
             return false;
         int i;
         boolean equal;
         if(forward)
         {
             for(equal=true,i=0;i<len && equal;++i)
-                if(get_code(a1[0],a1[1],a1[2]+offset1+i)!=second.get_code(a2[0],a2[1],a2[2]+offset2+i))
+                if(get_code(a1[0],a1[1],a1[2]+i)!=second.get_code(a2[0],a2[1],a2[2]+i))
                 {
                     equal=false;
                 }
@@ -583,7 +583,7 @@ public class genome_database {
         else
         {
             for(equal=true,i=0;i<len && equal;++i)
-                if(get_code(a1[0],a1[1],a1[2]+offset1+i)!=second.get_complement_code(a2[0],a2[1],a2[2]+offset2+len-i-1))
+                if(get_code(a1[0],a1[1],a1[2]+i)!=second.get_complement_code(a2[0],a2[1],a2[2]+len-i-1))
                 {
                     equal=false;
                 }        
