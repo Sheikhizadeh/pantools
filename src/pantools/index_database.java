@@ -126,7 +126,7 @@ public class index_database {
         try{
             Files.createDirectory(Paths.get(path));
             System.out.println("Running KMC2...                      ");
-            executeCommand("kmc -r -k"+K_size+" -t"+cores+" -ci1 -fm "+(genomeDb.num_genomes>1?"@"+file.trim():genomeDb.genome_names[1])+" "+path+"/kmers "+path);
+            executeCommand("kmc -r -k"+K_size+" -t"+cores+" -m"+(Runtime.getRuntime().maxMemory()/1073741824L)+" -ci1 -fm "+(genomeDb.num_genomes>1?"@"+file.trim():genomeDb.genome_names[1])+" "+path+"/kmers "+path);
             String output=executeCommand("kmc_tools sort "+path+"/kmers "+path+"/sorted");
             if(output.startsWith("This database contains sorted k-mers already!"))
             {
@@ -215,7 +215,7 @@ public class index_database {
             K=old_index.K;
         // make new index for new genomes
             System.out.println("Running KMC2...                      ");
-           executeCommand("kmc -r -k"+K+" -t"+cores+" -ci1 -fm "+(genomeDb.num_genomes-previous_num_genomes>1?"@"+file.trim():genomeDb.genome_names[previous_num_genomes+1])+" "+path+"/new_kmers "+path);
+           executeCommand("kmc -r -k"+K+" -t"+cores+" -m"+(Runtime.getRuntime().maxMemory()/1073741824L)+" -ci1 -fm "+(genomeDb.num_genomes-previous_num_genomes>1?"@"+file.trim():genomeDb.genome_names[previous_num_genomes+1])+" "+path+"/new_kmers "+path);
         // merge two indeces    
             executeCommand("kmc_tools union "+path+"/old_index/kmers "+path+"/new_kmers "+path+"/sorted");
             pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");

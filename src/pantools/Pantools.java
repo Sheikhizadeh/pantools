@@ -162,9 +162,9 @@ public class Pantools {
                 break;
             case "build":
                 K=Integer.parseInt(args[1]);
-                if(K<10)
+                if(K<1 || K>256)
                 {
-                    System.out.println("K should be greater than 9!");
+                    System.out.println("K should be between 0 and 257 !");
                     System.exit(1);
                 }
                 PATH=args[2];
@@ -1355,7 +1355,7 @@ public class Pantools {
         //System.out.println("extend "+position);
         int begin,len=(int)node.getProperty("length");
         long id=node.getId(),last_kmer=(long)node.getProperty("last_kmer");
-        boolean broke=false;
+        boolean broke=false,degenerate=false;
         while(position<seq_len-1)
         {
             //System.out.println("extend "+position);
@@ -1363,10 +1363,13 @@ public class Pantools {
             {
                 ++position;
                 begin=position-K+1;
+                node.setProperty("length",len);
+                node.setProperty("last_kmer",last_kmer);                
                 jump();
                 create_degenerate(begin);
                 curr_node=degenerate_node;
-                curr_side=0;
+                curr_side=0; // we have set it zero already in create()
+                degenerate=true;
                 break;
             }
             next_kmer();
@@ -1394,8 +1397,11 @@ public class Pantools {
                 break;
             }
         }
-        node.setProperty("length",len);
-        node.setProperty("last_kmer",last_kmer);
+        if(!degenerate)
+        {
+            node.setProperty("length",len);
+            node.setProperty("last_kmer",last_kmer);
+        }
         if(!broke && position==seq_len-1 )
             finish=true;
     }
