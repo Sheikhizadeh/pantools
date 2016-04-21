@@ -6,6 +6,7 @@
 package pantools;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Arrays;
@@ -19,6 +20,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import org.neo4j.io.fs.FileUtils;
 
 /**
  *
@@ -53,10 +55,8 @@ public class index_database {
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
     public index_database(String path,genome_database genomeDb)
     {
-        int cores=Runtime.getRuntime().availableProcessors()/2+1;
         int k;
         long p;
-        pointer null_pointer=new pointer();
         try{
             pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");
             pre_file.seek(pre_file.length()-8);
@@ -85,9 +85,9 @@ public class index_database {
                 {
                     prefix_ptr[q]=read_long(pre_buff);
                 }
+                pre_buff=null;
             }
             pre_file.close();
-            pre_buff=null;
         // mapping suffix file into the memory
             suf_rec_size=ctr_size+suf_len/4;
             max_byte=max_byte/suf_rec_size*suf_rec_size;
@@ -130,8 +130,13 @@ public class index_database {
             String output=executeCommand("kmc_tools sort "+path+"/kmers "+path+"/sorted");
             if(output.startsWith("This database contains sorted k-mers already!"))
             {
-                Files.copy(Paths.get(path+"/kmers.kmc_pre"), Paths.get(path+"/sorted.kmc_pre"));
-                Files.copy(Paths.get(path+"/kmers.kmc_suf"), Paths.get(path+"/sorted.kmc_suf"));
+                new File(path+"/kmers.kmc_pre").renameTo(new File(path+"/sorted.kmc_pre"));
+                new File(path+"/kmers.kmc_suf").renameTo(new File(path+"/sorted.kmc_suf"));
+            }
+            else
+            {
+                new File(path+"/kmers.kmc_pre").delete();
+                new File(path+"/kmers.kmc_suf").delete();
             }
             pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");
             pre_file.seek(pre_file.length()-8);
@@ -160,9 +165,9 @@ public class index_database {
                 {
                     prefix_ptr[q]=read_long(pre_buff);
                 }
+                pre_buff=null;
             }
             pre_file.close();
-            pre_buff=null;
         // mapping suffix file into the memory
             suf_rec_size=ctr_size+suf_len/4;
             max_byte=max_byte/suf_rec_size*suf_rec_size;
@@ -205,8 +210,6 @@ public class index_database {
     // move current index files to directory old_index
         try{
             Files.createDirectory(Paths.get(path+"/old_index"));
-            Files.move(Paths.get(path+"/kmers.kmc_pre"),  Paths.get(path+"/old_index/kmers.kmc_pre"));
-            Files.move(Paths.get(path+"/kmers.kmc_suf"),  Paths.get(path+"/old_index/kmers.kmc_suf"));
             Files.move(Paths.get(path+"/sorted.kmc_pre"), Paths.get(path+"/old_index/sorted.kmc_pre"));
             Files.move(Paths.get(path+"/sorted.kmc_suf"), Paths.get(path+"/old_index/sorted.kmc_suf"));
             Files.move(Paths.get(path+"/pointers.db"),    Paths.get(path+"/old_index/pointers.db"));
@@ -217,7 +220,7 @@ public class index_database {
             System.out.println("Running KMC2...                      ");
            executeCommand("kmc -r -k"+K+" -t"+cores+" -m"+(Runtime.getRuntime().maxMemory()/1073741824L)+" -ci1 -fm "+(genomeDb.num_genomes-previous_num_genomes>1?"@"+file.trim():genomeDb.genome_names[previous_num_genomes+1])+" "+path+"/new_kmers "+path);
         // merge two indeces    
-            executeCommand("kmc_tools union "+path+"/old_index/kmers "+path+"/new_kmers "+path+"/sorted");
+            executeCommand("kmc_tools union "+path+"/old_index/sorted "+path+"/new_kmers "+path+"/sorted");
             pre_file = new RandomAccessFile(path+"/sorted.kmc_pre","r");
             pre_file.seek(pre_file.length()-8);
             header_pos=read_int(pre_file);
@@ -244,9 +247,9 @@ public class index_database {
                     prefix_ptr[q]=read_long(pre_buff);
                     //System.out.println(q+" "+prefix_ptr[q]);
                 }
+                pre_buff=null;
             }
             pre_file.close();
-            pre_buff=null;
         // mapping suffix file into the memory    
             suf_len=K-pre_len;
             suf_rec_size=ctr_size+suf_len/4;
@@ -300,11 +303,7 @@ public class index_database {
             }
             tx.success();} 
             old_index.close();
-            Files.delete(Paths.get(path+"/old_index/kmers.kmc_pre"));
-            Files.delete(Paths.get(path+"/old_index/kmers.kmc_suf"));
-            Files.delete(Paths.get(path+"/old_index/sorted.kmc_pre"));
-            Files.delete(Paths.get(path+"/old_index/sorted.kmc_suf"));
-            Files.delete(Paths.get(path+"/old_index/pointers.db"));
+            FileUtils.deleteRecursively( new File( path+"/old_index/" ) );
             Files.delete(Paths.get(path+"/new_kmers.kmc_pre"));
             Files.delete(Paths.get(path+"/new_kmers.kmc_suf"));
         }catch (IOException e) {
@@ -328,14 +327,20 @@ public class index_database {
         return suf_len;
     } 
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void close()throws IOException
+    public void close()
     {
-        ptr_file.close();
-        suf_file.close();
+        try{
+            ptr_file.close();
+            suf_file.close();
+        }catch(IOException e){
+                System.out.println(e.getMessage());  
+                System.exit(1);
+        }
         for(int k=0;k<ptr_parts_num;++k)
+        {
             ptr_buff[k]=null;
-        for(int k=0;k<suf_parts_num;++k)
             suf_buff[k]=null;
+        }
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
     int read_int(RandomAccessFile file)throws IOException

@@ -302,6 +302,7 @@ public class Pantools {
             System.out.println("Total time : "+(System.currentTimeMillis()-startTime)/1000+"."+(System.currentTimeMillis()-startTime)%1000+" seconds");
             print_peak_memory();
             graphDb.shutdown(); 
+            genomeDb.close();
         }
         else
         {
@@ -377,6 +378,8 @@ public class Pantools {
             tx.success();
         }
         graphDb.shutdown();  
+        genomeDb.close();
+        indexDb.close();
         System.out.println("Total time : "+(System.currentTimeMillis()-startTime)/1000+"."+(System.currentTimeMillis()-startTime)%1000+" seconds");
         print_peak_memory();
         try{
@@ -481,6 +484,8 @@ public class Pantools {
                     tx.success();
                 }
                 graphDb.shutdown(); 
+                genomeDb.close();
+                indexDb.close();
                 System.out.println("Total time : "+(System.currentTimeMillis()-startTime)/1000+"."+(System.currentTimeMillis()-startTime)%1000+" seconds");
                 print_peak_memory();
                 try{
@@ -617,6 +622,7 @@ public class Pantools {
             { 
             }
             graphDb.shutdown(); 
+            genomeDb.close();
             System.out.println(gene_nodes+" genes annotated.");
             System.out.println("Total time : "+(System.currentTimeMillis()-startTime)/1000+"."+(System.currentTimeMillis()-startTime)%1000+" seconds");
             print_peak_memory();

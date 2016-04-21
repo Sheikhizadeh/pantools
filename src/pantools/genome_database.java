@@ -495,6 +495,18 @@ public class genome_database {
            System.exit(1);
         }        
     }
+    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    public void close()
+    {
+        try{
+        genomes_file.close();
+        }catch(IOException e){
+                System.out.println(e.getMessage());  
+                System.exit(1);
+        }
+        for(int k=0;k<parts_num;++k)
+            genomes_buff[k]=null;
+    }
     /*
     Returns the binary code of nucleotide at genomic position (g,s,p) 
     */ 
