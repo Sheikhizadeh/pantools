@@ -6,10 +6,10 @@ Wageningen university and research center, the Netherlands.
 
 Requirements
 ------------
-- KMC: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files. 
+- KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files. 
        The homepage of the KMC project is http://sun.aei.polsl.pl/kmc
-       You need to unzipd kmc.zip and add the path of the right version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.
-- Java Virtual Machine version 1.7 or higher: add the corresponding path to java executable
+       You need to unzipd kmc.zip and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.
+- Java Virtual Machine version 1.7 or higher: Add the path to the java executable to your OS path environment variable. 
 
 How to run the program 
 ----------------------
@@ -47,19 +47,12 @@ List of commands
    
 Description of commands' arguments
 ----------------------------------
-a) K :
-   Size of K for de Bruijn graph
-b) genome_names_file:
-   A text file containing genome_number and genome_name seperated by a single space in each line
-c) fasta_names_file:
-   A text file containing paths to FASTA files; each in one line
-d) gff_names_file:
-   A text file containing paths to GFF files corresponding to the stored genomes,
-   in the same order. Missing annotations are shown by an empty line.
-e) annotation_records:
-   A text file containing annotation titles as they appear in gff file.
-f) regions_file:
-   A text file containing genome_number, sequence_number, begin and
-   end of a region in each line seperated by one space 
-g) groups_file:
-   A FASTA file with titles being names given to the groups followed by lines containing annotation titles as they appear in gff files.
+K :                 is size of K for construction of the de Bruijn graph.
+genome_names_file : is a text file containing genome_number and genome_name seperated by a single space in each line.
+fasta_names_file :  is a text file containing paths to FASTA files; each in one line.
+gff_names_file :    is a text file containing paths to GFF files corresponding to the stored genomes,
+                    in the same order. Missing annotations are shown by an empty line.
+annotation_records :is a text file containing annotation titles as they appear in gff file.
+regions_file:       is a text file containing genome_number, sequence_number, begin and
+                    end of a region in each line seperated by one space. 
+groups_file:        is a FASTA file with titles being names given to the groups followed by lines containing annotation titles as they appear in gff files.
