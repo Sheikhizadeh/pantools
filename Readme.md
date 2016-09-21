@@ -30,7 +30,7 @@ List of commands and examples for the provided sample data :
 
    Example: 
    
-   java  -Xmx4g  -jar  /home/pantools/dist/pantools.jar build  31  /home/two_hiv_pangenome_database  /home/pantools/example/sample_genomes_path.txt
+   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  31  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt
              
 2. annotate:
    To add annotations to a pan-genome. This function also produce a FASTA file containing all the protein sequences in the same order as they have been annotated in the GFF file.
@@ -42,7 +42,7 @@ List of commands and examples for the provided sample data :
 
    Example: 
 
-   java  -jar  /home/pantools/dist/pantools.jar  annotate  /home/two_hiv_pangenome_database  /home/pantools/example/sample_annotations_path.txt
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  annotate  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotations_path.txt
 
 3. add:
    To add new genomes to an available pan-genome.
@@ -62,7 +62,7 @@ List of commands and examples for the provided sample data :
 
    Example: 
 
-   java  -jar  /home/pantools/dist/pantools.jar  retrieve  genes  /home/two_hiv_pangenome_database  /home/pantools/example/sample_annotaion_records.txt
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotaion_records.txt
 
 5. retrieve regions:
    To extract sequence of some genomic regios.
@@ -74,7 +74,7 @@ List of commands and examples for the provided sample data :
 
    Example: 
 
-   java  -jar  /home/pantools/dist/pantools.jar  retrieve  regions  /home/two_hiv_pangenome_database  /home/pantools/example/sample_genomic_regions.txt
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  regions  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomic_regions.txt
 
 6. reconstruct:
    To reconstruct all or a set of genomes out of the pan-genome.
@@ -86,7 +86,7 @@ List of commands and examples for the provided sample data :
 
    Example: 
 
-   java  -jar  /home/pantools/dist/pantools.jar  reconstruct  all  /home/two_hiv_pangenome_database
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  reconstruct  all  /home/sheik005/two_hiv_pangenome_database
 
 7. group:
    To group genes by adding group nodes pointing to them, either de novo (based on thier similarity) or using a group file.
@@ -97,7 +97,7 @@ List of commands and examples for the provided sample data :
 
    Example: 
 
-   java  -jar  /home/pantools/dist/pantools.jar  group  /home/two_hiv_pangenome_database  /home/pantools/example/sample_orthologous_groups.txt
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_orthologous_groups.txt
 
 
 8. compare:
