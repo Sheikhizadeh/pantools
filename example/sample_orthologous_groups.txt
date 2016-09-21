@@ -1,27 +1,9 @@
->gag
-AF069671.1	feature	gene	22	1509	.	+	.	ID=gag
-AF413987.1	feature	gene	798	2291	.	+	.	ID=gag
->pol
-AF069671.1	feature	gene	1308	4313	.	+	.	ID=pol
-AF413987.1	feature	gene	2084	5095	.	+	.	ID=pol
->vif
-AF069671.1	feature	gene	4258	4836	.	+	.	ID=vif
-AF413987.1	feature	gene	5040	5618	.	+	.	ID=vif
->vpr
-AF069671.1	feature	gene	4776	5066	.	+	.	ID=vpr
-AF413987.1	feature	gene	5558	5848	.	+	.	ID=vpr
->tat
-AF069671.1	feature	gene	5047	7710	.	+	.	ID=tat
-AF413987.1	feature	gene	5829	8456	.	+	.	ID=tat
->rev
-AF069671.1	feature	gene	5186	7915	.	+	.	ID=rev
-AF413987.1	feature	gene	5968	8661	.	+	.	ID=rev
->vpu
-AF069671.1	feature	gene	5288	5533	.	+	.	ID=vpu
-AF413987.1	feature	gene	6064	6309	.	+	.	ID=vpu
->env
-AF069671.1	feature	gene	5451	8057	.	+	.	ID=env
-AF413987.1	feature	gene	6227	8803	.	+	.	ID=env
->nef
-AF069671.1	feature	gene	8059	8673	.	+	.	ID=nef
-AF413987.1	feature	gene	8805	9428	.	+	.	ID=nef
+gag 1_1_1 2_1_1
+pol 1_1_2 2_1_2
+vif 1_1_3 2_1_3
+vpr 1_1_4 2_1_4
+tat 1_1_5 2_1_5
+rev 1_1_6 2_1_6
+vpu 1_1_7 2_1_7
+env 1_1_8 2_1_8
+nef 1_1_9 2_1_9

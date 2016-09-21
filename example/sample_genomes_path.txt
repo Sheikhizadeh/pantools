@@ -1,3 +1,2 @@
-[path_to_the_github_library]/pantools/example/data/1/genome.fasta
-[path_to_the_github_library]/pantools/example/data/2/genome.fasta
+/home/sheik005/pantools/example/data/2/genome.fasta
 

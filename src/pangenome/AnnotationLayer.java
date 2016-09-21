@@ -140,7 +140,7 @@ public class AnnotationLayer {
                     if (gff_name.equals(""))
                         continue;
                     BufferedReader in = new BufferedReader(new FileReader(gff_name));
-                    //BufferedWriter out = new BufferedWriter(new FileWriter(gff_name + ".proteins.fasta"));
+                    BufferedWriter out = new BufferedWriter(new FileWriter(gff_name + ".proteins.fasta"));
                     while (in.ready()) // for each record of gff file
                     {
                         try (Transaction tx2 = graphDb.beginTx()) {
@@ -207,8 +207,8 @@ public class AnnotationLayer {
                                                     protein = pb.translate(coding_RNA, forward);
                                                     if (protein.length() != 0) {
                                                         ++protein_num;
-                                                        //out.write(">" + origin + "_" + protein_num + "\n");
-                                                        //write_fasta(out, protein, 70);
+                                                        out.write(">" + origin + "_" + protein_num + "\n");
+                                                        write_fasta(out, protein, 70);
                                                         rna_node.setProperty("protein", protein);
                                                         rna_node.setProperty("protein_number", origin + "_" + protein_num);
                                                         rna_node.setProperty("coding_length", rna_len);
@@ -259,8 +259,8 @@ public class AnnotationLayer {
                                                     protein = pb.translate(coding_RNA, forward);
                                                     if (protein.length() != 0) {
                                                         ++protein_num;
-                                                        //out.write(">" + origin + "_" + protein_num + "\n");
-                                                        //write_fasta(out, protein, 70);
+                                                        out.write(">" + origin + "_" + protein_num + "\n");
+                                                        write_fasta(out, protein, 70);
                                                         rna_node.setProperty("protein", protein);
                                                         rna_node.setProperty("protein_number", origin + "_" + protein_num);
                                                         rna_node.setProperty("coding_length", rna_len);
@@ -336,8 +336,8 @@ public class AnnotationLayer {
                                 protein = pb.translate(coding_RNA, forward);
                                 if (protein.length() != 0) {
                                     ++protein_num;
-                                    //out.write(">" + origin + " _" + protein_num + "\n");
-                                    //write_fasta(out, protein, 70);
+                                    out.write(">" + origin + " _" + protein_num + "\n");
+                                    write_fasta(out, protein, 70);
                                     rna_node.setProperty("protein", protein);
                                     rna_node.setProperty("protein_number", origin + "_" + protein_num);
                                     rna_node.setProperty("coding_length", rna_len);
@@ -356,7 +356,7 @@ public class AnnotationLayer {
                             isoforms_num = 0;
                         }
                         in.close();
-                        //out.close();
+                        out.close();
                         System.out.println("\r" + g_number + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_pgRNAs);
                         tx3.success();
                     }
@@ -373,7 +373,7 @@ public class AnnotationLayer {
                         for (int k = 0; genesIterator.hasNext(); ++k) {
                             genes_array[k] = genesIterator.next();
                         }
-                        graphDb.findNode(sequence_label, "origin", i + "_" + j).setProperty("genes", genes_array);
+                        graphDb.findNode(sequence_label, "number", i + "_" + j).setProperty("genes", genes_array);
                     }
                 }
                 tx4.success();
@@ -417,7 +417,7 @@ public class AnnotationLayer {
     /*
      To annotate nodes of the gene with gene_id and returning them in the order they traversed
      */
-    public Long[] annotate_nodes_of_gene(IndexPointer start_ptr, String origin, int begin, int end, long gene_id) {
+    public long[] annotate_nodes_of_gene(IndexPointer start_ptr, String origin, int begin, int end, long gene_id) {
         boolean found;
         Node neighbor, node=graphDb.getNodeById(start_ptr.node_id);
         String lable, name;
@@ -462,9 +462,9 @@ public class AnnotationLayer {
                 node.setProperty("gene_ids", new_gene_ids);
             }
         }
+        node_ids_list.add(node.getId());
         //System.out.println("loc before start:"+loc);
         while (length < gene_len && found) {
-            node_ids_list.add(node.getId());
             found = false;
             for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
                 neighbor = r.getEndNode();
@@ -475,6 +475,7 @@ public class AnnotationLayer {
                     neighbor_len = (int) neighbor.getProperty("length");
                     if (b_search((int[]) neighbor.getProperty(lable), loc - K + 1) >= 0) {
                         found = true;
+                        node_ids_list.add(node.getId());
                         //System.out.println(neighbor.getId()+" "+(loc-K+1));
                         //System.out.println("length:"+length+" neighbor_len:"+neighbor_len+" gene_len:"+gene_len);
                         //System.out.println((length+neighbor_len-K+1)+" ? "+(gene_len));
@@ -520,6 +521,7 @@ public class AnnotationLayer {
                         neighbor_len = (int) neighbor.getProperty("length");
                         if (b_search((int[]) neighbor.getProperty(lable), loc - K + 1) >= 0) {
                             found = true;
+                            node_ids_list.add(node.getId());
                             if (length + neighbor_len - K + 1 > gene_len) {
                                 //loc+=gene_len-length;
                                 length = gene_len;
@@ -549,7 +551,9 @@ public class AnnotationLayer {
                 }
             }
         }//for loc
-        Long[] node_ids_array = new Long[node_ids_list.size()];
+        long[] node_ids_array = new long[node_ids_list.size()];
+        for(i = 0 ; ! node_ids_list.isEmpty() ; ++i)
+            node_ids_array[i] = node_ids_list.removeFirst();
         return node_ids_array;
     }
     /*
@@ -558,44 +562,60 @@ public class AnnotationLayer {
     public void denovo_homology_annotaion() {
         int i, j, gene_len=0, current_gene_len, num_group_members;
         long[] node_ids;
-        long[] gene_ids;
-        int copy_number[] = new int[genomeDb.num_genomes+1];
+        long[] node_gene_ids;
+        int copy_number[];
         String current_gene_seq, gene_seq;
         Node group_node, gene_node, node, current_gene_node;
-        long gene_id, current_gene_id=-1;
+        long main_gene_id, gene_id, current_gene_id;
+        ResourceIterator<Node> genes_iterator;
+        if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
+            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
+                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+            registerShutdownHook(graphDb);
+        } else {
+            System.out.println("pangenome database not found!");
+            System.exit(0);
+        }
+        startTime = System.currentTimeMillis();
+        genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
         LinkedList<Node> homolog_gene_nodes = new LinkedList(); 
         PriorityQueue<Long> pq = new PriorityQueue();
-        ResourceIterator<Node> genes_iterator;
+        copy_number = new int[genomeDb.num_genomes+1];
         Alignment aligner = new Alignment();
         try (Transaction tx = graphDb.beginTx()) {
             genes_iterator=graphDb.findNodes(gene_label);
             while (genes_iterator.hasNext()) {
                 num_group_members = 1;
-                for (i = 1; i <= genomeDb.num_genomes; ++i) {
-                    copy_number[i] = 0;
-                }
                 gene_node=genes_iterator.next();
+                main_gene_id = gene_node.getId();
+                //System.out.println("gene........"+main_gene_id);
                 gene_len=(int)gene_node.getProperty("length");
                 gene_seq=(String)gene_node.getProperty("sequence");
+            // To avoid having one gene in different groups    
                 if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) {
                     node_ids=(long[])gene_node.getProperty("node_ids");
                     for (i=0;i<node_ids.length;++i) {
                         node = graphDb.getNodeById(node_ids[i]);
-                        gene_ids=(long[])node.getProperty("gene_ids");
-                        for (j = 0 ; j < gene_ids.length ; ++j)
-                            pq.offer(gene_ids[j]);
+                        node_gene_ids=(long[])node.getProperty("gene_ids");
+                        for (j = 0 ; j < node_gene_ids.length ; ++j)
+                        // avoid comparisons to the gene itself    
+                            if(main_gene_id != node_gene_ids[j])
+                                pq.offer(node_gene_ids[j]);
                     }
-                    while (!pq.isEmpty()) {
+                    current_gene_id=-1; // To be different from the first in the proprity queue
+                    while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
                         gene_id = pq.remove();
+                        //System.out.println(gene_id);
                         if(gene_id != current_gene_id) {
                             current_gene_id = gene_id;
                             current_gene_node = graphDb.getNodeById(gene_id);
+                        // To avoid having one gene in different groups    
                             if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ) {
                                 // If gene and the current mate are almost equally long and highly similar 
                                 current_gene_len = (int)current_gene_node.getProperty("length");
                                 if(Math.abs(current_gene_len - gene_len) <= Math.max(current_gene_len, gene_len) / 10 ) {
                                     current_gene_seq=(String)current_gene_node.getProperty("sequence");
-                                    if (aligner.similarity(current_gene_seq, gene_seq) > match_score * 0.9) {
+                                    if (aligner.similarity(current_gene_seq, gene_seq) > match_score * 0.75) {
                                         num_group_members += 1;
                                         homolog_gene_nodes.add(current_gene_node);
                                         copy_number[(int)current_gene_node.getProperty("genome")] += 1;
@@ -607,11 +627,15 @@ public class AnnotationLayer {
                     if( num_group_members > 1) {
                         group_node = graphDb.createNode(homolog_lable);
                         group_node.setProperty("num_members", num_group_members);
+                    // Because the gene has not been added to the group itself    
                         group_node.createRelationshipTo(gene_node, RelTypes.contains);
+                        copy_number[(int)gene_node.getProperty("genome")] += 1;
                         while (!homolog_gene_nodes.isEmpty()) 
                             group_node.createRelationshipTo(homolog_gene_nodes.removeFirst(), RelTypes.contains);
-                        for (i = 1; i <= genomeDb.num_genomes; ++i) 
+                        for (i = 1; i <= genomeDb.num_genomes; ++i) {
                             group_node.setProperty("copy_number_in_genome_" + i, copy_number[i]);
+                            copy_number[i] = 0;
+                        }
                     }
                 }
             }

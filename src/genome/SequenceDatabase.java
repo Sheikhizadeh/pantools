@@ -18,10 +18,12 @@ import java.nio.channels.FileChannel;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Transaction;
+import static pantools.Pantools.genome_label;
+import static pantools.Pantools.pangenome_label;
+import static pantools.Pantools.sequence_label;
 
 /**
  *
@@ -200,7 +202,7 @@ public class SequenceDatabase {
         num_bytes = 0;
         initalize();
         try (Transaction tx = graphDb.beginTx()) {
-            db_node = graphDb.findNodes(DynamicLabel.label("pangenome")).next();
+            db_node = graphDb.findNodes(pangenome_label).next();
             num_genomes = (int) db_node.getProperty("num_genomes");
             genome_length = new long[num_genomes + 1];
             sequence_titles = new String[num_genomes + 1][];
@@ -208,13 +210,13 @@ public class SequenceDatabase {
             sequence_start = new long[num_genomes + 1][];
             num_sequences = new int[num_genomes + 1];
             for (g = 1; g <= num_genomes; ++g) {
-                gen_node = graphDb.findNode(DynamicLabel.label("genome"), "number", g);
+                gen_node = graphDb.findNode(genome_label, "number", g);
                 num_sequences[g] = (int) gen_node.getProperty("num_sequences");
                 sequence_titles[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
-                    seq_node = graphDb.findNode(DynamicLabel.label("sequence"), "number", g + "_" + s);
+                    seq_node = graphDb.findNode(sequence_label, "number", g + "_" + s);
                     sequence_titles[g][s] = (String) seq_node.getProperty("sequence_title");
                     sequence_length[g][s] = (long) seq_node.getProperty("sequence_length");
                     sequence_start[g][s] = num_bytes;

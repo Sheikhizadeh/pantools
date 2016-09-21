@@ -21,7 +21,6 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Map.Entry;
-import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
@@ -209,7 +208,7 @@ public class SequenceLayer {
                     StringBuilder seq = new StringBuilder();
                     for (g = 1; g <= genomeDb.num_genomes; ++g) {
                         for (s = 1; s <= genomeDb.num_sequences[g]; ++s) {
-                            seq_node = graphDb.findNode(DynamicLabel.label("sequence"), "origin", g + "_" + s);
+                            seq_node = graphDb.findNode(sequence_label, "number", g + "_" + s);
                             start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
                             extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1), g + "_" + s, 0, (int) genomeDb.sequence_length[g][s] - 1);
                             len = seq.length();
@@ -500,7 +499,7 @@ public class SequenceLayer {
                             out = new BufferedWriter(new FileWriter(PATH + "/genome_" + g + ".fasta"));
                             for (s = 1; s <= genomeDb.num_sequences[g]; ++s) {
                                 out.write(">" + genomeDb.sequence_titles[g][s] + "\n");
-                                seq_node = graphDb.findNode(DynamicLabel.label("sequence"), "origin", g + "_" + s);
+                                seq_node = graphDb.findNode(sequence_label, "number", g + "_" + s);
                                 start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
                                 extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1l), g + "_" + s, 0, (int) genomeDb.sequence_length[g][s] - 1);
                                 write_fasta(out, seq.toString(), 80);
@@ -527,7 +526,7 @@ public class SequenceLayer {
                                 out = new BufferedWriter(new FileWriter(PATH + (fields.length > 1 ? "/" + fields[1] : "/genome_" + g) + ".fasta"));
                                 for (s = 1; s <= genomeDb.num_sequences[g]; ++s) {
                                     out.write(">" + genomeDb.sequence_titles[g][s] + "\n");
-                                    seq_node = graphDb.findNode(DynamicLabel.label("sequence"), "origin", g + "_" + s);
+                                    seq_node = graphDb.findNode(sequence_label, "number", g + "_" + s);
                                     start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
                                     extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1l), g + "_" + s, 0, (int) genomeDb.sequence_length[g][s] - 1);
                                     write_fasta(out, seq.toString(), 80);
@@ -801,7 +800,7 @@ public class SequenceLayer {
         int[] anchor_positions;
         String anchor_sides;
         String[] sides = {"F" + origin, "R" + origin};
-        Node seq_node = graphDb.findNode(sequence_label, "origin", origin);
+        Node seq_node = graphDb.findNode(sequence_label, "number", origin);
         anchor_nodes = (long[]) seq_node.getProperty("anchor_nodes");
         anchor_positions = (int[]) seq_node.getProperty("anchor_positions");
         anchor_sides = (String) seq_node.getProperty("anchor_sides");
@@ -1366,7 +1365,7 @@ public class SequenceLayer {
                 System.out.println("sequence " + sequence + "/" + genomeDb.num_sequences[genome] + " of genome " + genome + "\tlength=" + genomeDb.sequence_length[genome][sequence]);
                 try (Transaction tx = graphDb.beginTx()) {
                     sequence_node = curr_node = graphDb.createNode(sequence_label);
-                    sequence_node.setProperty("origin", genome + "_" + sequence);
+                    sequence_node.setProperty("number", genome + "_" + sequence);
                     sequence_node.setProperty("sequence_title", genomeDb.sequence_titles[genome][sequence]);
                     sequence_node.setProperty("sequence_length", genomeDb.sequence_length[genome][sequence]);
                     genome_node.createRelationshipTo(sequence_node, RelTypes.has);
@@ -1436,7 +1435,7 @@ public class SequenceLayer {
                 System.out.println("Localizing sequence " + address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "...                        ");
                 seq_len = genomeDb.sequence_length[address[0]][address[1]] - 1;
                 try (Transaction tx = graphDb.beginTx()) {
-                    node = seq_node = graphDb.findNode(sequence_label, "origin", address[0] + "_" + address[1]);
+                    node = seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
                     tx.success();
                 }
                 node_side = 0;

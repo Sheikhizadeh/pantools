@@ -19,7 +19,9 @@ import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 import org.neo4j.io.fs.FileUtils;
 
 /**
@@ -54,7 +56,7 @@ public class IndexDatabase {
     private RandomAccessFile ptr_file;
     private MappedByteBuffer[] ptr_buff;
 
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    // To mount an available index database
 
     public IndexDatabase(String path) {
         int k;
@@ -115,7 +117,7 @@ public class IndexDatabase {
         }
     }
 
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    // To create an index for the first time 
 
     public IndexDatabase(String path, String file, int K_size, SequenceDatabase genomeDb) {
         int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
@@ -195,7 +197,7 @@ public class IndexDatabase {
         }
     }
 
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    // To extend an available index 
 
     public IndexDatabase(String path, String file, SequenceDatabase genomeDb, GraphDatabaseService graphDb, int previous_num_genomes) {
         int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
@@ -204,27 +206,26 @@ public class IndexDatabase {
         IndexPointer null_pointer = new IndexPointer();
         Node node;
         ResourceIterator<Node> nodes;
+        Path old_index_folder;
         // move current index files to directory old_index
         try {
-            Files.createDirectory(Paths.get(path + "/old_index"));
-            //Files.move(Paths.get(path+"/kmers.kmc_pre"),  Paths.get(path+"/old_index/kmers.kmc_pre"));
-            //Files.move(Paths.get(path+"/kmers.kmc_suf"),  Paths.get(path+"/old_index/kmers.kmc_suf"));
+            old_index_folder = Files.createDirectory(Paths.get(path+"/old_index"));
             Files.move(Paths.get(path + "/sorted.kmc_pre"), Paths.get(path + "/old_index/sorted.kmc_pre"));
             Files.move(Paths.get(path + "/sorted.kmc_suf"), Paths.get(path + "/old_index/sorted.kmc_suf"));
             Files.move(Paths.get(path + "/pointers.db"), Paths.get(path + "/old_index/pointers.db"));
-            // load old_index
+        // load old_index
             IndexDatabase old_index = new IndexDatabase(path + "/old_index");
             K = old_index.K;
-            // make new index for new genomes
+        // make new index for new genomes
             System.out.println("Running KMC2...                      ");
             executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + (genomeDb.num_genomes - previous_num_genomes > 1 ? "@" + file.trim() : genomeDb.genome_names[previous_num_genomes + 1]) + " " + path + "/new_kmers " + path);
-            // merge two indeces    
+        // merge two indeces    
             executeCommand("kmc_tools union " + path + "/old_index/sorted " + path + "/new_kmers " + path + "/sorted");
             pre_file = new RandomAccessFile(path + "/sorted.kmc_pre", "r");
             pre_file.seek(pre_file.length() - 8);
             header_pos = read_int(pre_file);
             pre_file.seek(pre_file.length() - 8 - header_pos);
-            // read the merged index properties    
+        // read the merged index properties    
             K = read_int(pre_file);
             mode = read_int(pre_file);
             ctr_size = read_int(pre_file);
@@ -234,7 +235,7 @@ public class IndexDatabase {
             new_kmers_num = read_long(pre_file);
             kmers_num += new_kmers_num;
             System.out.println(new_kmers_num + " new kmers generated.                    ");
-            // load the prefix file into the memory    
+        // load the prefix file into the memory    
             pre_file.seek(4);
             int q, len = 1 << (2 * pre_len);
             prefix_ptr = new long[len];
@@ -248,7 +249,7 @@ public class IndexDatabase {
                 pre_buff = null;
             }
             pre_file.close();
-            // mapping suffix file into the memory    
+        // mapping suffix file into the memory    
             suf_len = K - pre_len;
             suf_rec_size = ctr_size + suf_len / 4;
             max_byte = max_byte / suf_rec_size * suf_rec_size;
@@ -261,7 +262,7 @@ public class IndexDatabase {
                 suf_parts_size[k] = (int) (k == suf_parts_num - 1 ? (kmers_num * suf_rec_size) % max_byte : max_byte);
                 suf_buff[k] = suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + k * suf_parts_size[0], suf_parts_size[k]);
             }
-            // mapping pointers file into the memory    
+        // mapping pointers file into the memory    
             max_byte = max_byte / ptr_len * ptr_len;
             ptr_parts_num = (int) ((kmers_num * ptr_len) % max_byte == 0 ? (kmers_num * ptr_len) / max_byte : (kmers_num * ptr_len) / max_byte + 1);
             ptr_parts_size = new long[ptr_parts_num];
@@ -274,7 +275,7 @@ public class IndexDatabase {
             for (p = 0; p < kmers_num; ++p) {
                 put_pointer(null_pointer, p);
             }
-            // adjusting available pointers
+        // adjusting available pointers
             try (Transaction tx = graphDb.beginTx()) {
                 nodes = graphDb.findNodes(DynamicLabel.label("node"));
                 seq_nodes = (int) graphDb.findNodes(DynamicLabel.label("pangenome")).next().getProperty("num_nodes");
@@ -309,14 +310,12 @@ public class IndexDatabase {
                 }
             }
             old_index.close();
-            //Files.delete(Paths.get(path+"/old_index/kmers.kmc_pre"));
-            //Files.delete(Paths.get(path+"/old_index/kmers.kmc_suf"));
-            FileUtils.deleteRecursively(new File(path + "/old_index/"));
-            //Files.delete(Paths.get(path+"/old_index/sorted.kmc_pre"));
-            //Files.delete(Paths.get(path+"/old_index/sorted.kmc_suf"));
-            //Files.delete(Paths.get(path+"/old_index/pointers.db"));
+            Files.delete(Paths.get(path + "/old_index/sorted.kmc_suf"));
             Files.delete(Paths.get(path + "/new_kmers.kmc_pre"));
             Files.delete(Paths.get(path + "/new_kmers.kmc_suf"));
+            Files.delete(Paths.get(path + "/old_index/pointers.db"));
+            Files.delete(Paths.get(path + "/old_index/sorted.kmc_pre"));
+            //Files.delete(old_index_folder);
         } catch (IOException e) {
             System.out.println(e.getMessage() + "\nFailed to make index!");
             System.exit(1);
@@ -579,4 +578,5 @@ public class IndexDatabase {
         }
         return exe_output.toString();
     }
+    
 }
