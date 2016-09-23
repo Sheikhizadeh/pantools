@@ -55,6 +55,7 @@ import static pangenome.SequenceLayer.extract_sequence;
 import static pangenome.SequenceLayer.write_fasta;
 import static pangenome.SequenceLayer.b_search;
 import static alignment.Alignment.*;
+import alignment.AlignmentBlock;
 import static pantools.Pantools.db_trsc_limit;
 
 /**
@@ -85,7 +86,7 @@ public class AnnotationLayer {
     }
 
     public void annotate(String gff_paths) {
-        int i, j, num_genes, num_mRNAs, num_tRNAs, num_ncRNAs, num_pgRNAs, num_exons, protein_num;
+        int i, j, num_genes=0, num_mRNAs, num_tRNAs, num_ncRNAs, num_pgRNAs, num_exons, protein_num;
         int begin, end, s = 0, g_number, rna_len, isoforms_num, gene_start_pos = 0, phase;
         boolean forward=false;
         num_exons = 0;
@@ -559,8 +560,8 @@ public class AnnotationLayer {
     /*
     
     */
-    public void denovo_homology_annotaion() {
-        int i, j, gene_len=0, current_gene_len, num_group_members;
+    public void denovo_homology_annotation() {
+        int i, j, step, gene_len=0, current_gene_len, num_groups=0, total_genes=0, group_size;
         long[] node_ids;
         long[] node_gene_ids;
         int copy_number[];
@@ -572,75 +573,109 @@ public class AnnotationLayer {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
                     .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
             registerShutdownHook(graphDb);
+            startTime = System.currentTimeMillis();
+            genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
+            LinkedList<Node> homolog_gene_nodes = new LinkedList(); 
+            PriorityQueue<Long> pq = new PriorityQueue();
+            copy_number = new int[genomeDb.num_genomes+1];
+            Alignment aligner = new Alignment();
+            System.out.println("genes\tgroups");
+            try (Transaction tx1 = graphDb.beginTx()) {
+                genes_iterator=graphDb.findNodes(gene_label);
+                while (genes_iterator.hasNext()) {
+                try (Transaction tx2 = graphDb.beginTx()) {
+                    for (step = 0; step < db_trsc_limit && genes_iterator.hasNext(); ++step) {
+                        gene_node=genes_iterator.next();
+                        main_gene_id = gene_node.getId();
+                        //System.out.println("gene........"+main_gene_id);
+                        gene_len=(int)gene_node.getProperty("length");
+                        gene_seq=(String)gene_node.getProperty("sequence");
+                    // To avoid having one gene in different groups    
+                        if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) {
+                            node_ids=(long[])gene_node.getProperty("node_ids");
+                            for (i=0;i<node_ids.length;++i) {
+                                node = graphDb.getNodeById(node_ids[i]);
+                                node_gene_ids=(long[])node.getProperty("gene_ids");
+                                for (j = 0 ; j < node_gene_ids.length ; ++j)
+                                // avoid comparisons to the gene itself    
+                                    if(main_gene_id != node_gene_ids[j])
+                                        pq.offer(node_gene_ids[j]);
+                            }
+                            current_gene_id = -1l; // To be different from the first in the proprity queue
+                            while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
+                                gene_id = pq.remove();
+                                if(gene_id != current_gene_id) {
+                                    current_gene_id = gene_id;
+                                    current_gene_node = graphDb.getNodeById(gene_id);
+                                    if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) // To avoid having one gene in different groups
+                                            && ! have_overlap(gene_node,current_gene_node )
+                                            ) {
+                                        current_gene_len = (int)current_gene_node.getProperty("length");
+                                    // If gene and the current mate are almost equally long 
+                                        if(Math.abs(current_gene_len - gene_len) <= Math.max(current_gene_len, gene_len) / 10 ) {
+                                            current_gene_seq=(String)current_gene_node.getProperty("sequence");
+                                        // If genes are highly similar 
+                                            if ( aligner.get_similarity(current_gene_seq, gene_seq) > 0.75 ) {
+                                                homolog_gene_nodes.add(current_gene_node);
+                                                copy_number[(int)current_gene_node.getProperty("genome")] += 1;
+                                            }
+                                        }
+                                    }
+                                }
+                            }// while
+                            group_size = homolog_gene_nodes.size()+1;
+                            if( group_size > 1 ) {
+                                group_node = graphDb.createNode(homolog_lable);
+                                ++num_groups;
+                                total_genes += group_size;
+                                group_node.setProperty("num_members", group_size );
+                            // Because the gene has not been added to the group itself    
+                                group_node.createRelationshipTo(gene_node, RelTypes.contains);
+                                copy_number[(int)gene_node.getProperty("genome")] += 1;
+                                while (!homolog_gene_nodes.isEmpty()) 
+                                    group_node.createRelationshipTo(homolog_gene_nodes.removeFirst(), RelTypes.contains);
+                                for (i = 1; i <= genomeDb.num_genomes; ++i) {
+                                    group_node.setProperty("copy_number_in_genome_" + i, copy_number[i]);
+                                    copy_number[i] = 0;
+                                }
+                            }
+                            else
+                                total_genes += 1;
+                        }
+                        if (num_groups % 10  == 0)
+                            System.out.print("\r" + total_genes + "\t" + num_groups);
+                        }// for
+                    tx2.success();
+                    }// transaction 2
+                } // while 
+                tx1.success();
+                System.out.println("\r" + total_genes + "\t" + num_groups);
+            } // transaction 1
         } else {
             System.out.println("pangenome database not found!");
             System.exit(0);
         }
-        startTime = System.currentTimeMillis();
-        genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
-        LinkedList<Node> homolog_gene_nodes = new LinkedList(); 
-        PriorityQueue<Long> pq = new PriorityQueue();
-        copy_number = new int[genomeDb.num_genomes+1];
-        Alignment aligner = new Alignment();
-        try (Transaction tx = graphDb.beginTx()) {
-            genes_iterator=graphDb.findNodes(gene_label);
-            while (genes_iterator.hasNext()) {
-                num_group_members = 1;
-                gene_node=genes_iterator.next();
-                main_gene_id = gene_node.getId();
-                //System.out.println("gene........"+main_gene_id);
-                gene_len=(int)gene_node.getProperty("length");
-                gene_seq=(String)gene_node.getProperty("sequence");
-            // To avoid having one gene in different groups    
-                if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) {
-                    node_ids=(long[])gene_node.getProperty("node_ids");
-                    for (i=0;i<node_ids.length;++i) {
-                        node = graphDb.getNodeById(node_ids[i]);
-                        node_gene_ids=(long[])node.getProperty("gene_ids");
-                        for (j = 0 ; j < node_gene_ids.length ; ++j)
-                        // avoid comparisons to the gene itself    
-                            if(main_gene_id != node_gene_ids[j])
-                                pq.offer(node_gene_ids[j]);
-                    }
-                    current_gene_id=-1; // To be different from the first in the proprity queue
-                    while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
-                        gene_id = pq.remove();
-                        //System.out.println(gene_id);
-                        if(gene_id != current_gene_id) {
-                            current_gene_id = gene_id;
-                            current_gene_node = graphDb.getNodeById(gene_id);
-                        // To avoid having one gene in different groups    
-                            if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ) {
-                                // If gene and the current mate are almost equally long and highly similar 
-                                current_gene_len = (int)current_gene_node.getProperty("length");
-                                if(Math.abs(current_gene_len - gene_len) <= Math.max(current_gene_len, gene_len) / 10 ) {
-                                    current_gene_seq=(String)current_gene_node.getProperty("sequence");
-                                    if (aligner.similarity(current_gene_seq, gene_seq) > match_score * 0.75) {
-                                        num_group_members += 1;
-                                        homolog_gene_nodes.add(current_gene_node);
-                                        copy_number[(int)current_gene_node.getProperty("genome")] += 1;
-                                    }
-                                }
-                            }
-                        }
-                    }// while
-                    if( num_group_members > 1) {
-                        group_node = graphDb.createNode(homolog_lable);
-                        group_node.setProperty("num_members", num_group_members);
-                    // Because the gene has not been added to the group itself    
-                        group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                        copy_number[(int)gene_node.getProperty("genome")] += 1;
-                        while (!homolog_gene_nodes.isEmpty()) 
-                            group_node.createRelationshipTo(homolog_gene_nodes.removeFirst(), RelTypes.contains);
-                        for (i = 1; i <= genomeDb.num_genomes; ++i) {
-                            group_node.setProperty("copy_number_in_genome_" + i, copy_number[i]);
-                            copy_number[i] = 0;
-                        }
-                    }
-                }
-            }
-            tx.success();
-        } 
+    }
+    /*
+        Decides if two genes overlap
+    */
+    private boolean have_overlap(Node gene1, Node gene2){
+        int gene1_begin, gene1_end, gene2_begin, gene2_end;
+        String gene1_origin, gene2_origin;
+        gene1_origin=(String)gene1.getProperty("origin");
+        gene1_begin=(int)gene1.getProperty("begin");
+        gene1_end=(int)gene1.getProperty("end");        
+        gene2_origin=(String)gene2.getProperty("origin");
+        gene2_begin=(int)gene2.getProperty("begin");
+        gene2_end=(int)gene2.getProperty("end");
+        if (!gene1_origin.equals(gene2_origin))
+            return false;
+        else if (gene1_begin > gene2_end || gene1_end < gene2_begin)
+            return false;
+        else if (gene2_begin > gene1_end || gene2_end < gene1_begin)
+            return false;
+        else
+            return true;
     }
     
     /*
@@ -720,7 +755,8 @@ public class AnnotationLayer {
                                 }
                             }
                         }
-                        System.out.print("\r" + total_proteins + "\t" + num_groups);
+                        if (num_groups % 100  == 0)
+                            System.out.print("\r" + total_proteins + "\t" + num_groups);
                     }
                     tx.success();
                     System.out.println("\r" + total_proteins + "\t" + num_groups);

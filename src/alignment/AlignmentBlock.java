@@ -13,14 +13,13 @@ public class AlignmentBlock {
 
     public StringBuilder one;
     public StringBuilder two;
-    public int score;
+    public double score;
 
-    public AlignmentBlock(int length) {
-        one = new StringBuilder(length);
-        two = new StringBuilder(length);
+    public AlignmentBlock() {
+        one = new StringBuilder();
+        two = new StringBuilder();
         score = 0;
     }
-
     public void reset() {
         one.setLength(0);
         two.setLength(0);

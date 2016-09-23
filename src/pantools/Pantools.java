@@ -141,7 +141,7 @@ public class Pantools {
             case "group":
                 PATH = args[2];
                 if (args[1].equals("denovo"))
-                    annLayer.denovo_homology_annotaion();
+                    annLayer.denovo_homology_annotation();
                 else
                     annLayer.group_ortholog_proteins(args[1]);
                 break;
