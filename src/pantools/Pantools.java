@@ -65,32 +65,7 @@ public class Pantools {
      */
 
     public static enum RelTypes implements RelationshipType {
-
-        AA0, AA1, AA2, AA3,
-        AC0, AC1, AC2, AC3,
-        AG0, AG1, AG2, AG3,
-        AT0, AT1, AT2, AT3,
-        AN0, AN1, AN2, AN3,
-        CA0, CA1, CA2, CA3,
-        CC0, CC1, CC2, CC3,
-        CG0, CG1, CG2, CG3,
-        CT0, CT1, CT2, CT3,
-        CN0, CN1, CN2, CN3,
-        GA0, GA1, GA2, GA3,
-        GC0, GC1, GC2, GC3,
-        GG0, GG1, GG2, GG3,
-        GT0, GT1, GT2, GT3,
-        GN0, GN1, GN2, GN3,
-        TA0, TA1, TA2, TA3,
-        TC0, TC1, TC2, TC3,
-        TG0, TG1, TG2, TG3,
-        TT0, TT1, TT2, TT3,
-        TN0, TN1, TN2, TN3,
-        NA0, NA1, NA2, NA3,
-        NC0, NC1, NC2, NC3,
-        NG0, NG1, NG2, NG3,
-        NT0, NT1, NT2, NT3,
-        NN0, NN1, NN2, NN3,
+        FF, FR, RF, RR,
         begin, // for pointing to start node of a gene
         end, // for pointing to end node of a gene
         has, // for pointing to genome and sequence nodes
@@ -123,8 +98,8 @@ public class Pantools {
                 break;
             case "build":
                 K = Integer.parseInt(args[1]);
-                if (K < 1 || K > 256) {
-                    System.out.println(" Please enter a proper K value ( 1 <= K <= 256 ).");
+                if (K < 6 || K > 256) {
+                    System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
                     System.exit(1);
                 }
                 PATH = args[2];

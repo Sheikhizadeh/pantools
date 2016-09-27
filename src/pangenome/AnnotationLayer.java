@@ -54,8 +54,7 @@ import static pangenome.SequenceLayer.locate;
 import static pangenome.SequenceLayer.extract_sequence;
 import static pangenome.SequenceLayer.write_fasta;
 import static pangenome.SequenceLayer.b_search;
-import static alignment.Alignment.*;
-import alignment.AlignmentBlock;
+import static pangenome.SequenceLayer.get_outgoing_edge;
 import static pantools.Pantools.db_trsc_limit;
 
 /**
@@ -87,12 +86,12 @@ public class AnnotationLayer {
 
     public void annotate(String gff_paths) {
         int i, j, num_genes=0, num_mRNAs, num_tRNAs, num_ncRNAs, num_pgRNAs, num_exons, protein_num;
-        int begin, end, s = 0, g_number, rna_len, isoforms_num, gene_start_pos = 0, phase;
+        int begin, end, rna_len, isoforms_num, gene_start_pos = 0, phase;
         boolean forward=false;
         num_exons = 0;
         String sequence_id, current_sequence_id=null, origin = null;
-        Node db_node, start_node, gene_node = null, rna_node = null;
-        IndexPointer start_ptr;
+        Node db_node, start_node, stop_node, gene_node = null, rna_node = null;
+        IndexPointer start_ptr, stop_ptr;
         protein_builder pb = new protein_builder();
         Relationship rel;
         StringBuilder log = new StringBuilder();
@@ -101,6 +100,7 @@ public class AnnotationLayer {
         StringBuilder gene = new StringBuilder();
         String strand = null, gff_name, line=null, protein;
         List<Long>[][] genes_list;
+        int[] address = new int[3];
         long[] genes_array;
         int[] pair;
         PairComparator comp = new PairComparator();
@@ -132,7 +132,7 @@ public class AnnotationLayer {
             }
             try (BufferedReader gff_files = new BufferedReader(new FileReader(gff_paths))) {
                 System.out.println("genome\tgenes\tmRNAs\ttRNAs\tncRNAs\tpgRNAs");
-                for (g_number = 1; gff_files.ready() && g_number <= genomeDb.num_genomes; ++g_number) // for each gff file
+                for (address[0] = 1; gff_files.ready() && address[0] <= genomeDb.num_genomes; ++address[0]) // for each gff file
                 {
                     protein_num = 0;
                     num_genes = num_mRNAs = num_tRNAs = num_ncRNAs = num_pgRNAs = 0;
@@ -164,12 +164,12 @@ public class AnnotationLayer {
                                 // if a feature belongs to a new sequence 
                                 // find the sequence number according to the sequence id in the gff file                                 
                                 if ( ! sequence_id.equals(current_sequence_id) ) {
-                                   s = find_sequence(sequence_id, g_number);
+                                   address[1] = find_sequence(sequence_id, address[0]);
                                    current_sequence_id = sequence_id;
                                 }
-                                if (s > 0) // if sequence found
+                                if (address[1] > 0) // if sequence found
                                 {
-                                    origin = g_number + "_" + s;
+                                    origin = address[0] + "_" + address[1];
                                     switch (fields[2]) {
                                         case "CDS":
                                         case "five_prime_UTR":
@@ -284,43 +284,39 @@ public class AnnotationLayer {
                                             // initial a gene_node
                                             gene_node = graphDb.createNode(gene_label);
                                             gene_node.setProperty("type", fields[2]);
-                                            gene_node.setProperty("genome", g_number);
+                                            gene_node.setProperty("genome", address[0]);
                                             gene_node.setProperty("origin", origin);
                                             gene_node.setProperty("begin", begin + 1);
                                             gene_node.setProperty("end", end + 1);
                                             gene_node.setProperty("length", end - begin + 1);
                                             gene_node.setProperty("strand", strand);
                                             gene_node.setProperty("attribute", fields[fields.length - 1]); // is needed in retrieve genes function
-                                            start_ptr = locate(origin, begin);
-                                            //stop_ptr =locate(origin,end-K+1); // points to the start position of the last k_mer of the gene
+                                            start_ptr = locate(address[0], address[1], begin);
+                                            stop_ptr = locate(address[0], address[1] ,end-K+1); // points to the start position of the last k_mer of the gene
                                             start_node = graphDb.getNodeById(start_ptr.node_id);
                                             start_node.setProperty("gene_starts", true);
                                             rel = gene_node.createRelationshipTo(start_node, RelTypes.begin);
                                             rel.setProperty("forward", start_ptr.canonical);
                                             rel.setProperty("pos", start_ptr.position);
-                                            // There is no need to point to the stop node.
-                                            //stop_node=graphDb.getNodeById(stop_ptr.node_id);
-                                            //stop_node.setProperty("gene_stops", true);
-                                            //rel=gene_node.createRelationshipTo(stop_node, RelTypes.end);
-                                            //rel.setProperty("forward", stop_ptr.canonical);
-                                            //rel.setProperty("pos", stop_ptr.position);
+                                            stop_node=graphDb.getNodeById(stop_ptr.node_id);
+                                            stop_node.setProperty("gene_stops", true);
+                                            rel=gene_node.createRelationshipTo(stop_node, RelTypes.end);
+                                            rel.setProperty("forward", stop_ptr.canonical);
+                                            rel.setProperty("pos", stop_ptr.position);
                                             gene.setLength(0);
                                             // extract gene as appears in the sequence    
-                                            extract_sequence(gene, start_ptr, origin, begin, end);
-                                            /*if (gene.toString().contains("N")) {
-                                                gene_node.setProperty("broken", "true");
-                                            }*/
-                                            gene_node.setProperty("node_ids", annotate_nodes_of_gene(start_ptr, origin, begin, end,gene_node.getId()));
-                                            gene_node.setProperty("sequence", gene.toString());
+                                            extract_sequence(gene, start_ptr, address, begin, end);
+                                            gene_node.setProperty("node_ids", annotate_nodes_of_gene(start_ptr, address[0], address[1], begin, end,gene_node.getId()));
+                                            //gene_node.setProperty("sequence", gene.toString());
                                             // adding gene_node id to the sequence node
-                                            genes_list[g_number][s].add(gene_node.getId());
+                                            genes_list[address[0]][address[1]].add(gene_node.getId());
                                             break;
                                     } // switch
                                 } else // if sequence not found
                                 {
-                                    log.append(sequence_id).append(" missed in genome ").append(g_number).append("\n"); // usually organal genes
+                                    log.append(sequence_id).append(" missed in genome ").append(address[0]).append("\n"); // usually organal genes
                                 }
-                                System.out.print("\r" + g_number + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_pgRNAs);
+                                System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_pgRNAs);
                             }// for trsc
                             tx2.success();
                         } // tx2
@@ -358,7 +354,7 @@ public class AnnotationLayer {
                         }
                         in.close();
                         out.close();
-                        System.out.println("\r" + g_number + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_pgRNAs);
+                        System.out.println("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_pgRNAs);
                         tx3.success();
                     }
                 } // for genomes
@@ -418,18 +414,16 @@ public class AnnotationLayer {
     /*
      To annotate nodes of the gene with gene_id and returning them in the order they traversed
      */
-    public long[] annotate_nodes_of_gene(IndexPointer start_ptr, String origin, int begin, int end, long gene_id) {
-        boolean found;
+    public long[] annotate_nodes_of_gene(IndexPointer start_ptr, int genome, int sequence, int begin, int end, long gene_id) {
         Node neighbor, node=graphDb.getNodeById(start_ptr.node_id);
-        String lable, name;
-        String[] prp = {"F" + origin, "R" + origin};
+        Relationship rel;
         LinkedList<Long> node_ids_list = new LinkedList();
-        int i, loc, node_len, neighbor_len, s_side, d_side, gene_len = end - begin + 1, length = 0, num_genes, position=start_ptr.position;
+        int i, loc, node_len, neighbor_len, gene_len = end - begin + 1, length = 0, num_genes, position=start_ptr.position;
         long[] gene_ids, new_gene_ids;
+        int[] address = new int[]{genome,sequence,0};
         loc = begin;
         node_len = (int) node.getProperty("length");
-        //System.out.println("gene_id "+gene_id);
-        //System.out.println("forward:"+forward+" position:"+position+" sequence_number:"+sequence_number+" begin:"+begin+" end:"+end+" gene_len:"+gene_len+" K:"+K);
+    // to take the first node of the gene into account    
         if (start_ptr.canonical) {
             if (position + gene_len - 1 <= node_len - 1) {
                 length += gene_len;
@@ -447,7 +441,7 @@ public class AnnotationLayer {
                 loc += position + 1;
             }
         }
-        found = true;
+    // add the gene_id to the list of gene ids of the node    
         if (!node.hasProperty("gene_ids")) {
             node.setProperty("gene_ids", new long[]{gene_id});
         } else {
@@ -465,93 +459,35 @@ public class AnnotationLayer {
         }
         node_ids_list.add(node.getId());
         //System.out.println("loc before start:"+loc);
-        while (length < gene_len && found) {
-            found = false;
-            for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
-                neighbor = r.getEndNode();
-                name = r.getType().name();
-                d_side = (name.charAt(2) - 48) % 2;
-                lable = (d_side == 0 ? prp[0] : prp[1]);
-                if (neighbor.hasProperty(lable)) {
-                    neighbor_len = (int) neighbor.getProperty("length");
-                    if (b_search((int[]) neighbor.getProperty(lable), loc - K + 1) >= 0) {
-                        found = true;
-                        node_ids_list.add(node.getId());
-                        //System.out.println(neighbor.getId()+" "+(loc-K+1));
-                        //System.out.println("length:"+length+" neighbor_len:"+neighbor_len+" gene_len:"+gene_len);
-                        //System.out.println((length+neighbor_len-K+1)+" ? "+(gene_len));
-                        if (length + neighbor_len - K + 1 > gene_len) {
-                            //System.out.println((length+neighbor_len-K+1)+" here "+(gene_len));
-                            //loc+=gene_len-length;
-                            length = gene_len;
-                        } else {
-                            //System.out.println(" there ");
-                            length += neighbor_len - K + 1;
-                            loc += neighbor_len - K + 1;
-                        }
-                        //System.out.println("loc :"+loc+" length :"+length);
-                        node = neighbor;
-                        if (!node.hasProperty("gene_ids")) {
-                            node.setProperty("gene_ids", new long[]{gene_id});
-                        } else {
-                            gene_ids = (long[]) node.getProperty("gene_ids");
-                            num_genes = gene_ids.length;
-                            if (gene_ids[num_genes - 1] != gene_id) // the node is not repeated on the path
-                            {
-                                new_gene_ids = new long[num_genes + 1];
-                                for (i = 0; i < num_genes; ++i) {
-                                    new_gene_ids[i] = gene_ids[i];
-                                }
-                                new_gene_ids[i] = gene_id;
-                                node.setProperty("gene_ids", new_gene_ids);
-                            }
-                        }
-                        break;
+        while (length < gene_len) {
+            address[2] = loc - K + 1;
+            rel = get_outgoing_edge(node, address);
+            neighbor = rel.getEndNode();
+            neighbor_len = (int) neighbor.getProperty("length");            
+            node_ids_list.add(node.getId());
+            if (length + neighbor_len - K + 1 > gene_len) {
+                length = gene_len;
+            } else {
+                length += neighbor_len - K + 1;
+                loc += neighbor_len - K + 1;
+            }
+            node = neighbor;
+            if (!node.hasProperty("gene_ids")) {
+                node.setProperty("gene_ids", new long[]{gene_id});
+            } else {
+                gene_ids = (long[]) node.getProperty("gene_ids");
+                num_genes = gene_ids.length;
+                if (gene_ids[num_genes - 1] != gene_id) // the node is not repeated on the path
+                {
+                    new_gene_ids = new long[num_genes + 1];
+                    for (i = 0; i < num_genes; ++i) {
+                        new_gene_ids[i] = gene_ids[i];
                     }
-                    //else
-                    //  System.out.println("else: "+neighbor.getId()+" "+((int[])neighbor.getProperty(lable))[0]+" "+(loc-K+1));
+                    new_gene_ids[i] = gene_id;
+                    node.setProperty("gene_ids", new_gene_ids);
                 }
             }
-            if (!found) {
-                for (Relationship r : node.getRelationships(Direction.INCOMING)) {
-                    neighbor = r.getStartNode();
-                    name = r.getType().name();
-                    s_side = (name.charAt(2) - 48) / 2;
-                    lable = (s_side == 0 ? prp[1] : prp[0]);
-                    if (neighbor.hasProperty(lable)) {
-                        neighbor_len = (int) neighbor.getProperty("length");
-                        if (b_search((int[]) neighbor.getProperty(lable), loc - K + 1) >= 0) {
-                            found = true;
-                            node_ids_list.add(node.getId());
-                            if (length + neighbor_len - K + 1 > gene_len) {
-                                //loc+=gene_len-length;
-                                length = gene_len;
-                            } else {
-                                length += neighbor_len - K + 1;
-                                loc += neighbor_len - K + 1;
-                            }
-                            node = neighbor;
-                            if (!node.hasProperty("gene_ids")) {
-                                node.setProperty("gene_ids", new long[]{gene_id});
-                            } else {
-                                gene_ids = (long[]) node.getProperty("gene_ids");
-                                num_genes = gene_ids.length;
-                                if (gene_ids[num_genes - 1] != gene_id) // the node is not repeated on the path
-                                {
-                                    new_gene_ids = new long[num_genes + 1];
-                                    for (i = 0; i < num_genes; ++i) {
-                                        new_gene_ids[i] = gene_ids[i];
-                                    }
-                                    new_gene_ids[i] = gene_id;
-                                    node.setProperty("gene_ids", new_gene_ids);
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }//for loc
+        } // while
         long[] node_ids_array = new long[node_ids_list.size()];
         for(i = 0 ; ! node_ids_list.isEmpty() ; ++i)
             node_ids_array[i] = node_ids_list.removeFirst();
