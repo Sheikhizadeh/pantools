@@ -66,9 +66,8 @@ public class Pantools {
 
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
-        begin, // for pointing to start node of a gene
-        end, // for pointing to end node of a gene
         has, // for pointing to genome and sequence nodes
+        visits, // for connecting genes to the nodes
         contains// for pointing to gene nodes of the group
     }
 

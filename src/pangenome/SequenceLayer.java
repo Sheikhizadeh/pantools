@@ -322,8 +322,8 @@ public class SequenceLayer {
                         {
                             ++i;
                             //System.out.println(record);
-                            rstart = gene.getSingleRelationship(RelTypes.begin, Direction.OUTGOING);
-                            start = rstart.getEndNode();
+                            start = graphDb.getNodeById((long)gene.getProperty("start_node_id"));
+                            rstart = graphDb.getRelationshipById((long)gene.getProperty("start_edge_id"));
                             origin = (String) gene.getProperty("origin");
                             origin_fields = origin.split("_");
                             address[0] = Integer.parseInt(origin_fields[0]);
@@ -331,7 +331,7 @@ public class SequenceLayer {
                             begin = (int) gene.getProperty("begin");
                             end = (int) gene.getProperty("end");
                             strand = gene.getProperty("strand").toString().equals("+");
-                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("pos"), -1l), address, begin - 1, end - 1);//
+                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("position"), -1l), address, begin - 1, end - 1);//
                             //genomeDb=new sequence_database(PATH+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
@@ -724,7 +724,7 @@ public class SequenceLayer {
      To append s[from..to] to "seq". 
      */
 
-    private static int append_fwd(StringBuilder seq, String s, int from, int to) {
+    public static int append_fwd(StringBuilder seq, String s, int from, int to) {
         seq.append(s.substring(from, to + 1));//genomeDb.get_sequence(addrs[0],addrs[1],addrs[2]+from, to-from+1));
         return to - from + 1;
     }
@@ -732,7 +732,7 @@ public class SequenceLayer {
      To append reverse_complement of s[from..to] to "seq". 
      */
 
-    private static int append_rev(StringBuilder seq, String s, int from, int to) {
+    public static int append_rev(StringBuilder seq, String s, int from, int to) {
         seq.append(reverse_complement(s.substring(from, to + 1)));//genomeDb.get_sequence(addrs[0],addrs[1],addrs[2]+from, to-from+1)));
         return to - from + 1;
     }
@@ -811,9 +811,7 @@ public class SequenceLayer {
         long inx, split_first_kmer, node_last_kmer = 0;
         int[] address;
         Node neighbor, split_node;
-        String rel_name;
         Relationship rel;
-        RelationshipType rel_type;
         address = (int[]) node.getProperty("address");
         gen = address[0];
         seq = address[1];
@@ -826,30 +824,16 @@ public class SequenceLayer {
         split_node.setProperty("address", address);
         split_len = node_len - pos;
         split_node.setProperty("length", split_len);
-        if (node.hasProperty("gene_starts")) {
-            for (Relationship r : node.getRelationships(RelTypes.begin, Direction.INCOMING))// To update genes whose beginning lies in split_node 
+        if (node.hasRelationship(Direction.INCOMING, RelTypes.visits)) {
+            for (Relationship r : node.getRelationships(RelTypes.visits, Direction.INCOMING))// To update genes whose beginning lies in split_node 
             {
-                if ((int) r.getProperty("pos") >= pos) {
-                    rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.begin);
-                    rel.setProperty("side", r.getProperty("side"));
-                    rel.setProperty("pos", (int) r.getProperty("pos") - pos);
+                rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.visits);
+                if (r.hasProperty("position") && (int) r.getProperty("position") >= pos) {
+                    rel.setProperty("position", (int) r.getProperty("position") - pos);
+                    rel.setProperty("forward", r.getProperty("forward"));
                     r.delete();
-                }
+                } 
             }
-        }
-        if (node.hasProperty("gene_stops")) {
-            for (Relationship r : node.getRelationships(RelTypes.end, Direction.INCOMING)) // To update genes whose ending lies in split_node
-            {
-                if ((int) r.getProperty("pos") - K + 1 >= pos) {
-                    rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.end);
-                    rel.setProperty("side", r.getProperty("side"));
-                    rel.setProperty("pos", (int) r.getProperty("pos") - pos);
-                    r.delete();
-                }
-            }
-        }
-        if (node.hasProperty("gene_ids")) {
-            split_node.setProperty("gene_ids", node.getProperty("gene_ids"));
         }
         node_last_kmer = indexDb.find(make_kmer(gen, seq, loc + pos - 1));
         split_first_kmer = indexDb.get_next_index(node_last_kmer);
