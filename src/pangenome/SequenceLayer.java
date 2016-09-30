@@ -53,7 +53,8 @@ import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.phaseTime;
 import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
-import static pantools.Pantools.db_trsc_limit;
+import static pantools.Pantools.MAX_TRANSACTION_SIZE;
+import static pantools.Pantools.write_fasta;
 
 /**
  * Implements all the functionalities related to the sequence layer of the pangenome
@@ -73,17 +74,15 @@ public class SequenceLayer {
     private Node new_node;
     private Node degenerate_node;
     private IndexPointer pointer;
-    private byte[] byte_pointer;
     private int fwd_code, rev_code;
     private boolean finish;
-    private static int anchor_distance = 100; // Distance between two anchor nodes
+    private static int ANCHOR_DISTANCES = 100; // Distance between two anchor nodes
 
     /**
      * The constructor of the class.
      */    
     public SequenceLayer() {
         pointer = new IndexPointer();
-        byte_pointer = new byte[index.IndexDatabase.ptr_len];
         finish = false;
     }
 
@@ -448,7 +447,7 @@ public class SequenceLayer {
     /**
      * Reconstructs all or some of the genomes in separated FASTA files.
      * 
-     * @param genome_records a text file containing the number and a given name for each genome. 
+     * @param genome_records_file A text file containing the number and a given name for each genome. 
      */
     public void reconstruct_genomes(String genome_records_file) {
         if (new File(PATH + GENOME_DATABASE_PATH).exists()) {
@@ -588,8 +587,6 @@ public class SequenceLayer {
                 System.out.println("comparing pangenomes...");
                 K = K1;
                 Node n1, n2;
-                byte[] s1 = new byte[21];
-                byte[] s2 = new byte[21];
                 kmer k_mer1 = new kmer(K, indexDb1.get_pre_len(), indexDb1.get_suf_len());
                 kmer k_mer2 = new kmer(K, indexDb2.get_pre_len(), indexDb2.get_suf_len());
                 IndexPointer p1 = new IndexPointer();
@@ -600,8 +597,8 @@ public class SequenceLayer {
                     if (k_mer1.compare(k_mer2) != 0) {
                         return false;
                     }
-                    indexDb1.get_pointer(s1, p1, k);
-                    indexDb2.get_pointer(s2, p2, k);
+                    indexDb1.get_pointer(p1, k);
+                    indexDb2.get_pointer(p2, k);
                     if (p1.next_index == -1L && p2.next_index == -1L) {
                         n1 = g1.getNodeById(p1.node_id);
                         len1 = (int) n1.getProperty("length");
@@ -784,7 +781,7 @@ public class SequenceLayer {
      * @param genome The genome number
      * @param sequence The sequence number 
      * @param position The position of interest
-     * @return 
+     * @return A pointer to the genomic position in the pangenome
      */
     public static IndexPointer locate(int genome, int sequence, int position) {
         int loc, low, high, mid , node_len;
@@ -991,7 +988,7 @@ public class SequenceLayer {
             if (position % (seq_len / 100 + 1) == 0) 
                 System.out.print((long) position * 100 / seq_len + 1 + "%\r");
             curr_index = indexDb.find(k_mer);
-            indexDb.get_pointer(byte_pointer, pointer, curr_index);
+            indexDb.get_pointer(pointer, curr_index);
             if (pointer.node_id == -1L) {
                 indexDb.put_next_index(curr_index, last_kmer);
                 ++len;
@@ -1120,7 +1117,7 @@ public class SequenceLayer {
             curr_side = 0; // not really needed
         } else {
             curr_index = indexDb.find(k_mer);
-            indexDb.get_pointer(byte_pointer, pointer, curr_index);
+            indexDb.get_pointer(pointer, curr_index);
             curr_node = node;
         }
     }
@@ -1196,7 +1193,7 @@ public class SequenceLayer {
             curr_side = 0;
         } else {
             curr_index = indexDb.find(k_mer);
-            indexDb.get_pointer(byte_pointer, pointer, curr_index);
+            indexDb.get_pointer(pointer, curr_index);
             curr_node = split_node2;
         }
     }
@@ -1251,7 +1248,7 @@ public class SequenceLayer {
         num_bases += (position - address[2]);
         if (!finish) {
             curr_index = indexDb.find(k_mer);
-            indexDb.get_pointer(byte_pointer, pointer, curr_index);
+            indexDb.get_pointer(pointer, curr_index);
         }
     }
     
@@ -1332,11 +1329,11 @@ public class SequenceLayer {
                     tx.success();
                 }
                 curr_index = indexDb.find(k_mer);
-                indexDb.get_pointer(byte_pointer, pointer, curr_index);
+                indexDb.get_pointer(pointer, curr_index);
                 finish = false;
                 while (!finish) {
                     try (Transaction tx = graphDb.beginTx()) {
-                        for (i = 0; i < db_trsc_limit && !finish; ++i) {
+                        for (i = 0; i < MAX_TRANSACTION_SIZE && !finish; ++i) {
                             if (pointer.node_id == -1L) // kmer is new
                             {
                                 create();
@@ -1403,7 +1400,7 @@ public class SequenceLayer {
                 for (address[2] = 0; address[2] + K - 1 < seq_len ;) // K-1 bases of the last node not added
                 {
                     try (Transaction tx = graphDb.beginTx()) {
-                        for (trsc = 0; trsc < db_trsc_limit && address[2] + K - 1 < seq_len; ++trsc) {
+                        for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && address[2] + K - 1 < seq_len; ++trsc) {
                             for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
                                 rel_name = r.getType().name();
                                 if (rel_name.charAt(0) != node_side) {
@@ -1438,7 +1435,7 @@ public class SequenceLayer {
                                         initial_coordinate[0] = address[2];
                                         r.setProperty(origin, initial_coordinate);
                                     }
-                                    if (count % anchor_distance == 0) {
+                                    if (count % ANCHOR_DISTANCES == 0) {
                                         nds.append(neighbor.getId()).append(" ");
                                         sds.append(neighbor_side);
                                         pos.append(address[2]).append(" ");
@@ -1507,13 +1504,13 @@ public class SequenceLayer {
                 for (address[2] = 0; address[2] + K - 1 < seq_len ;) // K-1 bases of the last node not added
                 {
                     try (Transaction tx = graphDb.beginTx()) {
-                        for (trsc = 0; trsc < db_trsc_limit && address[2] + K - 1 < seq_len ; ++trsc) {
+                        for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && address[2] + K - 1 < seq_len ; ++trsc) {
                             rel = get_outgoing_edge(node, address);
                             //System.out.println("node "+node.getId()+" next "+address[0]+"_"+address[1]+"_"+address[2]);
                             neighbor = rel.getEndNode();
                             rel_name = rel.getType().name();
                             neighbor_length = (int) neighbor.getProperty("length");
-                            if (count % anchor_distance == 0) {
+                            if (count % ANCHOR_DISTANCES == 0) {
                                 nds.append(neighbor.getId()).append(" ");
                                 sds.append(rel_name.charAt(1));
                                 pos.append(address[2]).append(" ");
@@ -1563,7 +1560,7 @@ public class SequenceLayer {
         }
         while (nodes_iterator.hasNext()){
             try (Transaction tx = graphDb.beginTx()) {
-                for (trsc = 0; trsc < db_trsc_limit && nodes_iterator.hasNext() ; ++trsc) {
+                for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && nodes_iterator.hasNext() ; ++trsc) {
                     node = nodes_iterator.next();
                     addr = (int[]) node.getProperty("address");
                     node_length = (int) node.getProperty("length");
@@ -1579,7 +1576,7 @@ public class SequenceLayer {
         }
         while (nodes_iterator.hasNext()){
             try (Transaction tx = graphDb.beginTx()) {
-                for (trsc = 0; trsc < db_trsc_limit && nodes_iterator.hasNext() ; ++trsc) {
+                for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && nodes_iterator.hasNext() ; ++trsc) {
                     node = nodes_iterator.next();
                     addr = (int[]) node.getProperty("address");
                     node_length = (int) node.getProperty("length");
@@ -1606,7 +1603,7 @@ public class SequenceLayer {
         }
         while (nodes.hasNext()) {
             try (Transaction tx = graphDb.beginTx()) {
-                for (i = 0; i < db_trsc_limit && nodes.hasNext(); ++i) {
+                for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
                     node = nodes.next();
                     node.removeProperty(side);
                 }
@@ -1620,7 +1617,7 @@ public class SequenceLayer {
         }
         while (nodes.hasNext()) {
             try (Transaction tx = graphDb.beginTx()) {
-                for (i = 0; i < db_trsc_limit && nodes.hasNext(); ++i) {
+                for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
                     node = nodes.next();
                     node.removeProperty(side);
                 }
@@ -1715,28 +1712,4 @@ public class SequenceLayer {
         }
         return size / 1048576 + 1;
     }
-
-    /**
-     * Writes a sequence in a FASTA file with specified length for lines.
-     * 
-     * @param fasta_file The FASTA file object
-     * @param seq The sequence to be written in the file.
-     * @param length Length of the lines.
-     */    
-    public static void write_fasta(BufferedWriter fasta_file, String seq, int length) {
-        int i;
-        try {
-            for (i = 1; i <= seq.length(); ++i) {
-                fasta_file.write(seq.charAt(i - 1));
-                if (i % length == 0) {
-                    fasta_file.write("\n");
-                }
-            }
-            fasta_file.write("\n");
-        } catch (IOException ioe) {
-
-        }
-
-    }
-
 }

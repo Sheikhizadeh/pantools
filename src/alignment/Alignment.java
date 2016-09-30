@@ -130,7 +130,7 @@ public class Alignment {
     }
 
     /**
-     * Calculates the similarity score of two nucleotide sequences. score <= 1.0
+     * Calculates the similarity score of two nucleotide sequences (score is not greater than 1).
      * @param s1 First sequence
      * @param s2 Second sequence
      * @return Tht similarity score

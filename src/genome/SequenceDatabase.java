@@ -24,6 +24,7 @@ import org.neo4j.graphdb.Transaction;
 import static pantools.Pantools.genome_label;
 import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.sequence_label;
+import static pantools.Pantools.write_fasta;
 
 /**
  * Implements all the functionality to work with a 4-bit compressed sequence database. 
@@ -631,30 +632,26 @@ public class SequenceDatabase {
         }
         return seq.toString();
     }
-    /*
-     Determines the equality of two subsequences of s1 and s2 of length len starting at start1 and start2, respectively.
-     forward determines the direction of comparion.
-     */
 
     /**
      * Determines the identity of two genomic regions.
      * 
-     * @param database
-     * @param a1
-     * @param a2
-     * @param offset1
-     * @param offset2
-     * @param len
-     * @param forward
-     * @return 
+     * @param database The second database we are making a comparison with. 
+     * @param a1 Genomic address in the first database
+     * @param a2 Genomic address in the second database
+     * @param offset1 Distance to the start position of the first sequence
+     * @param offset2 Distance to the start position of the second sequence
+     * @param len The length of sequences
+     * @param direction Direction of the second sequence True for forward and False for reverse
+     * @return The result of the comparison
      */
-    public boolean compare(SequenceDatabase database, int[] a1, int[] a2, int offset1, int offset2, int len, boolean forward) {
+    public boolean compare(SequenceDatabase database, int[] a1, int[] a2, int offset1, int offset2, int len, boolean direction) {
         if (a1[2] + offset1 + len - 1 >= sequence_length[a1[0]][a1[1]] || a2[2] + offset2 + len - 1 >= database.sequence_length[a2[0]][a2[1]]) {
             return false;
         }
         int i;
         boolean equal;
-        if (forward) {
+        if (direction) {
             for (equal = true, i = 0; i < len && equal; ++i) {
                 if (get_code(a1[0], a1[1], a1[2] + offset1 + i) != database.get_code(a2[0], a2[1], a2[2] + offset2 + i)) {
                     equal = false;
@@ -668,24 +665,5 @@ public class SequenceDatabase {
             }
         }
         return equal;
-    }
-    /*
-     Writes the "seq" in a FASTA file with lines justified to lines "length" long 
-     */
-
-    private void write_fasta(BufferedWriter fasta_file, String seq, int length) {
-        int i;
-        try {
-            for (i = 1; i <= seq.length(); ++i) {
-                fasta_file.write(seq.charAt(i - 1));
-                if (i % length == 0) {
-                    fasta_file.write("\n");
-                }
-            }
-            fasta_file.write("\n");
-        } catch (IOException ioe) {
-
-        }
-
     }
 }

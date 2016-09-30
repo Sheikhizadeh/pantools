@@ -53,9 +53,9 @@ import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.tRNA_label;
 import static pangenome.SequenceLayer.locate;
-import static pangenome.SequenceLayer.write_fasta;
 import static pangenome.SequenceLayer.get_outgoing_edge;
-import static pantools.Pantools.db_trsc_limit;
+import static pantools.Pantools.MAX_TRANSACTION_SIZE;
+import static pantools.Pantools.write_fasta;
 
 /**
  * Implements all the functionalities related to the annotation layer of the pangenome
@@ -88,7 +88,7 @@ public class AnnotationLayer {
      * Adds nodes of different genomic features to the pangenome.
      * All features should be annotated in the hierarchical order of gene, RNA, exon, CDS  
      * 
-     * @param gff_paths_file 
+     * @param gff_paths_file A text file listing the paths to the annotation files
      */
     public void annotate(String gff_paths_file) {
         int i, j, num_genes=0, num_mRNAs, num_tRNAs, num_ncRNAs, num_pgRNAs, num_exons, protein_num;
@@ -150,7 +150,7 @@ public class AnnotationLayer {
                     while (in.ready()) 
                     {
                         try (Transaction tx2 = graphDb.beginTx()) {
-                            for (i = 0; i < db_trsc_limit && in.ready(); ++i) {
+                            for (i = 0; i < MAX_TRANSACTION_SIZE && in.ready(); ++i) {
                                 line = in.readLine();
                                 if (line.equals("") || line.charAt(0) == '#') // if line is empty or a comment skip it
                                 {
@@ -499,7 +499,7 @@ public class AnnotationLayer {
                 genes_iterator = graphDb.findNodes(gene_label);
                 while (genes_iterator.hasNext()) {
                 try (Transaction tx2 = graphDb.beginTx()) {
-                    for (step = 0; step < db_trsc_limit && genes_iterator.hasNext(); ++step) {
+                    for (step = 0; step < MAX_TRANSACTION_SIZE && genes_iterator.hasNext(); ++step) {
                         gene_node=genes_iterator.next();
                         gene_len=(int)gene_node.getProperty("length");
                         gene_seq=(String)gene_node.getProperty("sequence");

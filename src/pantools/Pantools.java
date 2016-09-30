@@ -9,6 +9,10 @@ package pantools;
 
 import genome.SequenceDatabase;
 import index.IndexDatabase;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
@@ -20,14 +24,12 @@ import pangenome.AnnotationLayer;
 import pangenome.SequenceLayer;
 
 /**
- *
- * @author sheik005
+ * Implements the main and shared functions. 
+ * 
+ * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
+ * University, Netherlands
  */
 public class Pantools {
-    /*
-     The main function
-     */
-
     public static String PATH;
     public static String GRAPH_DATABASE_PATH = "/databases/graph.db/";
     public static String INDEX_DATABASE_PATH = "/databases/index.db/";
@@ -36,18 +38,8 @@ public class Pantools {
     public static IndexDatabase indexDb;
     public static SequenceDatabase genomeDb;
     public static SequenceDatabase sequenceDb;
-    public static int db_trsc_limit = 1000;    //   The number of transactions to be committed in batch
+    public static int MAX_TRANSACTION_SIZE = 1000;    //   The number of transactions to be committed in batch
 
-    /*
-     There are following types of nodes:
-     - pangenome   
-     - genome
-     - sequence
-     - node
-     - degenerate
-     - gene
-     - group
-     */
     public static Label pangenome_label = DynamicLabel.label("pangenome");
     public static Label genome_label = DynamicLabel.label("genome");
     public static Label sequence_label = DynamicLabel.label("sequence");
@@ -60,9 +52,6 @@ public class Pantools {
     public static Label pgRNA_label = DynamicLabel.label("pgRNA");
     public static Label ortholog_lable = DynamicLabel.label("orthologs");
     public static Label homolog_lable = DynamicLabel.label("homologs");
-    /*
-     All possible relationship types between two nodes in the graph.
-     */
 
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
@@ -82,6 +71,10 @@ public class Pantools {
     public static SequenceLayer seqLayer;
     public static AnnotationLayer annLayer;
 
+    /**
+     * The starting point of the PanTools program
+     * @param args Command line arguments
+     */
     public static void main(String[] args) {
         if (args.length < 2 || args[1].equals("--help") || args[1].equals("-h")) {
             print_help_comment();
@@ -149,10 +142,10 @@ public class Pantools {
         print_peak_memory();
         System.out.println("-----------------------------------------------------------------------");
     }
-    /*
-     To print a simple manual for the users
-     */
 
+    /**
+     * Print the manual of the software.
+     */
     private static void print_help_comment() {
         System.out.println("************************************************************************\n" +
 "PanTools is a disk-based java application for computational pan-genomics\n" +
@@ -298,10 +291,10 @@ public class Pantools {
                 
 );
     }
-    /*
-     To calculates and prints peak of memory usage of the program in mega bytes.
-     */
 
+    /**
+     * Estimates and prints the peak memory used during the execution of the program. 
+     */
     private static void print_peak_memory() {
         long memoryUsage = 0;
         try {
@@ -314,5 +307,50 @@ public class Pantools {
             System.err.println("Exception in agent: " + t);
         }
     }
+    
+    /**
+     * Writes a sequence in a FASTA file with specified length for lines.
+     * 
+     * @param fasta_file The FASTA file object
+     * @param seq The sequence to be written in the file.
+     * @param length Length of the lines.
+     */    
+    public static void write_fasta(BufferedWriter fasta_file, String seq, int length) {
+        int i;
+        try {
+            for (i = 1; i <= seq.length(); ++i) {
+                fasta_file.write(seq.charAt(i - 1));
+                if (i % length == 0) {
+                    fasta_file.write("\n");
+                }
+            }
+            fasta_file.write("\n");
+        } catch (IOException ioe) {
 
+        }
+
+    }    
+
+    /**
+     * Executes a shell command. 
+     * @param command The command
+     * @return The output of the bash command
+     */
+    public static String executeCommand(String command) {
+        StringBuilder exe_output = new StringBuilder();
+        String line = "";
+        Process p;
+        try {
+            p = Runtime.getRuntime().exec(command);
+            p.waitFor();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            while ((line = reader.readLine()) != null) {
+                exe_output.append(line + "\n");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return exe_output.toString();
+    }    
 }
