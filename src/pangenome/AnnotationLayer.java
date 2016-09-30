@@ -469,7 +469,6 @@ public class AnnotationLayer {
             else 
                 loc += append_rev(gene_builder, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
             node = neighbor;
-            node_len = (int) node.getProperty("length");
             gene_node.createRelationshipTo(node, RelTypes.visits);
         } // while
         gene_node.setProperty("stop_node", node.getId());
