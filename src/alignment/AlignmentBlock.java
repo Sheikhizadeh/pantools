@@ -6,8 +6,10 @@
 package alignment;
 
 /**
- *
- * @author sheik005
+ * Implements the structure for storing the result of pairwise nucleotide alignment. 
+ * 
+ * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
+ * University, Netherlands
  */
 public class AlignmentBlock {
 
@@ -15,11 +17,18 @@ public class AlignmentBlock {
     public StringBuilder two;
     public double score;
 
+    /**
+     * The constructor.
+     */
     public AlignmentBlock() {
         one = new StringBuilder();
         two = new StringBuilder();
         score = 0;
     }
+    
+    /**
+     * clears the structure.
+     */
     public void reset() {
         one.setLength(0);
         two.setLength(0);

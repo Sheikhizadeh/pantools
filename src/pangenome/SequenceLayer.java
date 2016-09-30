@@ -56,7 +56,8 @@ import static pantools.Pantools.startTime;
 import static pantools.Pantools.db_trsc_limit;
 
 /**
- *
+ * Implements all the functionalities related to the sequence layer of the pangenome
+ * 
  * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
  * University, Netherlands
  */
@@ -77,6 +78,9 @@ public class SequenceLayer {
     private boolean finish;
     private static int anchor_distance = 100; // Distance between two anchor nodes
 
+    /**
+     * The constructor of the class.
+     */    
     public SequenceLayer() {
         pointer = new IndexPointer();
         byte_pointer = new byte[index.IndexDatabase.ptr_len];
@@ -84,32 +88,19 @@ public class SequenceLayer {
     }
 
     /**
-     * @param args the command line arguments build : To build a pan-genome out
-     * of a set of genomes add : To add new genomes to an available pan-genome
-     * genes : To extract gene sequence according to their IDs group : To add
-     * group nodes pointing to genes comp : To compare two pan-genomes
-     * @throws java.io.IOException
-     */
-    /*
-     To builds a pan-genome database out of a set of input genomes.
-     file : a text file containing paths to FASTA files
-     */
-    /**
-     *
-     * @param genome_paths
-     * @param args the command line arguments build : To build a pan-genome out
-     * of a set of genomes add : To add new genomes to an available pan-genome
-     * genes : To extract gene sequence according to their IDs group : To add
-     * group nodes pointing to genes comp : To compare two pan-genomes
-     * @throws java.io.IOException
-     */
-    public void build(String genome_paths) {
-        int i, j;
+     * Constructs a pangenome database from given genomes.
+     * 
+     * @param genome_paths_file Path to the FASTA genome files. 
+     */  
+    public void build(String genome_paths_file) {
+    // If a database folder is already exist in the specified path, removes all the content of it.    
         File theDir = new File(PATH);
         if (theDir.exists()) {
             try {
-                FileUtils.deleteRecursively(new File(PATH)); // deletes old files
+                FileUtils.deleteRecursively(new File(PATH));
             } catch (IOException ioe) {
+                System.out.println("Failed to delete the database " + PATH);
+                System.exit(1);  
             }
         } else {
             try {
@@ -120,7 +111,7 @@ public class SequenceLayer {
             }
         }
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+                .setConfig("keep_logical_logs", "100M size").newGraphDatabase(); // Limits the size of transaction log files.
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
         num_nodes = 0;
@@ -130,8 +121,8 @@ public class SequenceLayer {
             db_node.setProperty("k_mer_size", K);
             tx.success();
         }
-        genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, genome_paths);
-        indexDb = new IndexDatabase(PATH + INDEX_DATABASE_PATH, genome_paths, K, genomeDb);
+        genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, genome_paths_file);
+        indexDb = new IndexDatabase(PATH + INDEX_DATABASE_PATH, genome_paths_file, K, genomeDb);
         construct_pangenome(0);
         System.out.println("Number of kmers:   " + indexDb.length());
         System.out.println("Number of nodes:   " + num_nodes);
@@ -161,12 +152,13 @@ public class SequenceLayer {
         System.out.println("index.db size: " + getFolderSize(new File(PATH + INDEX_DATABASE_PATH)) + " MB");
         System.out.println("genome.db size: " + getFolderSize(new File(PATH + GENOME_DATABASE_PATH)) + " MB");
     }
-    /*
-     To adds new genomes to an available pan-genome database.
-     genome_paths : a text file containing paths to FASTA files
+    
+    /**
+     * Adds new genomes to an available pangenome.
+     * 
+     * @param genome_paths_file Path to the FASTA genome files. 
      */
-
-    public void add(String genome_paths) {
+    public void add(String genome_paths_file) {
         int i, j, g, s, len, previous_num_genomes;
         long byte_number = 0;
         Node start, seq_node;
@@ -181,15 +173,17 @@ public class SequenceLayer {
                     System.out.println("Can not locate database node!");
                     System.exit(1);
                 }
+            // Reads the properties of the pangenome    
                 K = (int) db_node.getProperty("k_mer_size");
                 num_nodes = (int) db_node.getProperty("num_nodes");
                 num_edges = (int) db_node.getProperty("num_edges");
                 num_degenerates = (int) db_node.getProperty("num_degenerate_nodes");
                 num_bases = (int) db_node.getProperty("num_bases");
                 previous_num_genomes = (int) db_node.getProperty("num_genomes");
-                if (!Files.exists(Paths.get(PATH + GENOME_DATABASE_PATH))) // if genome database has been lost
+            // if the genome database is not available, reconstruct it.    
+                if (!Files.exists(Paths.get(PATH + GENOME_DATABASE_PATH))) 
                 {
-                    // read genomes information from the graph and rebuild the genomes database
+                // read genomes information from the graph and rebuild the genomes database
                     genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, graphDb);
                     StringBuilder seq = new StringBuilder();
                     for (g = 1; g <= genomeDb.num_genomes; ++g) {
@@ -214,11 +208,12 @@ public class SequenceLayer {
                 } else {
                     genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
                 }
-                genomeDb.add_genomes(PATH + GENOME_DATABASE_PATH, genome_paths);
-                indexDb = new IndexDatabase(PATH + INDEX_DATABASE_PATH, genome_paths, genomeDb, graphDb, previous_num_genomes);
+                genomeDb.add_genomes(PATH + GENOME_DATABASE_PATH, genome_paths_file);
+                indexDb = new IndexDatabase(PATH + INDEX_DATABASE_PATH, genome_paths_file, genomeDb, graphDb, previous_num_genomes);
                 tx.success();
             }
-            drop_property("sequence");// these should be dropped out as include-genomes function recreate them
+        // the sequences should be dropped out as they will change and add_sequence_properties() function will rebuild the new ones.    
+            drop_property("sequence");
             construct_pangenome(previous_num_genomes);
             System.out.println("Number of kmers:   " + indexDb.length());
             System.out.println("Number of nodes:   " + num_nodes);
@@ -856,7 +851,6 @@ public class SequenceLayer {
         return rel;
     }
     
-
     /**
      * Splits a node at a specified position by creating a new node called split_node as a part separated from the node.
      * @param node The node which should be split.
@@ -899,7 +893,8 @@ public class SequenceLayer {
             }
         }
     // Updating the Kmers chain in the index    
-        node_last_kmer = indexDb.find(make_kmer(gen, seq, loc + pos - 1));
+        node_last_kmer = indexDb.find(make_kmer(gen, seq, loc + pos - 1)); 
+    // Better than starting traversal from the first kmer of the node in index
         split_first_kmer = indexDb.get_next_index(node_last_kmer);
         indexDb.put_next_index(-1L, node_last_kmer);
         split_node.setProperty("first_kmer", split_first_kmer);
@@ -941,6 +936,28 @@ public class SequenceLayer {
         node.setProperty("last_kmer", node_last_kmer);
         node.setProperty("length", pos + K - 1);
         return split_node;
+    }
+    
+    /**
+     * Makes a kmer located at a specific genomic position.
+     * 
+     * @param genome The genome number
+     * @param sequence The sequence number
+     * @param position The position of the kmer in the sequence
+     * @return kmer The canonical form of the kmer 
+     */
+    private kmer make_kmer(int genome, int sequence, int position) {
+        int j, fwd_code, rev_code;
+        kmer fwd_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
+        kmer rev_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
+        for (j = 0; j < K; ++j) {
+            fwd_code = genomeDb.get_code(genome, sequence, position + j);
+            rev_code = 3 - fwd_code;
+            fwd_kmer.next_up_kmer(fwd_code);
+            rev_kmer.next_down_kmer(rev_code);
+        }
+        fwd_kmer.canonical = fwd_kmer.compare(rev_kmer) == -1;
+        return fwd_kmer.canonical ? fwd_kmer : rev_kmer;
     }
     
     /**
@@ -1114,10 +1131,10 @@ public class SequenceLayer {
             curr_node = node;
         }
     }
-    /*
-     To enter a node and follow it in forward direction till reaching to a split position or end of the node
+    
+    /**
+     * Enters the forward side of node in which the current Kmer found and performs zero, one or two splits.   
      */
-
     private void follow_reverse() {
         int pos, begin, g, s, loc, side, points_to;
         int[] address;
@@ -1285,31 +1302,11 @@ public class SequenceLayer {
         fwd_kmer.canonical = fwd_kmer.compare(rev_kmer) == -1;
         k_mer = fwd_kmer.canonical ? fwd_kmer : rev_kmer;
     }
-    /*
-     To give the K-mer in genomic position (genome,sequence,position) 
-     fwd_kmer: Forward sequence of the K-mer
-     rev_kmer: Reverse sequence of the K-mer
-     kmer  : canonical k-mer
-     canonical: a boolean determining if the K-mer is canonical  
-     */
 
-    private kmer make_kmer(int genome, int sequence, int position) {
-        int j, fwd_code, rev_code;
-        kmer fwd_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
-        kmer rev_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
-        for (j = 0; j < K; ++j) {
-            fwd_code = genomeDb.get_code(genome, sequence, position + j);
-            rev_code = 3 - fwd_code;
-            fwd_kmer.next_up_kmer(fwd_code);
-            rev_kmer.next_down_kmer(rev_code);
-        }
-        fwd_kmer.canonical = fwd_kmer.compare(rev_kmer) == -1;
-        return fwd_kmer.canonical ? fwd_kmer : rev_kmer;
-    }
-    /*
-     The main function constructs the pangenome of input sequences.
+    /**
+     * 
+     Constructs the pangenome out of the provided input sequences.
      */
-
     void construct_pangenome(int previous_num_genomes) {
         int i;
         Node genome_node, sequence_node;
@@ -1373,13 +1370,14 @@ public class SequenceLayer {
             }
             System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");
         }//genomes
+        add_sequence_properties();
         annotate_nodes();
     }
-    /*
-     To add list of "anchor_nodes", "anchor_sides" and "anchor_positions" to each sequence_node.
-     These properties facilitate extracting genomic regions. 
+    
+    /**
+     * To add list of anchor nodes, anchor sides and anchor positions to each sequence_node.
+     * These are used for locating genomic regions very quickly. 
      */
-
     void annotate_nodes() {
         int trsc, i, m, neighbor_length = 0, count;
         long seq_len;
@@ -1393,9 +1391,10 @@ public class SequenceLayer {
         String[] ids_list, posis_list;
         String rel_name;
         int[] addr = null, address = new int[3];
+        System.out.println("Localizing nodes... ");
         for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                System.out.println("Localizing sequence " + address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "...                        ");
+                System.out.print("\rsequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
                 seq_len = genomeDb.sequence_length[address[0]][address[1]] - 1;
                 try (Transaction tx = graphDb.beginTx()) {
                     node = seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
@@ -1411,11 +1410,6 @@ public class SequenceLayer {
                             neighbor = rel.getEndNode();
                             rel_name = rel.getType().name();
                             neighbor_length = (int) neighbor.getProperty("length");
-                            // To add "sequence" property to the nodes
-                            if (!neighbor.hasProperty("sequence")) {
-                                addr = (int[]) neighbor.getProperty("address");
-                                neighbor.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], neighbor_length, true));
-                            }
                             if (count % anchor_distance == 0) {
                                 nds.append(neighbor.getId()).append(" ");
                                 sds.append(rel_name.charAt(1));
@@ -1424,9 +1418,6 @@ public class SequenceLayer {
                             count++;
                             address[2] = address[2] + neighbor_length - K + 1;
                             node = neighbor;
-                            if (address[2] % (seq_len / 100 + 1) == 0) {
-                                System.out.print((long) address[2] * 100 / seq_len + 1 + "%    \r");
-                            }
                         }
                         tx.success();
                     }
@@ -1451,11 +1442,56 @@ public class SequenceLayer {
                 sds.setLength(0);
             }//sequences
         }//genomes
+        System.out.println();
     }
-    /*
-     To add "sequence" property to the nodes
-     */
 
+    /**
+     * Extracts the sequence of the nodes from the genome database and store it as a property of the node.
+     */
+    void add_sequence_properties() {
+        int trsc, node_length;
+        Node node;
+        int[] addr;
+        System.out.println("Adding sequence to the nodes...");
+        ResourceIterator<Node> nodes_iterator;
+        try (Transaction tx = graphDb.beginTx()) {
+            nodes_iterator = graphDb.findNodes(node_label);
+            tx.success();
+        }
+        while (nodes_iterator.hasNext()){
+            try (Transaction tx = graphDb.beginTx()) {
+                for (trsc = 0; trsc < db_trsc_limit && nodes_iterator.hasNext() ; ++trsc) {
+                    node = nodes_iterator.next();
+                    addr = (int[]) node.getProperty("address");
+                    node_length = (int) node.getProperty("length");
+                    node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true));
+                }
+                tx.success();
+            }
+        }
+        nodes_iterator.close();
+        try (Transaction tx = graphDb.beginTx()) {
+            nodes_iterator = graphDb.findNodes(degenerate_label);
+            tx.success();
+        }
+        while (nodes_iterator.hasNext()){
+            try (Transaction tx = graphDb.beginTx()) {
+                for (trsc = 0; trsc < db_trsc_limit && nodes_iterator.hasNext() ; ++trsc) {
+                    node = nodes_iterator.next();
+                    addr = (int[]) node.getProperty("address");
+                    node_length = (int) node.getProperty("length");
+                    node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true));
+                }
+                tx.success();
+            }
+        }
+        nodes_iterator.close();
+    }
+
+    /**
+     * Remove the given property from all the nodes and degenerates.
+     * @param property 
+     */    
     void drop_property(String side) {
         int i;
         byte[] sequence;
@@ -1490,28 +1526,13 @@ public class SequenceLayer {
         }
         nodes.close();
     }
-    /*
-     To provide a simple binary search
-     */
 
-    public static int b_search(int[] array, int key) {
-        int low = 0, mid, high = array.length - 1;
-        while (low <= high) {
-            mid = (low + high) / 2;
-            if (key < array[mid]) {
-                high = mid - 1;
-            } else if (key > array[mid]) {
-                low = mid + 1;
-            } else {
-                return mid;
-            }
-        }
-        return -1;
-    }
-    /*
-     To return the reverse complement of "s".
-     */
-
+    /**
+     * Return reverse complement of the given string.
+     * 
+     * @param s    The input string
+     * @return 
+     */     
     private static String reverse_complement(String s) {
         StringBuilder rv = new StringBuilder();
         for (int i = s.length() - 1; i >= 0; --i) {
@@ -1559,56 +1580,11 @@ public class SequenceLayer {
         return rv.toString();
     }
 
-    private static StringBuilder reverse_complement(StringBuilder s) {
-        StringBuilder rv = new StringBuilder();
-        for (int i = s.length() - 1; i >= 0; --i) {
-            switch (s.charAt(i)) {
-                case 'A':
-                    rv.append('T');
-                    break;
-                case 'C':
-                    rv.append('G');
-                    break;
-                case 'G':
-                    rv.append('C');
-                    break;
-                case 'T':
-                    rv.append('A');
-                    break;
-                case 'R':
-                    rv.append('Y');
-                    break;
-                case 'Y':
-                    rv.append('R');
-                    break;
-                case 'K':
-                    rv.append('M');
-                    break;
-                case 'M':
-                    rv.append('K');
-                    break;
-                case 'B':
-                    rv.append('V');
-                    break;
-                case 'V':
-                    rv.append('B');
-                    break;
-                case 'D':
-                    rv.append('H');
-                    break;
-                case 'H':
-                    rv.append('D');
-                    break;
-                default:
-                    rv.append(s.charAt(i));
-            }
-        }
-        return rv;
-    }
-    /*
-     To register the action to be taken if the program halts unexpectedly
+    /**
+     * Shuts down the graph database if the program halts unexpectedly.
+     * 
+     * @param graphDb The graph database object 
      */
-
     private static void registerShutdownHook(final GraphDatabaseService graphDb) {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -1617,10 +1593,13 @@ public class SequenceLayer {
             }
         });
     }
-    /*
-     To return size of a folder
-     */
 
+    /**
+     * Returns size of a given folder.
+     * 
+     * @param dir The folder File object.
+     * @return Size of the folder in MegaBytes
+     */
     public static long getFolderSize(File dir) {
         long size = 0;
         for (File file : dir.listFiles()) {
@@ -1633,10 +1612,14 @@ public class SequenceLayer {
         }
         return size / 1048576 + 1;
     }
-    /*
-     To write the "seq" in a FASTA file with lines justified to lines "length" long 
-     */
 
+    /**
+     * Writes a sequence in a FASTA file with specified length for lines.
+     * 
+     * @param fasta_file The FASTA file object
+     * @param seq The sequence to be written in the file.
+     * @param length Length of the lines.
+     */    
     public static void write_fasta(BufferedWriter fasta_file, String seq, int length) {
         int i;
         try {

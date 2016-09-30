@@ -1,5 +1,11 @@
 package alignment;
 
+/**
+ * Implements required functionalities for nucleotide pairwise alignment 
+ * 
+ * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
+ * University, Netherlands
+ */
 public class Alignment {
 
     private int match[][];
@@ -13,6 +19,9 @@ public class Alignment {
     public static int GAP_OPEN = -2;
     public static int GAP_EXT = -1;
     
+    /**
+     * The constructor of the class
+     */
     public Alignment() {
     // initialize matrixes
         matrix = new int[MAX_LENGTH+1][MAX_LENGTH+1];
@@ -28,6 +37,7 @@ public class Alignment {
                     match[i][j] = MISMATCH_SCORE; 
             }
         }
+    // Degenerate bases are supported    
         match['A']['D'] = MATCH_SCORE;
         match['A']['H'] = MATCH_SCORE;
         match['A']['M'] = MATCH_SCORE;
@@ -86,7 +96,13 @@ public class Alignment {
         match['Y']['T'] = MATCH_SCORE;
     }
 
-
+    /**
+     * Generates the alignment of two nucleotide sequences.
+     * 
+     * @param s1 First sequence
+     * @param s2 Second sequence
+     * @return The aligned sequences
+     */
     public AlignmentBlock get_alignment(String s1, String s2) {
         int i, j;
         int m = Math.min(s1.length() - 1, MAX_LENGTH), n = Math.min(s2.length() - 1, MAX_LENGTH);
@@ -113,6 +129,12 @@ public class Alignment {
         return alignment;
     }
 
+    /**
+     * Calculates the similarity score of two nucleotide sequences. score <= 1.0
+     * @param s1 First sequence
+     * @param s2 Second sequence
+     * @return Tht similarity score
+     */
     public double get_similarity(String s1, String s2) {
         int i, j;
         int m = Math.min(s1.length() - 1, MAX_LENGTH), n = Math.min(s2.length() - 1, MAX_LENGTH);

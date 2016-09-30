@@ -26,8 +26,10 @@ import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.sequence_label;
 
 /**
- *
- * @author sheik005
+ * Implements all the functionality to work with a 4-bit compressed sequence database. 
+ * 
+ * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
+ * University, Netherlands
  */
 public class SequenceDatabase {
 
@@ -50,13 +52,13 @@ public class SequenceDatabase {
     public int[] binary;
     public int[] complement;
     private String db_path;
-    /*
-     Initialize sym, binary and complement arrays.
-     sym: All the nucleotide IUPAC symbols
-     binary: The binary code for IUPAC symbols
-     complement: The binary code for complement every other binary code 
-     */
 
+    /**
+     * Initialize sym, binary and complement arrays.
+     * sym: All the nucleotide IUPAC symbols.
+     * binary: The binary code for IUPAC symbols.
+     * complement: The binary code for the complement of every binary code 
+     */
     public void initalize() {
         sym = new char[]{'A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'V', 'H', 'D', 'B', 'N'};
         complement = new int[]{3, 2, 1, 0, 9, 8, 6, 7, 5, 4, 13, 12, 11, 10, 14};
@@ -77,10 +79,11 @@ public class SequenceDatabase {
         binary['B'] = 13;
         binary['N'] = 14;
     }
-    /*
-     Mounts the genome database present in "path" to "genomeDb" object
-     */
 
+    /**
+     * Mounts the genome database to the database object.
+     * @param path Path to the genome database
+     */
     public SequenceDatabase(String path) {
         int g, s, k;
         BufferedReader in;
@@ -126,12 +129,14 @@ public class SequenceDatabase {
             System.exit(1);
         }
     }
-    /*
-     Creates a genome database in "path" for FASTA files in listed "file" 
-     */
 
-    public SequenceDatabase(String path, String file) {
-        int g, s, i;
+    /**
+     * Creates a new genome database.
+     * @param path Path of the database
+     * @param genome_paths_file A text file containing path to the genomes
+     */
+    public SequenceDatabase(String path, String genome_paths_file) {
+        int g;
         BufferedReader in;
         String line;
         List<String> genome_list = new LinkedList();
@@ -142,7 +147,7 @@ public class SequenceDatabase {
         num_bytes = 0;
         // count number of genomes    
         try {
-            in = new BufferedReader(new FileReader(file));
+            in = new BufferedReader(new FileReader(genome_paths_file));
             while (in.ready()) {
                 line = in.readLine();
                 if (line.equals("")) {
@@ -190,10 +195,13 @@ public class SequenceDatabase {
         code_genomes(path, 0);
         write_info();
     }
-    /*
-     Reconstructs a genome database in "path" from the pangenome "graphDb"
-     */
 
+    /**
+     * Reconstructs a genome database from the pangenome.
+     * 
+     * @param path Path of the genome database
+     * @param graphDb The graph database object
+     */
     public SequenceDatabase(String path, GraphDatabaseService graphDb) {
         new File(path).mkdir();
         Node db_node, seq_node, gen_node;
@@ -245,10 +253,13 @@ public class SequenceDatabase {
         }
         write_info();
     }
-    /*
-     Compresses genomes' in a binary database 
-     */
 
+    /**
+     * Compresses genomes in a binary database, each nucleotide in 4 bits.
+     * 
+     * @param path Path of the genome database
+     * @param previous_num_genomes The number of the genomes were already in the genome database
+     */
     public void code_genomes(String path, int previous_num_genomes) {
         String line;
         char carry;
@@ -360,6 +371,13 @@ public class SequenceDatabase {
         }
     }
 
+    /**
+     * Make FASTA file of a genome from the genome database.
+     * 
+     * @param path Path of the genome database
+     * @param genome_number Number of the genome in the database
+     * @param genome_name Name of the resulting FASTA file
+     */
     public void decode_genome(String path, int genome_number, String genome_name) {
         int s;
         BufferedWriter out;
@@ -377,11 +395,14 @@ public class SequenceDatabase {
             System.exit(1);
         }
     }
-    /*
-     Adds new genomes to the genome database 
-     */
 
-    public void add_genomes(String path, String file) {
+    /**
+     * Adds new genomes to the genome database.
+     * 
+     * @param path Path of the genome database
+     * @param genome_paths_file A text file containing path to the genomes
+     */
+    public void add_genomes(String path, String genome_paths_file) {
         int g, s, i, previous_num_genomes = 0;
         BufferedReader in;
         String line;
@@ -389,7 +410,7 @@ public class SequenceDatabase {
         initalize();
         try {
             // count number of new genomes
-            in = new BufferedReader(new FileReader(file));
+            in = new BufferedReader(new FileReader(genome_paths_file));
             while (in.ready()) {
                 line = in.readLine();
                 if (line.equals("")) {
@@ -449,8 +470,9 @@ public class SequenceDatabase {
         write_info();
     }
 
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-
+    /**
+     * Closes the database.
+     */
     public void close() {
         try {
             genomes_file.close();
@@ -462,10 +484,10 @@ public class SequenceDatabase {
             genomes_buff[k] = null;
         }
     }
-    /*
-     Writes the genomes.info file to disk 
-     */
 
+    /**
+     * Writes the genomes.info file to disk.
+     */
     public void write_info() {
         int g, s;
         try {
@@ -487,10 +509,14 @@ public class SequenceDatabase {
             System.exit(1);
         }
     }
-    /*
-     Returns the binary code of nucleotide at genomic position (g,s,p) 
-     */
 
+    /**
+     * Returns the nucleotide at a specified genomic position.
+     * @param g Genome number 
+     * @param s Sequence number
+     * @param p Base position
+     * @return The base 
+     */
     public char get_symbol(int g, int s, int p) {
         if (p < sequence_length[g][s]) {
             byte b;
@@ -505,10 +531,14 @@ public class SequenceDatabase {
             return 0;
         }
     }
-    /*
-     Returns the complement of binary code of nucleotide at genomic position (g,s,p) 
-     */
 
+    /**
+     * Returns the complement of a nucleotide at a specified genomic position.
+     * @param g Genome number 
+     * @param s Sequence number
+     * @param p Base position
+     * @return The base 
+     */
     public char get_complement_symbol(int g, int s, int p) {
         if (p < sequence_length[g][s]) {
             byte b;
@@ -523,10 +553,14 @@ public class SequenceDatabase {
             return 0;
         }
     }
-    /*
-     Returns the binary code of nucleotide at genomic position (g,s,p) 
-     */
 
+    /**
+     * Returns the binary code of anucleotide at a specified genomic position.
+     * @param g Genome number 
+     * @param s Sequence number
+     * @param p Base position
+     * @return The base 
+     */
     public int get_code(int g, int s, int p) {
         if (p < sequence_length[g][s]) {
             byte b;
@@ -541,10 +575,14 @@ public class SequenceDatabase {
             return -1;
         }
     }
-    /*
-     Returns the complement of binary code of nucleotide at genomic position (g,s,p) 
-     */
 
+    /**
+     * Returns the binary code of complement of a nucleotide at a specified genomic position.
+     * @param g Genome number 
+     * @param s Sequence number
+     * @param p Base position
+     * @return The base 
+     */    
     public int get_complement_code(int g, int s, int p) {
         if (p < sequence_length[g][s]) {
             byte b;
@@ -559,11 +597,18 @@ public class SequenceDatabase {
             return -1;
         }
     }
-    /*
-     Returns the forward or reverse_complement sequence at genomic position (g,s,p) 
-     */
 
-    public String get_sequence(int g, int s, int p, int l, boolean forward) {
+    /**
+     * Retrieves a genomic region from the genome database.
+     * 
+     * @param g Genome number
+     * @param s Sequence number
+     * @param p Start Position of the region
+     * @param l Length of the region
+     * @param direction specifies the direction, True for forward and False for reverse
+     * @return The genomic region
+     */
+    public String get_sequence(int g, int s, int p, int l, boolean direction) {
         int i;
         StringBuilder seq = new StringBuilder();
         if (p < 0) // take the part is available at the start of the sequence
@@ -575,7 +620,7 @@ public class SequenceDatabase {
         {
             l = (int) sequence_length[g][s] - p;
         }
-        if (forward) {
+        if (direction) {
             for (i = 0; i < l; ++i) {
                 seq.append(get_symbol(g, s, p + i));
             }
@@ -591,21 +636,33 @@ public class SequenceDatabase {
      forward determines the direction of comparion.
      */
 
-    public boolean compare(SequenceDatabase second, int[] a1, int[] a2, int offset1, int offset2, int len, boolean forward) {
-        if (a1[2] + offset1 + len - 1 >= sequence_length[a1[0]][a1[1]] || a2[2] + offset2 + len - 1 >= second.sequence_length[a2[0]][a2[1]]) {
+    /**
+     * Determines the identity of two genomic regions.
+     * 
+     * @param database
+     * @param a1
+     * @param a2
+     * @param offset1
+     * @param offset2
+     * @param len
+     * @param forward
+     * @return 
+     */
+    public boolean compare(SequenceDatabase database, int[] a1, int[] a2, int offset1, int offset2, int len, boolean forward) {
+        if (a1[2] + offset1 + len - 1 >= sequence_length[a1[0]][a1[1]] || a2[2] + offset2 + len - 1 >= database.sequence_length[a2[0]][a2[1]]) {
             return false;
         }
         int i;
         boolean equal;
         if (forward) {
             for (equal = true, i = 0; i < len && equal; ++i) {
-                if (get_code(a1[0], a1[1], a1[2] + offset1 + i) != second.get_code(a2[0], a2[1], a2[2] + offset2 + i)) {
+                if (get_code(a1[0], a1[1], a1[2] + offset1 + i) != database.get_code(a2[0], a2[1], a2[2] + offset2 + i)) {
                     equal = false;
                 }
             }
         } else {
             for (equal = true, i = 0; i < len && equal; ++i) {
-                if (get_code(a1[0], a1[1], a1[2] + offset1 + i) != second.get_complement_code(a2[0], a2[1], a2[2] + offset2 + len - i - 1)) {
+                if (get_code(a1[0], a1[1], a1[2] + offset1 + i) != database.get_complement_code(a2[0], a2[1], a2[2] + offset2 + len - i - 1)) {
                     equal = false;
                 }
             }

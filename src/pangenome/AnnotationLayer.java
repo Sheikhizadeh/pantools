@@ -53,40 +53,44 @@ import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.tRNA_label;
 import static pangenome.SequenceLayer.locate;
-import static pangenome.SequenceLayer.extract_sequence;
 import static pangenome.SequenceLayer.write_fasta;
-import static pangenome.SequenceLayer.b_search;
 import static pangenome.SequenceLayer.get_outgoing_edge;
 import static pantools.Pantools.db_trsc_limit;
 
 /**
- *
- * @author sheik005
+ * Implements all the functionalities related to the annotation layer of the pangenome
+ * 
+ * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
+ * University, Netherlands
  */
 public class AnnotationLayer {
-    /*
-     To add gene_nodes to the graph. 
-     gff_paths : a text file containing paths to annotation files 
+
+    /**
+     * Implements a comparator for integer arrays of size two
      */
-
     public class PairComparator implements Comparator<int[]> {
-
         @Override
         public int compare(int[] x, int[] y) {
-            // Assume neither string is null. Real code should
-            // probably be more robust
-            // You could also just return x.length() - y.length(),
-            // which would be more efficient.
             if (x[0] < y[0]) 
                 return -1;
             else if (x[0] > y[0]) 
+                return 1;
+            else if (x[1] < y[1]) 
+                return -1;
+            else if (x[1] > y[1]) 
                 return 1;
             else
                 return 0;
         }
     }
 
-    public void annotate(String gff_paths) {
+    /**
+     * Adds nodes of different genomic features to the pangenome.
+     * All features should be annotated in the hierarchical order of gene, RNA, exon, CDS  
+     * 
+     * @param gff_paths_file 
+     */
+    public void annotate(String gff_paths_file) {
         int i, j, num_genes=0, num_mRNAs, num_tRNAs, num_ncRNAs, num_pgRNAs, num_exons, protein_num;
         int begin, end, rna_len, isoforms_num, gene_start_pos = 0, phase;
         boolean forward=false;
@@ -115,7 +119,7 @@ public class AnnotationLayer {
                     System.out.println("Can not locate database node!");
                     System.exit(1);
                 }
-                // Read graph information    
+                // Read the pangenome information    
                 K = (int) db_node.getProperty("k_mer_size");
                 num_nodes = (int) db_node.getProperty("num_nodes");
                 num_edges = (int) db_node.getProperty("num_edges");
@@ -130,7 +134,7 @@ public class AnnotationLayer {
                     genes_list[i][j] = new ArrayList();
                 }
             }
-            try (BufferedReader gff_files = new BufferedReader(new FileReader(gff_paths))) {
+            try (BufferedReader gff_files = new BufferedReader(new FileReader(gff_paths_file))) {
                 System.out.println("genome\tgenes\tmRNAs\ttRNAs\tncRNAs\tpgRNAs");
                 for (address[0] = 1; gff_files.ready() && address[0] <= genomeDb.num_genomes; ++address[0]) // for each gff file
                 {
@@ -142,7 +146,8 @@ public class AnnotationLayer {
                         continue;
                     BufferedReader in = new BufferedReader(new FileReader(gff_name));
                     BufferedWriter out = new BufferedWriter(new FileWriter(gff_name + ".proteins.fasta"));
-                    while (in.ready()) // for each record of gff file
+                // for each record of gff file
+                    while (in.ready()) 
                     {
                         try (Transaction tx2 = graphDb.beginTx()) {
                             for (i = 0; i < db_trsc_limit && in.ready(); ++i) {
@@ -161,24 +166,25 @@ public class AnnotationLayer {
                                 phase = !".".equals(fields[7]) ? Integer.parseInt(fields[7]) : 0 ;
                                 forward = strand.equals("+");
                                 sequence_id = fields[0]; // sequence id
-                                // if a feature belongs to a new sequence 
-                                // find the sequence number according to the sequence id in the gff file                                 
+                            // if a feature belongs to a new sequence 
+                            // find the sequence number according to the sequence id in the gff file                                 
                                 if ( ! sequence_id.equals(current_sequence_id) ) {
                                    address[1] = find_sequence(sequence_id, address[0]);
                                    current_sequence_id = sequence_id;
                                 }
-                                if (address[1] > 0) // if sequence found
+                            // if sequence found    
+                                if (address[1] > 0) 
                                 {
                                     origin = address[0] + "_" + address[1];
                                     switch (fields[2]) {
                                         case "CDS":
                                         case "five_prime_UTR":
                                         case "three_prime_UTR":
-                                            // if the RNA codes for a protein (is not a pseudogene)    
+                                        // if the RNA codes for a protein (is not a pseudogene)    
                                             if (fields[2].equals("CDS") && rna_node.hasLabel(mRNA_label)) {
                                                 rna_len += end - begin + 1 - phase;
-                                                // For forward strand features, phase is counted from the start field. 
-                                                // For reverse strand features, phase is counted from the end field.
+                                            // For forward strand features, phase is counted from the start field. 
+                                            // For reverse strand features, phase is counted from the end field.
                                                 if ( forward )
                                                     pq.add(new int[]{begin + 1 + phase, end + 1});
                                                 else
@@ -197,9 +203,11 @@ public class AnnotationLayer {
                                         case "tRNA":
                                         case "ncRNA":
                                         case "pseudogenic_transcript":
-                                            if (num_exons != 0) // is not the first RNA of the gene
+                                        // if is not the first RNA of the gene
+                                            if (num_exons != 0) 
                                             {
-                                                if (rna_len != 0) // if is a coding RNA
+                                            // if is a coding RNA
+                                                if (rna_len != 0) 
                                                 {
                                                     while (pq.size() != 0) {
                                                         pair = pq.remove();
@@ -248,9 +256,11 @@ public class AnnotationLayer {
                                         case "gene":
                                         case "pseudogene":
                                         case "transposable_element_gene":
-                                            if (num_exons != 0) // is not the first RNA of the gene
+                                        // is not the first RNA of the gene
+                                            if (num_exons != 0) 
                                             {
-                                                if (rna_len != 0) // if is a coding RNA
+                                            // if is a coding RNA
+                                                if (rna_len != 0) 
                                                 {
                                                     // concatenates CDS in increasing order of their start point using a priority queue
                                                     while (pq.size() != 0) {
@@ -291,10 +301,10 @@ public class AnnotationLayer {
                                             gene_node.setProperty("length", end - begin + 1);
                                             gene_node.setProperty("strand", strand);
                                             gene_node.setProperty("attribute", fields[fields.length - 1]); // is needed in retrieve genes function
-                                            // extract gene sequence as appears in the sequence and connects it to its nodes   
+                                        // extract gene sequence as appears in the sequence and connects it to its nodes   
                                             connect_gene_to_nodes(gene_builder, address, begin, end,gene_node);
                                             gene_node.setProperty("sequence", gene_builder.toString());
-                                            // adding gene_node id to the sequence node
+                                        // adding gene_node id to the sequence node
                                             genes_list[address[0]][address[1]].add(gene_node.getId());
                                             break;
                                     } // switch
@@ -308,9 +318,11 @@ public class AnnotationLayer {
                         } // tx2
                     } // while lines
                     try (Transaction tx3 = graphDb.beginTx()) {
-                        if (num_exons != 0) // for the last RNA: if is not the first RNA of the gene
+                    // for the last RNA: if is not the first RNA of the gene    
+                        if (num_exons != 0) 
                         {
-                            if (rna_len != 0) // if is a coding RNA
+                        // if is a coding RNA    
+                            if (rna_len != 0) 
                             {
                                 while (pq.size() != 0) {
                                     pair = pq.remove();
@@ -333,7 +345,7 @@ public class AnnotationLayer {
                             rna_node.setProperty("num_exons", num_exons);
                             num_exons = 0;
                         }
-                        if (isoforms_num != 0) // is not the first gene
+                        if (isoforms_num != 0) 
                         {
                             gene_node.setProperty("isoforms_num", isoforms_num);
                             isoforms_num = 0;
@@ -369,6 +381,7 @@ public class AnnotationLayer {
             }
             graphDb.shutdown();
             genomeDb.close();
+            // delete the database transaction files
             File directory = new File(PATH + GRAPH_DATABASE_PATH);
             for (File f : directory.listFiles())
                 if (f.getName().startsWith("neostore.transaction.db."))
@@ -378,27 +391,39 @@ public class AnnotationLayer {
             System.exit(1);
         }
     }
-    /*
-     To return the number of the sequence from genome "g" whose name contains "prefix".
-     */
 
-    private int find_sequence(String prefix, int g) {
+    /**
+     * Finds the number of a sequence in a genome given its name.
+     * 
+     * @param name Name of the sequence
+     * @param genome Number of the genome
+     * @return The number of the sequence in the genome
+     */
+    private int find_sequence(String name, int genome) {
         boolean found = false;
-        int s;
-        for (found = false, s = 1; !found && s <= genomeDb.num_sequences[g]; ++s) {
-            if (genomeDb.sequence_titles[g][s].contains(prefix)) {
+        int sequence;
+        for (found = false, sequence = 1; !found && sequence <= genomeDb.num_sequences[genome]; ++sequence) {
+            if (genomeDb.sequence_titles[genome][sequence].contains(name)) {
                 found = true;
             }
         }
-        --s;
+        --sequence;
         if (found) {
-            return s;
+            return sequence;
         } else {
             return -1;
         }
     }
-    /*
-     To annotate nodes of the gene with gene_id and returning them in the order they traversed
+
+    /**
+     * Connect the annotated gene to all the nodes its sequence passes through in the pangenome.
+     * At the same time assembles the sequence of the gene
+     * 
+     * @param gene_builder String builder which will contain the sequence of the gene  
+     * @param address Contains the genome and the sequence number of the gene
+     * @param begin Start position of the gene
+     * @param end Stop position of the gene
+     * @param gene_node The gene node itself
      */
     public void connect_gene_to_nodes(StringBuilder gene_builder, int[] address, int begin, int end, Node gene_node) {
         Relationship rel;
@@ -449,9 +474,10 @@ public class AnnotationLayer {
         } // while
         gene_node.setProperty("stop_node", node.getId());
     }
-    /*
-    
-    */
+
+    /**
+     * Groups the highly similar genes together
+     */
     public void denovo_homology_annotation() {
         int i, step, gene_len=0, current_gene_len, num_groups=0, total_genes=0, group_size;
         int[] copy_number;
@@ -541,9 +567,14 @@ public class AnnotationLayer {
             System.exit(0);
         }
     }
-    /*
-        Decides if two genes overlap
-    */
+
+    /**
+     * Decides if two genes overlap.
+     * 
+     * @param gene1 The first gene
+     * @param gene2 The second gene
+     * @return Decision
+     */
     private boolean have_overlap(Node gene1, Node gene2){
         int gene1_begin, gene1_end, gene2_begin, gene2_end;
         String gene1_origin, gene2_origin;
@@ -563,11 +594,12 @@ public class AnnotationLayer {
             return true;
     }
     
-    /*
-     To group ortholog/homolog/etc genes. 
-     group_names : a text file with lines starting with a group name followed by a colon, followed by genes IDs seperated by one space.
+    /**
+     * Groups the gene families found by a orthogroup finder tool.
+     * 
+     * @param group_file A text file containing inferred orthogroups in orthoMCL format 
      */
-    public void group_ortholog_proteins(String group_names) {
+    public void group_ortholog_proteins(String group_file) {
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             Node group_node = null, mRNA_node;
             Relationship rel;
@@ -581,7 +613,7 @@ public class AnnotationLayer {
             int i, j, total_proteins = 0, num_proteins, num_groups = 0;
             boolean found;
             System.out.println("Grouping protein_coding genes ...");
-            try (BufferedReader in = new BufferedReader(new FileReader(group_names))) {
+            try (BufferedReader in = new BufferedReader(new FileReader(group_file))) {
                 graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
                         .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
                 registerShutdownHook(graphDb);
@@ -648,7 +680,7 @@ public class AnnotationLayer {
                 }
                 in.close();
             } catch (IOException ioe) {
-                System.out.println("Failed to open " + group_names);
+                System.out.println("Failed to open " + group_file);
                 System.exit(1);
             }
             File directory = new File(PATH + GRAPH_DATABASE_PATH);
@@ -663,10 +695,12 @@ public class AnnotationLayer {
             System.exit(1);
         }
     }
-    /*
-     To register the action to be taken if the program halts unexpectedly
+    
+    /**
+     * Shuts down the graph database if the program halts unexpectedly.
+     * 
+     * @param graphDb The graph database object 
      */
-
     private void registerShutdownHook(final GraphDatabaseService graphDb) {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
