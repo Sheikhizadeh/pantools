@@ -115,8 +115,10 @@ public class Pantools {
             case "compare":
                 if (seqLayer.compare_pangenomes(args[1], args[2])) {
                     System.out.println("Databases are equal.");
+                    System.out.println("....................");
                 } else {
                     System.out.println("Databases are different");
+                    System.out.println(".......................");
                 }
                 break;
             case "retrieve":

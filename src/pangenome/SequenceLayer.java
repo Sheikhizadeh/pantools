@@ -454,6 +454,7 @@ public class SequenceLayer {
             BufferedReader in;
             BufferedWriter out;
             Node seq_node, start;
+            Relationship rel;
             String[] fields;
             String line;
             int[] address;
@@ -481,8 +482,9 @@ public class SequenceLayer {
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
-                                start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
-                                extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1l), address, 0, (int) genomeDb.sequence_length[address[0]][address[1]] - 1);
+                                rel = seq_node.getRelationships(Direction.OUTGOING).iterator().next();
+                                start = rel.getEndNode();
+                                extract_sequence(seq, locate(address[0], address[1],0), address, 0, (int) genomeDb.sequence_length[address[0]][address[1]] - 1);
                                 write_fasta(out, seq.toString(), 80);
                                 seq.setLength(0);
                             }
@@ -508,8 +510,9 @@ public class SequenceLayer {
                                 for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                                     out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                     seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
-                                    start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
-                                    extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1l), address, 0, (int) genomeDb.sequence_length[address[0]][address[1]] - 1);
+                                    rel = seq_node.getRelationships(Direction.OUTGOING).iterator().next();
+                                    start = rel.getEndNode();
+                                    extract_sequence(seq, locate(address[0], address[1],0), address, 0, (int) genomeDb.sequence_length[address[0]][address[1]] - 1);
                                     write_fasta(out, seq.toString(), 80);
                                     seq.setLength(0);
                                 }
@@ -549,9 +552,10 @@ public class SequenceLayer {
         IndexDatabase indexDb2;
         SequenceDatabase genomeDb1;
         SequenceDatabase genomeDb2;
-        Node db_node1, db_node2;
-        
+        Node db_node1, db_node2, n1, n2;
+        kmer k_mer1, k_mer2;
         if (new File(path1 + GRAPH_DATABASE_PATH).exists() && new File(path2 + GRAPH_DATABASE_PATH).exists()) {
+            startTime = System.currentTimeMillis();
             GraphDatabaseService g1 = new GraphDatabaseFactory().newEmbeddedDatabase(new File(path1 + GRAPH_DATABASE_PATH));
             GraphDatabaseService g2 = new GraphDatabaseFactory().newEmbeddedDatabase(new File(path2 + GRAPH_DATABASE_PATH));
             registerShutdownHook(g1);
@@ -578,23 +582,22 @@ public class SequenceLayer {
                 knum1 = (long) db_node1.getProperty("num_k_mers");
                 knum2 = (long) db_node2.getProperty("num_k_mers");
                 if (K1 != K2 || sq_num1 != sq_num2 || sq_num1 != sq_num2 || ed_num1 != ed_num2 || ng1 != ng2 || knum1 != knum2) {
+                    System.out.println("Basic properties are different.");
                     return false;
                 }
                 genomeDb1 = new SequenceDatabase(path1 + GENOME_DATABASE_PATH);
                 genomeDb2 = new SequenceDatabase(path2 + GENOME_DATABASE_PATH);
                 indexDb1 = new IndexDatabase(path1 + INDEX_DATABASE_PATH);
                 indexDb2 = new IndexDatabase(path2 + INDEX_DATABASE_PATH);
-                System.out.println("comparing pangenomes...");
+                System.out.println("Comparing pangenomes...");
                 K = K1;
-                Node n1, n2;
-                kmer k_mer1 = new kmer(K, indexDb1.get_pre_len(), indexDb1.get_suf_len());
-                kmer k_mer2 = new kmer(K, indexDb2.get_pre_len(), indexDb2.get_suf_len());
                 IndexPointer p1 = new IndexPointer();
                 IndexPointer p2 = new IndexPointer();
                 for (k = 0; k < knum1; ++k) {
                     k_mer1 = indexDb1.get_kmer(k);
                     k_mer2 = indexDb2.get_kmer(k);
                     if (k_mer1.compare(k_mer2) != 0) {
+                        System.out.println("Kmers number " + k + " are different.");
                         return false;
                     }
                     indexDb1.get_pointer(p1, k);
@@ -606,9 +609,11 @@ public class SequenceLayer {
                         len2 = (int) n2.getProperty("length");
                         if (len1 != len2 || (!genomeDb1.compare(genomeDb2, (int[]) n1.getProperty("address"), (int[]) n2.getProperty("address"), 0, 0, len1, true)
                                 && !genomeDb1.compare(genomeDb2, (int[]) n1.getProperty("address"), (int[]) n2.getProperty("address"), 0, 0, len1, false))) {
+                            System.out.println("Nodes " + p1.node_id + " and " + p2.node_id + " are different.");
                             return false;
                         }
                         if (n1.getDegree(Direction.BOTH) != n2.getDegree(Direction.BOTH)) {
+                            System.out.println("Nodes " + p1.node_id + " and " + p2.node_id + " have different degrees.");
                             return false;
                         }
                     }
@@ -695,13 +700,13 @@ public class SequenceLayer {
         node_len = (int) node.getProperty("length");
     // Takes the part of the region lies in the first node of the path that region takes in the graph    
         if (start_ptr.canonical) {
-            if (position + seq_len - 1 <= node_len - 1) {
+            if (position + seq_len - 1 <= node_len - 1) { // The whole sequence lies in this node
                 loc += append_fwd(seq, (String) node.getProperty("sequence"), position, position + seq_len - 1);
             } else {
                 loc += append_fwd(seq, (String) node.getProperty("sequence"), position, node_len - 1);
             }
         } else {
-            if (position - (seq_len - 1) >= 0) {
+            if (position - (seq_len - 1) >= 0) { // The whole sequence lies in this node
                 loc += append_rev(seq, (String) node.getProperty("sequence"), position - (seq_len - 1), position);
             } else {
                 loc += append_rev(seq, (String) node.getProperty("sequence"), 0, position);
@@ -811,10 +816,10 @@ public class SequenceLayer {
         if (position < anchor_positions[mid]) {
             --mid;
         }
+        forward = anchor_sides.charAt(mid) == 'F';
         try (Transaction tx = graphDb.beginTx()) {
             node = graphDb.getNodeById(anchor_nodes[mid]);
             loc = anchor_positions[mid];
-            forward = anchor_sides.charAt(mid) == 'F';
             node_len = (int) node.getProperty("length");
         // Traverse the pangenome from the anchor node until reach to the target
             while (loc + node_len - K + 1 <= position) 
@@ -822,6 +827,7 @@ public class SequenceLayer {
                 address[2] = loc + node_len - K + 1;
                 rel = get_outgoing_edge(node, address);
                 neighbor = rel.getEndNode();
+                forward = rel.getType().name().charAt(1) == 'F';
                 loc += node_len - K + 1;
                 node = neighbor;
                 node_len = (int) node.getProperty("length");
@@ -1367,7 +1373,6 @@ public class SequenceLayer {
      * To add list of anchor nodes, anchor sides and anchor positions to each sequence_node.
      * These are used for locating genomic regions very quickly. 
      */
-
     void annotate_nodes() {
         int trsc, i, len, m, neighbor_length = 0, count;
         char node_side, neighbor_side = 'F';
@@ -1397,10 +1402,10 @@ public class SequenceLayer {
                 }
                 node_side = 'F';
                 count = 0;
-                for (address[2] = 0; address[2] + K - 1 < seq_len ;) // K-1 bases of the last node not added
+                for (address[2] = 0; address[2] + K - 1 <= seq_len ;) // K-1 bases of the last node not added
                 {
                     try (Transaction tx = graphDb.beginTx()) {
-                        for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && address[2] + K - 1 < seq_len; ++trsc) {
+                        for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && address[2] + K - 1 <= seq_len; ++trsc) {
                             for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
                                 rel_name = r.getType().name();
                                 if (rel_name.charAt(0) != node_side) {
@@ -1454,73 +1459,6 @@ public class SequenceLayer {
                 if (address[2] + K - 1 < seq_len) {
                     System.out.println("not found " + neighbor.getId() + " " + address[2]);
                     System.exit(1);
-                }
-                m = sds.length();
-                ids_list = nds.toString().split("\\s");
-                posis_list = pos.toString().split("\\s");
-                anchor_nodes = new long[m];
-                anchor_positions = new int[m];
-                for (i = 0; i < m; ++i) {
-                    anchor_nodes[i] = Long.valueOf(ids_list[i]);
-                    anchor_positions[i] = Integer.valueOf(posis_list[i]);
-                }
-                try (Transaction tx = graphDb.beginTx()) {
-                    seq_node.setProperty("anchor_nodes", anchor_nodes);
-                    seq_node.setProperty("anchor_positions", anchor_positions);
-                    seq_node.setProperty("anchor_sides", sds.toString());
-                    tx.success();
-                }
-                nds.setLength(0);
-                pos.setLength(0);
-                sds.setLength(0);
-            }//sequences
-        }//genomes
-        System.out.println();
-    }
-
-    void annotate_nodes_old() {
-        int trsc, i, m, neighbor_length = 0, count;
-        long seq_len;
-        long[] anchor_nodes;
-        int[] anchor_positions;
-        Node node, neighbor, seq_node;
-        Relationship rel;
-        StringBuilder nds = new StringBuilder();
-        StringBuilder pos = new StringBuilder();
-        StringBuilder sds = new StringBuilder();
-        String[] ids_list, posis_list;
-        String rel_name;
-        int[] addr = null, address = new int[3];
-        System.out.println("Localizing nodes... ");
-        for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
-            for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                System.out.print("\rsequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
-                seq_len = genomeDb.sequence_length[address[0]][address[1]] - 1;
-                try (Transaction tx = graphDb.beginTx()) {
-                    node = seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
-                    tx.success();
-                }
-                count = 0;
-                for (address[2] = 0; address[2] + K - 1 < seq_len ;) // K-1 bases of the last node not added
-                {
-                    try (Transaction tx = graphDb.beginTx()) {
-                        for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && address[2] + K - 1 < seq_len ; ++trsc) {
-                            rel = get_outgoing_edge(node, address);
-                            //System.out.println("node "+node.getId()+" next "+address[0]+"_"+address[1]+"_"+address[2]);
-                            neighbor = rel.getEndNode();
-                            rel_name = rel.getType().name();
-                            neighbor_length = (int) neighbor.getProperty("length");
-                            if (count % ANCHOR_DISTANCES == 0) {
-                                nds.append(neighbor.getId()).append(" ");
-                                sds.append(rel_name.charAt(1));
-                                pos.append(address[2]).append(" ");
-                            }
-                            count++;
-                            address[2] = address[2] + neighbor_length - K + 1;
-                            node = neighbor;
-                        }
-                        tx.success();
-                    }
                 }
                 m = sds.length();
                 ids_list = nds.toString().split("\\s");
