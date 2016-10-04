@@ -300,7 +300,7 @@ public class AnnotationLayer {
                                             gene_node.setProperty("attribute", fields[fields.length - 1]); // is needed in retrieve genes function
                                         // extract gene sequence as appears in the sequence and connects it to its nodes   
                                             connect_gene_to_nodes(gene_builder, address, begin, end,gene_node);
-                                            gene_node.setProperty("sequence", direction?gene_builder.toString():reverse_complement(gene_builder.toString()));
+                                           // gene_node.setProperty("sequence", direction?gene_builder.toString():reverse_complement(gene_builder.toString()));
                                         // adding gene_node id to the sequence node
                                             genes_list[address[0]][address[1]].add(gene_node.getId());
                                             break;
