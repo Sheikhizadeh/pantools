@@ -54,6 +54,7 @@ import static pantools.Pantools.phaseTime;
 import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
+import static pantools.Pantools.reverse_complement;
 import static pantools.Pantools.write_fasta;
 
 /**
@@ -211,8 +212,10 @@ public class SequenceLayer {
                 indexDb = new IndexDatabase(PATH + INDEX_DATABASE_PATH, genome_paths_file, genomeDb, graphDb, previous_num_genomes);
                 tx.success();
             }
-        // the sequences should be dropped out as they will change and add_sequence_properties() function will rebuild the new ones.    
-            drop_property("sequence");
+        // the sequences should be dropped out as they will change and add_sequence_properties() function will rebuild them.    
+            drop_nodes_property("sequence");
+        // the edge colors should be dropped out as they will change and annotate_nodes() function will rebuild them again.    
+            drop_edges_colors();
             construct_pangenome(previous_num_genomes);
             System.out.println("Number of kmers:   " + indexDb.length());
             System.out.println("Number of nodes:   " + num_nodes);
@@ -330,7 +333,7 @@ public class SequenceLayer {
                             begin = (int) gene.getProperty("begin");
                             end = (int) gene.getProperty("end");
                             strand = gene.getProperty("strand").toString().equals("+");
-                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("position"), -1l), address, begin - 1, end - 1);//
+                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("starts_at"), -1l), address, begin - 1, end - 1);//
                             //genomeDb=new sequence_database(PATH+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
@@ -889,8 +892,8 @@ public class SequenceLayer {
             for (Relationship r : node.getRelationships(RelTypes.visits, Direction.INCOMING)) 
             {
                 rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.visits);
-                if (r.hasProperty("position") && (int) r.getProperty("position") >= pos) {
-                    rel.setProperty("position", (int) r.getProperty("position") - pos);
+                if (r.hasProperty("starts_at") && (int) r.getProperty("starts_at") >= pos) {
+                    rel.setProperty("starts_at", (int) r.getProperty("starts_at") - pos);
                     rel.setProperty("forward", r.getProperty("forward"));
                     r.delete();
                 } 
@@ -1530,7 +1533,7 @@ public class SequenceLayer {
      * Remove the given property from all the nodes and degenerates.
      * @param property 
      */    
-    void drop_property(String side) {
+    void drop_nodes_property(String property) {
         int i;
         byte[] sequence;
         ResourceIterator<Node> nodes;
@@ -1543,7 +1546,7 @@ public class SequenceLayer {
             try (Transaction tx = graphDb.beginTx()) {
                 for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
                     node = nodes.next();
-                    node.removeProperty(side);
+                    node.removeProperty(property);
                 }
                 tx.success();
             }
@@ -1557,7 +1560,7 @@ public class SequenceLayer {
             try (Transaction tx = graphDb.beginTx()) {
                 for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
                     node = nodes.next();
-                    node.removeProperty(side);
+                    node.removeProperty(property);
                 }
                 tx.success();
             }
@@ -1566,56 +1569,27 @@ public class SequenceLayer {
     }
 
     /**
-     * Return reverse complement of the given string.
-     * 
-     * @param s    The input string
-     * @return 
-     */     
-    private static String reverse_complement(String s) {
-        StringBuilder rv = new StringBuilder();
-        for (int i = s.length() - 1; i >= 0; --i) {
-            switch (s.charAt(i)) {
-                case 'A':
-                    rv.append('T');
-                    break;
-                case 'C':
-                    rv.append('G');
-                    break;
-                case 'G':
-                    rv.append('C');
-                    break;
-                case 'T':
-                    rv.append('A');
-                    break;
-                case 'R':
-                    rv.append('Y');
-                    break;
-                case 'Y':
-                    rv.append('R');
-                    break;
-                case 'K':
-                    rv.append('M');
-                    break;
-                case 'M':
-                    rv.append('K');
-                    break;
-                case 'B':
-                    rv.append('V');
-                    break;
-                case 'V':
-                    rv.append('B');
-                    break;
-                case 'D':
-                    rv.append('H');
-                    break;
-                case 'H':
-                    rv.append('D');
-                    break;
-                default:
-                    rv.append(s.charAt(i));
+     * Remove the occurrence arrays of the edges.
+     */    
+    void drop_edges_colors() {
+        int i;
+        ResourceIterator<Relationship> rels;
+        Relationship r;
+        try (Transaction tx = graphDb.beginTx()) {
+            rels = graphDb.getAllRelationships().iterator();
+            tx.success();
+        }
+        while (rels.hasNext()) {
+            try (Transaction tx = graphDb.beginTx()) {
+                for (i = 0; i < MAX_TRANSACTION_SIZE && rels.hasNext(); ++i) {
+                    r = rels.next();
+                    for(String p:r.getPropertyKeys())
+                        r.removeProperty(p);
+                }
+                tx.success();
             }
         }
-        return rv.toString();
+        rels.close();
     }
 
     /**

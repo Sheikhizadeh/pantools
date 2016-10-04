@@ -52,21 +52,12 @@ public class protein_builder {
      * @param direction The direction of the translation
      * @return The protein sequence
      */
-    public String translate(StringBuilder mRNA, boolean direction)
+    public String translate(String mRNA)
     {
         sequence.setLength(0);
         int i;   
-        //if (mRNA.length() % 3 == 0)
-            if ( direction )
-            {
-                for(i=0;i<=mRNA.length()-6;i+=3)
-                    sequence.append(table[binary[mRNA.charAt(i)]*16+binary[mRNA.charAt(i+1)]*4+binary[mRNA.charAt(i+2)]]);
-            }
-            else 
-            {
-                for(i=mRNA.length()-1;i>=5;i-=3)
-                    sequence.append(table[(3-binary[mRNA.charAt(i)])*16+(3-binary[mRNA.charAt(i-1)])*4+(3-binary[mRNA.charAt(i-2)])]);            
-            }
+        for(i=0;i<=mRNA.length()-3;i+=3)
+            sequence.append(table[binary[mRNA.charAt(i)]*16+binary[mRNA.charAt(i+1)]*4+binary[mRNA.charAt(i+2)]]);
         return sequence.toString();
     }
 } 

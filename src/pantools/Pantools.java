@@ -332,6 +332,59 @@ public class Pantools {
         }
 
     }    
+    
+    /**
+     * Return reverse complement of the given string.
+     * 
+     * @param s    The input string
+     * @return 
+     */     
+    public static String reverse_complement(String s) {
+        StringBuilder rv = new StringBuilder();
+        for (int i = s.length() - 1; i >= 0; --i) {
+            switch (s.charAt(i)) {
+                case 'A':
+                    rv.append('T');
+                    break;
+                case 'C':
+                    rv.append('G');
+                    break;
+                case 'G':
+                    rv.append('C');
+                    break;
+                case 'T':
+                    rv.append('A');
+                    break;
+                case 'R':
+                    rv.append('Y');
+                    break;
+                case 'Y':
+                    rv.append('R');
+                    break;
+                case 'K':
+                    rv.append('M');
+                    break;
+                case 'M':
+                    rv.append('K');
+                    break;
+                case 'B':
+                    rv.append('V');
+                    break;
+                case 'V':
+                    rv.append('B');
+                    break;
+                case 'D':
+                    rv.append('H');
+                    break;
+                case 'H':
+                    rv.append('D');
+                    break;
+                default:
+                    rv.append(s.charAt(i));
+            }
+        }
+        return rv.toString();
+    }
 
     /**
      * Executes a shell command. 
