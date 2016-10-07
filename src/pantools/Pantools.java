@@ -48,13 +48,16 @@ public class Pantools {
     public static Label gene_label = DynamicLabel.label("gene");
     public static Label pseudogene_label = DynamicLabel.label("pseudogene");
     public static Label TEgene_label = DynamicLabel.label("TEgene");
+    public static Label coding_gene_label = DynamicLabel.label("coding_gene");
+    public static Label noncoding_gene_label = DynamicLabel.label("noncoding_gene");
+    public static Label tRNA_gene_label = DynamicLabel.label("tRNA_gene");
     public static Label mRNA_label = DynamicLabel.label("mRNA");
     public static Label tRNA_label = DynamicLabel.label("tRNA");
     public static Label ncRNA_label = DynamicLabel.label("ncRNA");
-    public static Label pgRNA_label = DynamicLabel.label("pgRNA");
+    //public static Label pgRNA_label = DynamicLabel.label("pgRNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
-    public static Label UTR5_label = DynamicLabel.label("UTR5");
-    public static Label UTR3_label = DynamicLabel.label("UTR3");
+    //public static Label UTR5_label = DynamicLabel.label("UTR5");
+    //public static Label UTR3_label = DynamicLabel.label("UTR3");
     public static Label ortholog_lable = DynamicLabel.label("orthologs");
     public static Label homolog_lable = DynamicLabel.label("homologs");
 
@@ -64,7 +67,9 @@ public class Pantools {
         visits, // for connecting genes to the nodes
         contains, // for pointing to gene nodes of the group
         codes_for,// for connecting genes to mRNAs
-        contributes_to// for connecting CDSs and LTRs to mRNA
+        contributes_to,// for connecting CDSs and LTRs to mRNA
+        is_a, // for connecting genes to tRNAs, ncRNAs and pseusogenic_transcripts
+        covers //to connect CDSs to the nodes
     }
 
     public static long startTime;

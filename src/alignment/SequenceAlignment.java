@@ -6,14 +6,14 @@ package alignment;
  * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
  * University, Netherlands
  */
-public class Alignment {
+public class SequenceAlignment {
 
     private int match[][];
     private int matrix[][];
     private int up[][];
     private int left[][];
     public int alignment_length;
-    public static int MAX_LENGTH = 15000;
+    public static int MAX_LENGTH = 10000;
     public static int MATCH_SCORE = 4;
     public static int MISMATCH_SCORE = -2;
     public static int GAP_OPEN = -2;
@@ -22,7 +22,7 @@ public class Alignment {
     /**
      * The constructor of the class
      */
-    public Alignment() {
+    public SequenceAlignment() {
     // initialize matrixes
         matrix = new int[MAX_LENGTH+1][MAX_LENGTH+1];
         up = new int[MAX_LENGTH+1][MAX_LENGTH+1];
