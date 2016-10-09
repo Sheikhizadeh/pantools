@@ -624,30 +624,32 @@ public class AnnotationLayer {
                     pq.offer(r2.getStartNode().getId());
             }
         }
-        current_gene_id = pq.peek();
-        while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
-            while (!pq.isEmpty()) { 
-                gene_id = pq.remove();
-                if(gene_id != current_gene_id)
-                    break;
-            }
-            current_gene_node = graphDb.getNodeById(current_gene_id);
-            if ( current_gene_node.hasLabel(tRNA_gene_label) && 
-                    ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) // To avoid having one gene in different groups
-                    && ! have_overlap(gene_node,current_gene_node ) ) {
-                tRNA_node1 = gene_node.getSingleRelationship(RelTypes.is_a,Direction.OUTGOING).getEndNode();
-                tRNA_seq1 = (String)tRNA_node1.getProperty("sequence");
-                tRNA_len1 = tRNA_seq1.length();
-                tRNA_node2 = current_gene_node.getSingleRelationship(RelTypes.is_a,Direction.OUTGOING).getEndNode();
-                tRNA_seq2 = (String)tRNA_node2.getProperty("sequence");
-                tRNA_len2 = tRNA_seq2.length();
-                if ( Math.abs(tRNA_len1 - tRNA_len2) <= Math.max(tRNA_len1, tRNA_len2)/10 && 
-                    seq_aligner.get_similarity(tRNA_seq1,tRNA_seq2) > 0.75 ) {
-                    gene_nodes.add(current_gene_node);
+        if (!pq.isEmpty()) {
+            current_gene_id = pq.peek();
+            while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
+                while (!pq.isEmpty()) { 
+                    gene_id = pq.remove();
+                    if(gene_id != current_gene_id)
+                        break;
                 }
-            } // if
-            current_gene_id = gene_id;
-        }// while        
+                current_gene_node = graphDb.getNodeById(current_gene_id);
+                if ( current_gene_node.hasLabel(tRNA_gene_label) && 
+                        ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) // To avoid having one gene in different groups
+                        && ! have_overlap(gene_node,current_gene_node ) ) {
+                    tRNA_node1 = gene_node.getSingleRelationship(RelTypes.is_a,Direction.OUTGOING).getEndNode();
+                    tRNA_seq1 = (String)tRNA_node1.getProperty("sequence");
+                    tRNA_len1 = tRNA_seq1.length();
+                    tRNA_node2 = current_gene_node.getSingleRelationship(RelTypes.is_a,Direction.OUTGOING).getEndNode();
+                    tRNA_seq2 = (String)tRNA_node2.getProperty("sequence");
+                    tRNA_len2 = tRNA_seq2.length();
+                    if ( Math.abs(tRNA_len1 - tRNA_len2) <= Math.max(tRNA_len1, tRNA_len2)/10 && 
+                        seq_aligner.get_similarity(tRNA_seq1,tRNA_seq2) > 0.75 ) {
+                        gene_nodes.add(current_gene_node);
+                    }
+                } // if
+                current_gene_id = gene_id;
+            }// while
+        }        
     }    
     
     /**
