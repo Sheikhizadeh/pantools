@@ -221,18 +221,18 @@ public class AnnotationLayer {
                                             gene_node.setProperty("end", end);
                                             gene_node.setProperty("strand", strand);
                                             gene_node.setProperty("length", end - begin + 1);
+                                            gene_node.setProperty("ID", get_property(attribute,"ID"));
+                                            gene_node.setProperty("origin", origin);
+                                            gene_node.setProperty("fields", fields);
                                         // extract gene sequence as appears in the sequence and connects it to its nodes   
                                             gene_builder.setLength(0);
                                             connect_gene_to_nodes(gene_builder, address, begin-1, end-1, gene_node);
                                         // adding gene_node id to the sequence node
                                             genes_list[address[0]][address[1]].add(gene_node.getId());
-                                            gene_node.setProperty("ID", get_property(attribute,"ID"));
-                                            gene_node.setProperty("origin", origin);
-                                            gene_node.setProperty("fields", fields);
+                                            ++total_genes;
                                             switch (fields[2]) {
                                                 case "gene":
                                                     ++num_coding_genes;
-                                                    ++total_genes;
                                                     break;
                                                 case "pseudogene":
                                                     ++num_pseudogenes;
