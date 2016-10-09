@@ -632,9 +632,9 @@ public class AnnotationLayer {
                     break;
             }
             current_gene_node = graphDb.getNodeById(current_gene_id);
-            if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) // To avoid having one gene in different groups
-                    && ! have_overlap(gene_node,current_gene_node ) &&
-                    current_gene_node.hasLabel(tRNA_gene_label)) {
+            if ( current_gene_node.hasLabel(tRNA_gene_label) && 
+                    ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) // To avoid having one gene in different groups
+                    && ! have_overlap(gene_node,current_gene_node ) ) {
                 tRNA_node1 = gene_node.getSingleRelationship(RelTypes.is_a,Direction.OUTGOING).getEndNode();
                 tRNA_seq1 = (String)tRNA_node1.getProperty("sequence");
                 tRNA_len1 = tRNA_seq1.length();
