@@ -198,7 +198,7 @@ public class AnnotationLayer {
                                                         cds_node = r2.getStartNode();
                                                         pq.add(new int[]{(int)cds_node.getProperty("start")-1,(int)cds_node.getProperty("stop")-1});
                                                     }
-                                                    for (coding_RNA.setLength(0);pq.size() != 0;) {
+                                                    for (coding_RNA.setLength(0);!pq.isEmpty();) {
                                                         pair = pq.remove();
                                                         coding_RNA.append(gene_builder.substring(pair[0] - gene_start_pos, pair[1] - gene_start_pos + 1));
                                                     }
@@ -212,12 +212,12 @@ public class AnnotationLayer {
                                                 }
                                                 gene_node.setProperty("isoforms_num", isoforms_num);
                                             }
+                                            gene_start_pos = begin - 1;
                                         // create new gene node    
                                             gene_node = graphDb.createNode(gene_label);
                                             if (fields[2].equals("gene")){
                                                 ++num_coding_genes;
                                                 ++total_genes;
-                                                gene_start_pos = begin - 1;
                                                 gene_node.setProperty("genome", address[0]);
                                                 gene_node.setProperty("begin", begin);
                                                 gene_node.setProperty("end", end);
