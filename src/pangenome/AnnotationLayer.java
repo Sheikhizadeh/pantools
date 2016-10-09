@@ -612,7 +612,7 @@ public class AnnotationLayer {
      * @param seq_aligner 
      */
     private void get_trna_family(LinkedList<Node> gene_nodes, PriorityQueue<Long> pq, Node gene_node, SequenceAlignment seq_aligner){
-        int count, tRNA_len1,tRNA_len2;
+        int tRNA_len1,tRNA_len2;
         Node tmp, tRNA_node1, tRNA_node2, current_gene_node, node;
         String tRNA_seq1, tRNA_seq2;
         long gene_id=-1l, current_gene_id;
@@ -626,7 +626,7 @@ public class AnnotationLayer {
         }
         current_gene_id = pq.peek();
         while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
-            for (count = 0;!pq.isEmpty();++count) { 
+            while (!pq.isEmpty()) { 
                 gene_id = pq.remove();
                 if(gene_id != current_gene_id)
                     break;
@@ -634,8 +634,7 @@ public class AnnotationLayer {
             current_gene_node = graphDb.getNodeById(current_gene_id);
             if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) // To avoid having one gene in different groups
                     && ! have_overlap(gene_node,current_gene_node ) &&
-                    gene_node.hasRelationship(RelTypes.is_a,Direction.OUTGOING) &&
-                    current_gene_node.hasRelationship(RelTypes.is_a,Direction.OUTGOING)) {
+                    current_gene_node.hasLabel(tRNA_gene_label)) {
                 tRNA_node1 = gene_node.getSingleRelationship(RelTypes.is_a,Direction.OUTGOING).getEndNode();
                 tRNA_seq1 = (String)tRNA_node1.getProperty("sequence");
                 tRNA_len1 = tRNA_seq1.length();

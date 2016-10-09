@@ -5,6 +5,7 @@
         <group>
             <file>file:/Users/siavash/pantools/src/alignment/ProteinAlignment.java</file>
             <file>file:/Users/siavash/pantools/src/alignment/SequenceAlignment.java</file>
+            <file>file:/Users/siavash/pantools/src/pantools/Pantools.java</file>
             <file>file:/Users/siavash/pantools/src/pangenome/SequenceLayer.java</file>
             <file>file:/Users/siavash/pantools/src/pangenome/AnnotationLayer.java</file>
         </group>
