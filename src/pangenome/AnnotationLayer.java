@@ -63,6 +63,7 @@ import static pantools.Pantools.TEgene_label;
 import static pantools.Pantools.coding_gene_label;
 import static pantools.Pantools.noncoding_gene_label;
 import static pantools.Pantools.pseudogene_label;
+import static pantools.Pantools.pseudogenic_transcript_label;
 import static pantools.Pantools.reverse_complement;
 import static pantools.Pantools.tRNA_gene_label;
 import static pantools.Pantools.write_fasta;
@@ -189,7 +190,7 @@ public class AnnotationLayer {
                                         case "pseudogene":
                                         case "transposable_element_gene":
                                         // for the previous gene node. Translate the proteins of the gene.
-                                            if (gene_node != null && gene_node.hasLabel(coding_gene_label)){ 
+                                            if (gene_node != null){ 
                                                 isoforms_num =0;
                                                 for (Relationship r1: gene_node.getRelationships(RelTypes.codes_for, Direction.OUTGOING)) {
                                                     ++isoforms_num;
@@ -215,34 +216,38 @@ public class AnnotationLayer {
                                             gene_start_pos = begin - 1;
                                         // create new gene node    
                                             gene_node = graphDb.createNode(gene_label);
-                                            if (fields[2].equals("gene")){
-                                                ++num_coding_genes;
-                                                ++total_genes;
-                                                gene_node.setProperty("genome", address[0]);
-                                                gene_node.setProperty("begin", begin);
-                                                gene_node.setProperty("end", end);
-                                                gene_node.setProperty("strand", strand);
-                                                gene_node.setProperty("length", end - begin + 1);
-                                            // extract gene sequence as appears in the sequence and connects it to its nodes   
-                                                gene_builder.setLength(0);
-                                                connect_gene_to_nodes(gene_builder, address, begin-1, end-1, gene_node);
-                                            // adding gene_node id to the sequence node
-                                                genes_list[address[0]][address[1]].add(gene_node.getId());
-                                            }
-                                            else if (fields[2].equals("pseudogene")){
-                                                ++num_pseudogenes;
-                                                gene_node.addLabel(pseudogene_label);
-                                            } else {
-                                                ++num_TEgenes;
-                                                gene_node.addLabel(TEgene_label);
-                                            }
+                                            gene_node.setProperty("genome", address[0]);
+                                            gene_node.setProperty("begin", begin);
+                                            gene_node.setProperty("end", end);
+                                            gene_node.setProperty("strand", strand);
+                                            gene_node.setProperty("length", end - begin + 1);
+                                        // extract gene sequence as appears in the sequence and connects it to its nodes   
+                                            gene_builder.setLength(0);
+                                            connect_gene_to_nodes(gene_builder, address, begin-1, end-1, gene_node);
+                                        // adding gene_node id to the sequence node
+                                            genes_list[address[0]][address[1]].add(gene_node.getId());
                                             gene_node.setProperty("ID", get_property(attribute,"ID"));
                                             gene_node.setProperty("origin", origin);
                                             gene_node.setProperty("fields", fields);
+                                            switch (fields[2]) {
+                                                case "gene":
+                                                    ++num_coding_genes;
+                                                    ++total_genes;
+                                                    break;
+                                                case "pseudogene":
+                                                    ++num_pseudogenes;
+                                                    gene_node.addLabel(pseudogene_label);
+                                                    break;
+                                                default:
+                                                    ++num_TEgenes;
+                                                    gene_node.addLabel(TEgene_label);
+                                                    break;
+                                            }
                                             break;
                                         case "mRNA":
+                                        case "pseudogenic_transcript":
                                             ++num_mRNAs;
-                                            rna_node = graphDb.createNode(mRNA_label);
+                                            rna_node = graphDb.createNode(fields[2].equals("mRNA")?mRNA_label:pseudogenic_transcript_label);
                                             rna_node.setProperty("ID", get_property(attribute,"ID"));
                                             rna_node.setProperty("origin", origin);
                                             rna_node.setProperty("fields", fields);
@@ -308,7 +313,7 @@ public class AnnotationLayer {
                     } // while lines
                 // for the last gene in the file. Translate the proteins of the gene.
                     try (Transaction tx = graphDb.beginTx()) {
-                        if (gene_node != null && gene_node.hasLabel(coding_gene_label)){ 
+                        if (gene_node != null){ 
                             isoforms_num =0;
                             for (Relationship r1: gene_node.getRelationships(RelTypes.codes_for, Direction.OUTGOING)) {
                                 ++isoforms_num;
@@ -317,7 +322,7 @@ public class AnnotationLayer {
                                     cds_node = r2.getStartNode();
                                     pq.add(new int[]{(int)cds_node.getProperty("start")-1,(int)cds_node.getProperty("stop")-1});
                                 }
-                                for (coding_RNA.setLength(0);pq.size() != 0;) {
+                                for (coding_RNA.setLength(0);!pq.isEmpty();) {
                                     pair = pq.remove();
                                     coding_RNA.append(gene_builder.substring(pair[0] - gene_start_pos, pair[1] - gene_start_pos + 1));
                                 }

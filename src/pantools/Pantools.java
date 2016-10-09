@@ -54,10 +54,8 @@ public class Pantools {
     public static Label mRNA_label = DynamicLabel.label("mRNA");
     public static Label tRNA_label = DynamicLabel.label("tRNA");
     public static Label ncRNA_label = DynamicLabel.label("ncRNA");
-    //public static Label pgRNA_label = DynamicLabel.label("pgRNA");
+    public static Label pseudogenic_transcript_label = DynamicLabel.label("pseudogenic_transcript_label");
     public static Label CDS_label = DynamicLabel.label("CDS");
-    //public static Label UTR5_label = DynamicLabel.label("UTR5");
-    //public static Label UTR3_label = DynamicLabel.label("UTR3");
     public static Label ortholog_lable = DynamicLabel.label("orthologs");
     public static Label homolog_lable = DynamicLabel.label("homologs");
 
