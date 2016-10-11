@@ -30,7 +30,6 @@ import pangenome.SequenceLayer;
  * University, Netherlands
  */
 public class Pantools {
-    public static String PATH;
     public static String GRAPH_DATABASE_PATH = "/databases/graph.db/";
     public static String INDEX_DATABASE_PATH = "/databases/index.db/";
     public static String GENOME_DATABASE_PATH = "/databases/genome.db/";
@@ -46,15 +45,7 @@ public class Pantools {
     public static Label node_label = DynamicLabel.label("node");
     public static Label degenerate_label = DynamicLabel.label("degenerate");
     public static Label gene_label = DynamicLabel.label("gene");
-    public static Label pseudogene_label = DynamicLabel.label("pseudogene");
-    public static Label TEgene_label = DynamicLabel.label("TEgene");
-    public static Label coding_gene_label = DynamicLabel.label("coding_gene");
-    public static Label noncoding_gene_label = DynamicLabel.label("noncoding_gene");
-    public static Label tRNA_gene_label = DynamicLabel.label("tRNA_gene");
-    public static Label mRNA_label = DynamicLabel.label("mRNA");
-    public static Label tRNA_label = DynamicLabel.label("tRNA");
-    public static Label ncRNA_label = DynamicLabel.label("ncRNA");
-    public static Label pseudogenic_transcript_label = DynamicLabel.label("pseudogenic_transcript_label");
+    public static Label RNA_label = DynamicLabel.label("RNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
     public static Label ortholog_lable = DynamicLabel.label("orthologs");
     public static Label homolog_lable = DynamicLabel.label("homologs");
@@ -66,7 +57,6 @@ public class Pantools {
         contains, // for pointing to gene nodes of the group
         codes_for,// for connecting genes to mRNAs
         contributes_to,// for connecting CDSs and LTRs to mRNA
-        is_a, // for connecting genes to tRNAs, ncRNAs and pseusogenic_transcripts
         covers //to connect CDSs to the nodes
     }
 
@@ -95,8 +85,7 @@ public class Pantools {
         System.out.println("------------------------------- PanTools -------------------------------");
         switch (args[0]) {
             case "reconstruct":
-                PATH = args[2];
-                seqLayer.reconstruct_genomes(args[1]);
+                seqLayer.reconstruct_genomes(args[1],args[2]);
                 break;
             case "build":
                 K = Integer.parseInt(args[1]);
@@ -104,47 +93,35 @@ public class Pantools {
                     System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
                     System.exit(1);
                 }
-                PATH = args[2];
-                seqLayer.build(args[3]);
+                seqLayer.build(args[3],args[2]);
                 break;
             case "add":
-                PATH = args[1];
-                seqLayer.add(args[2]);
+                seqLayer.add(args[2],args[1]);
                 break;
             case "annotate":
-                PATH = args[1];
-                annLayer.annotate(args[2]);
+                annLayer.annotate(args[2],args[1]);
                 break;
             case "group":
-                PATH = args[2];
                 if (args[1].equals("denovo"))
-                    annLayer.denovo_homology_annotation();
+                    annLayer.denovo_homology_annotation(args[2]);
                 else
-                    annLayer.group_ortholog_proteins(args[1]);
+                    annLayer.group_ortholog_proteins(args[1],args[2]);
                 break;
             case "compare":
-                if (seqLayer.compare_pangenomes(args[1], args[2])) {
-                    System.out.println("Databases are equal.");
-                    System.out.println("....................");
-                } else {
-                    System.out.println("Databases are different");
-                    System.out.println(".......................");
-                }
+                seqLayer.compare_pangenomes(args[1], args[2]);
                 break;
             case "retrieve":
-                PATH = args[2];
                 if (args[1].equals("genes")) {
-                    seqLayer.retrieve_genes(args[3]);
+                    seqLayer.retrieve_genes(args[3],args[2]);
                 } else if (args[1].equals("regions")) {
-                    seqLayer.retrieve_regions(args[3]);
+                    seqLayer.retrieve_regions(args[3],args[2]);
                 } else {
                     print_help_comment();
                     System.exit(1);
                 }
                 break;
             case "query":
-                PATH = args[1];
-                seqLayer.run_query();
+                seqLayer.run_query(args[1]);
                 break;
             default:
                 print_help_comment();
@@ -307,7 +284,7 @@ public class Pantools {
     /**
      * Estimates and prints the peak memory used during the execution of the program. 
      */
-    private static void print_peak_memory() {
+    public static void print_peak_memory() {
         long memoryUsage = 0;
         try {
             for (MemoryPoolMXBean pool : ManagementFactory.getMemoryPoolMXBeans()) {

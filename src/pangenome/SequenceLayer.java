@@ -36,7 +36,6 @@ import static pantools.Pantools.GENOME_DATABASE_PATH;
 import static pantools.Pantools.GRAPH_DATABASE_PATH;
 import static pantools.Pantools.INDEX_DATABASE_PATH;
 import static pantools.Pantools.K;
-import static pantools.Pantools.PATH;
 import pantools.Pantools.RelTypes;
 import static pantools.Pantools.degenerate_label;
 import static pantools.Pantools.gene_label;
@@ -92,7 +91,7 @@ public class SequenceLayer {
      * 
      * @param genome_paths_file Path to the FASTA genome files. 
      */  
-    public void build(String genome_paths_file) {
+    public void build(String genome_paths_file, String PATH) {
     // If a database folder is already exist in the specified path, removes all the content of it.    
         File theDir = new File(PATH);
         if (theDir.exists()) {
@@ -158,7 +157,7 @@ public class SequenceLayer {
      * 
      * @param genome_paths_file Path to the FASTA genome files. 
      */
-    public void add(String genome_paths_file) {
+    public void add(String genome_paths_file, String PATH) {
         int i, j, g, s, len, previous_num_genomes;
         long byte_number = 0;
         Node start, seq_node;
@@ -255,7 +254,7 @@ public class SequenceLayer {
      * 
      * @param annotation_records_file a text file containing annotation records of the genes to be retrieved.
      */
-    public void retrieve_genes(String annotation_records_file) {
+    public void retrieve_genes(String annotation_records_file, String PATH) {
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             BufferedReader in;
             ResourceIterator<Node> gene_nodes;
@@ -375,7 +374,7 @@ public class SequenceLayer {
      * @param region_records a text file with lines containing genome number, sequence number, start and stop positions
      *        of the genomic regions seperated by one space.
      */
-    public void retrieve_regions(String region_records) {
+    public void retrieve_regions(String region_records_file, String PATH) {
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             String[] fields;
             String line;
@@ -394,7 +393,7 @@ public class SequenceLayer {
             seq = new StringBuilder();
             num_regions = 0;
             try {
-                BufferedReader in = new BufferedReader(new FileReader(region_records));
+                BufferedReader in = new BufferedReader(new FileReader(region_records_file));
                 while (in.ready()) {
                     line = in.readLine();
                     if (line.equals("")) {
@@ -409,8 +408,8 @@ public class SequenceLayer {
             }
             startTime = System.currentTimeMillis();
             try (Transaction tx = graphDb.beginTx()) {
-                try (BufferedReader in = new BufferedReader(new FileReader(region_records))) {
-                    BufferedWriter out = new BufferedWriter(new FileWriter(region_records + ".fasta"));
+                try (BufferedReader in = new BufferedReader(new FileReader(region_records_file))) {
+                    BufferedWriter out = new BufferedWriter(new FileWriter(region_records_file + ".fasta"));
                     for (c = 0; in.ready();) {
                         line = in.readLine();
                         if (line.equals("")) {
@@ -452,7 +451,7 @@ public class SequenceLayer {
      * 
      * @param genome_records_file A text file containing the number and a given name for each genome. 
      */
-    public void reconstruct_genomes(String genome_records_file) {
+    public void reconstruct_genomes(String genome_records_file, String PATH) {
         if (new File(PATH + GENOME_DATABASE_PATH).exists()) {
             BufferedReader in;
             BufferedWriter out;
@@ -548,7 +547,7 @@ public class SequenceLayer {
      * @param path2 Path to the second pangenome
      * @return TRUE if pangenomes are the same, FALSE otherwise.
      */
-    public boolean compare_pangenomes(String path1, String path2) {
+    public void compare_pangenomes(String path1, String path2) {
         int sq_num1, sq_num2, ed_num1, ed_num2, K1, K2, ng1, ng2, len1, len2;
         long k, knum1, knum2;
         IndexDatabase indexDb1;
@@ -586,7 +585,6 @@ public class SequenceLayer {
                 knum2 = (long) db_node2.getProperty("num_k_mers");
                 if (K1 != K2 || sq_num1 != sq_num2 || sq_num1 != sq_num2 || ed_num1 != ed_num2 || ng1 != ng2 || knum1 != knum2) {
                     System.out.println("Basic properties are different.");
-                    return false;
                 }
                 genomeDb1 = new SequenceDatabase(path1 + GENOME_DATABASE_PATH);
                 genomeDb2 = new SequenceDatabase(path2 + GENOME_DATABASE_PATH);
@@ -601,7 +599,6 @@ public class SequenceLayer {
                     k_mer2 = indexDb2.get_kmer(k);
                     if (k_mer1.compare(k_mer2) != 0) {
                         System.out.println("Kmers number " + k + " are different.");
-                        return false;
                     }
                     indexDb1.get_pointer(p1, k);
                     indexDb2.get_pointer(p2, k);
@@ -613,11 +610,9 @@ public class SequenceLayer {
                         if (len1 != len2 || (!genomeDb1.compare(genomeDb2, (int[]) n1.getProperty("address"), (int[]) n2.getProperty("address"), 0, 0, len1, true)
                                 && !genomeDb1.compare(genomeDb2, (int[]) n1.getProperty("address"), (int[]) n2.getProperty("address"), 0, 0, len1, false))) {
                             System.out.println("Nodes " + p1.node_id + " and " + p2.node_id + " are different.");
-                            return false;
                         }
                         if (n1.getDegree(Direction.BOTH) != n2.getDegree(Direction.BOTH)) {
                             System.out.println("Nodes " + p1.node_id + " and " + p2.node_id + " have different degrees.");
-                            return false;
                         }
                     }
                     if (k % (knum1 / 100 + 1) == 0) {
@@ -630,16 +625,14 @@ public class SequenceLayer {
             }
             g1.shutdown();
             g2.shutdown();
-            return true;
+            System.out.println("Pangenomes are equal.");
         }
-        System.out.println("Error: a pair of databases are needed to be compared!");
-        return false;
     }
     
     /**
      * To iteratively receive and run Cypher queries. Results will be written in output files.
      */
-    public void run_query() {
+    public void run_query(String PATH) {
         int i;
         String query;
         BufferedWriter out;
