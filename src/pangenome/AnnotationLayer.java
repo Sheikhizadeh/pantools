@@ -150,7 +150,7 @@ public class AnnotationLayer {
                     while (in.ready()) 
                     {
                         try (Transaction tx2 = graphDb.beginTx()) {
-                            for (i = 0; i < MAX_TRANSACTION_SIZE && in.ready(); ++i) {
+                            for (i = 0; i < MAX_TRANSACTION_SIZE/100 && in.ready(); ++i) {
                                 line = in.readLine();
                                 if (line.equals("") || line.charAt(0) == '#') // if line is empty or a comment skip it
                                 {
@@ -492,7 +492,7 @@ public class AnnotationLayer {
                 System.out.println("genes\tgroups");
                 while (genes_iterator.hasNext()) {
                     try (Transaction tx2 = graphDb.beginTx()) {
-                        for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/10; ++trsc) {
+                        for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
                             gene_node=genes_iterator.next();
                             if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { // To avoid having one gene in different groups
                                 if (gene_node.hasLabel(coding_gene_label))
@@ -575,7 +575,7 @@ public class AnnotationLayer {
                         for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                             mRNA_node2 = r2.getEndNode();
                             //if ( mRNA_node2.getProperty("type").equals("mRNA") ){
-                                mRNA_len2 = (int)mRNA_node2.getProperty("coding_length");
+                                mRNA_len2 = (int)mRNA_node2.getProperty("protein_length");
                                 if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10 && 
                                         pro_aligner.get_similarity((String)mRNA_node1.getProperty("protein"), (String)mRNA_node2.getProperty("protein")) > 0.75 ) {
                                         gene_nodes.add(current_gene_node);
