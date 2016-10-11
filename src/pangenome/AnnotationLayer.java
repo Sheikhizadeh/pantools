@@ -54,6 +54,7 @@ import static pangenome.SequenceLayer.locate;
 import static pangenome.SequenceLayer.get_outgoing_edge;
 import static pantools.Pantools.CDS_label;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
+import static pantools.Pantools.coding_gene_label;
 import static pantools.Pantools.reverse_complement;
 import static pantools.Pantools.write_fasta;
 
@@ -91,7 +92,7 @@ public class AnnotationLayer {
      * @param gff_paths_file A text file listing the paths to the annotation files
      */
     public void annotate(String gff_paths_file, String PATH) {
-        int i, j, num_coding_genes=0, num_mRNAs, num_tRNAs, num_ncRNAs, protein_num, total_genes=0, position;
+        int i, j, num_mRNAs, num_tRNAs, num_ncRNAs, protein_num, total_genes=0, position;
         int num_short_RNAs, num_rRNAs, num_antisense_RNA;
         int begin, end, isoforms_num, gene_start_pos = 0;
         String sequence_id, current_sequence_id=null, origin = null, attribute;
@@ -139,7 +140,7 @@ public class AnnotationLayer {
                 {
                     gene_node = null;
                     protein_num = 0;
-                    num_coding_genes = num_mRNAs = num_tRNAs = num_ncRNAs = num_short_RNAs = num_rRNAs = num_antisense_RNA = 0;
+                    num_mRNAs = num_tRNAs = num_ncRNAs = num_short_RNAs = num_rRNAs = num_antisense_RNA = 0;
                     gff_name = gff_files.readLine();
                     if (gff_name.equals(""))
                         continue;
@@ -182,6 +183,7 @@ public class AnnotationLayer {
                                                     ++isoforms_num;
                                                     rna_node = r1.getEndNode();
                                                     if (rna_node.getProperty("type").equals("mRNA")){
+                                                        gene_node.addLabel(coding_gene_label);
                                                         for (Relationship r2: rna_node.getRelationships(RelTypes.contributes_to, Direction.INCOMING)) {
                                                             cds_node = r2.getStartNode();
                                                             pq.add(new int[]{(int)cds_node.getProperty("start")-1,(int)cds_node.getProperty("stop")-1});
@@ -192,11 +194,11 @@ public class AnnotationLayer {
                                                         }
                                                         protein = pb.translate(gene_node.getProperty("strand").equals("+")?coding_RNA.toString():reverse_complement(coding_RNA.toString()));
                                                         ++protein_num;
-                                                        out.write(">" + origin + " _" + protein_num + "\n");
-                                                        write_fasta(out, protein, 70);
+                                                        //out.write(">" + origin + " _" + protein_num + "\n");
+                                                        //write_fasta(out, protein, 70);
                                                         rna_node.setProperty("protein", protein);
                                                         rna_node.setProperty("protein_number", origin + "_" + protein_num);
-                                                        rna_node.setProperty("coding_length", protein.length());
+                                                        rna_node.setProperty("protein_length", protein.length());
                                                     }
                                                 }
                                                 gene_node.setProperty("isoforms_num", isoforms_num);
@@ -230,7 +232,6 @@ public class AnnotationLayer {
                                         switch (fields[2]){
                                             case "mRNA":
                                                 ++num_mRNAs;
-                                                gene_node.setProperty("type", "coding_gene");
                                                 break;
                                             case "tRNA":
                                                 ++num_tRNAs;
@@ -302,6 +303,7 @@ public class AnnotationLayer {
                                 ++isoforms_num;
                                 rna_node = r1.getEndNode();
                                 if (rna_node.getProperty("type").equals("mRNA")){
+                                    gene_node.addLabel(coding_gene_label);
                                     for (Relationship r2: rna_node.getRelationships(RelTypes.contributes_to, Direction.INCOMING)) {
                                         cds_node = r2.getStartNode();
                                         pq.add(new int[]{(int)cds_node.getProperty("start")-1,(int)cds_node.getProperty("stop")-1});
@@ -312,11 +314,11 @@ public class AnnotationLayer {
                                     }
                                     protein = pb.translate(gene_node.getProperty("strand").equals("+")?coding_RNA.toString():reverse_complement(coding_RNA.toString()));
                                     ++protein_num;
-                                    out.write(">" + origin + " _" + protein_num + "\n");
-                                    write_fasta(out, protein, 70);
+                                    //out.write(">" + origin + " _" + protein_num + "\n");
+                                    //write_fasta(out, protein, 70);
                                     rna_node.setProperty("protein", protein);
                                     rna_node.setProperty("protein_number", origin + "_" + protein_num);
-                                    rna_node.setProperty("coding_length", protein.length());
+                                    rna_node.setProperty("protein_length", protein.length());
                                 }
                             }
                             gene_node.setProperty("isoforms_num", isoforms_num);
@@ -493,7 +495,7 @@ public class AnnotationLayer {
                             gene_node=genes_iterator.next();
                             num_nodes = 0;
                             if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { // To avoid having one gene in different groups
-                                if (gene_node.getProperty("type").equals("coding_gene"))
+                                if (gene_node.hasLabel(coding_gene_label))
                                     get_homologs(gene_nodes, pq, gene_node, pro_aligner);
                                 else
                                     get_gene_family(gene_nodes, pq, gene_node, seq_aligner);
@@ -549,7 +551,7 @@ public class AnnotationLayer {
                 node = r1.getEndNode();
                 for (Relationship r2: node.getRelationships(Direction.INCOMING,RelTypes.visits)) {
                     current_gene_node = r2.getStartNode();
-                    if(!current_gene_node.equals(gene_node) && current_gene_node.getProperty("type").equals("coding_gene")) // avoid comparisons to the gene itself  
+                    if(!current_gene_node.equals(gene_node) && current_gene_node.hasLabel(coding_gene_label)) // avoid comparisons to the gene itself  
                         pq.offer(current_gene_node.getId());
                 }
             }
@@ -569,10 +571,10 @@ public class AnnotationLayer {
                     found = false;
                     for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                         mRNA_node1 = r1.getEndNode();
-                        mRNA_len1 = (int)mRNA_node1.getProperty("coding_length");
+                        mRNA_len1 = (int)mRNA_node1.getProperty("protein_length");
                         for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                             mRNA_node2 = r2.getEndNode();
-                            if ( mRNA_node2.getProperty("type").equals("coding_gene") ){
+                            //if ( mRNA_node2.getProperty("type").equals("mRNA") ){
                                 mRNA_len2 = (int)mRNA_node2.getProperty("coding_length");
                                 if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10 && 
                                         pro_aligner.get_similarity((String)mRNA_node1.getProperty("protein"), (String)mRNA_node2.getProperty("protein")) > 0.75 ) {
@@ -580,7 +582,7 @@ public class AnnotationLayer {
                                         found = true;
                                         break;
                                 }
-                            }
+                           // }
                             if (found)
                                 break;
                         }

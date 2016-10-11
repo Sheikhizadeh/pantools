@@ -45,6 +45,7 @@ public class Pantools {
     public static Label node_label = DynamicLabel.label("node");
     public static Label degenerate_label = DynamicLabel.label("degenerate");
     public static Label gene_label = DynamicLabel.label("gene");
+    public static Label coding_gene_label = DynamicLabel.label("coding_gene");
     public static Label RNA_label = DynamicLabel.label("RNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
     public static Label ortholog_lable = DynamicLabel.label("orthologs");
