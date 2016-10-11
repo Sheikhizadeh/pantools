@@ -92,7 +92,7 @@ public class AnnotationLayer {
      * @param gff_paths_file A text file listing the paths to the annotation files
      */
     public void annotate(String gff_paths_file, String PATH) {
-        int i, j, num_mRNAs, num_tRNAs, num_ncRNAs, protein_num, total_genes=0, position;
+        int i, j, num_genes, num_mRNAs, num_tRNAs, num_ncRNAs, protein_num, total_genes=0, position;
         int num_short_RNAs, num_rRNAs, num_antisense_RNA;
         int begin, end, isoforms_num, gene_start_pos = 0;
         String sequence_id, current_sequence_id=null, origin = null, attribute;
@@ -140,12 +140,12 @@ public class AnnotationLayer {
                 {
                     gene_node = null;
                     protein_num = 0;
-                    num_mRNAs = num_tRNAs = num_ncRNAs = num_short_RNAs = num_rRNAs = num_antisense_RNA = 0;
+                    num_genes = num_mRNAs = num_tRNAs = num_ncRNAs = num_short_RNAs = num_rRNAs = num_antisense_RNA = 0;
                     gff_name = gff_files.readLine();
                     if (gff_name.equals(""))
                         continue;
                     BufferedReader in = new BufferedReader(new FileReader(gff_name));
-                    BufferedWriter out = new BufferedWriter(new FileWriter(gff_name + ".proteins.fasta"));
+                    //BufferedWriter out = new BufferedWriter(new FileWriter(gff_name + ".proteins.fasta"));
                 // for each record of gff file
                     while (in.ready()) 
                     {
@@ -221,6 +221,7 @@ public class AnnotationLayer {
                                         // adding gene_node id to the sequence node
                                             genes_list[address[0]][address[1]].add(gene_node.getId());
                                             ++total_genes;
+                                            ++num_genes;
                                     } else if(fields[2].endsWith("RNA")) {
                                         rna_node = graphDb.createNode(RNA_label);
                                         rna_node.setProperty("ID", get_property(attribute,"ID"));
@@ -290,7 +291,7 @@ public class AnnotationLayer {
                                     log.append(sequence_id).append(" missed in genome ").append(address[0]).append("\n"); // usually organal genes
                                 }
                                 if (i % 500 == 1)
-                                    System.out.print("\r" + address[0] + "\t" + total_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_short_RNAs+ "\t" + num_rRNAs+ "\t" + num_antisense_RNA);
+                                    System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_short_RNAs+ "\t" + num_rRNAs+ "\t" + num_antisense_RNA);
                             }// for trsc
                             tx2.success();
                         } // tx2
@@ -326,8 +327,8 @@ public class AnnotationLayer {
                         tx.success();
                     }
                     in.close();
-                    out.close();
-                    System.out.println("\r" + address[0] + "\t" + total_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_short_RNAs+ "\t" + num_rRNAs+ "\t" + num_antisense_RNA);
+                    //out.close();
+                    System.out.println("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_short_RNAs+ "\t" + num_rRNAs+ "\t" + num_antisense_RNA);
                 } // for genomes
                 gff_files.close();
             } catch (IOException ioe) {
@@ -493,7 +494,6 @@ public class AnnotationLayer {
                     try (Transaction tx2 = graphDb.beginTx()) {
                         for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/10; ++trsc) {
                             gene_node=genes_iterator.next();
-                            num_nodes = 0;
                             if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { // To avoid having one gene in different groups
                                 if (gene_node.hasLabel(coding_gene_label))
                                     get_homologs(gene_nodes, pq, gene_node, pro_aligner);
