@@ -572,16 +572,18 @@ public class AnnotationLayer {
                         mRNA_len1 = (int)mRNA_node1.getProperty("coding_length");
                         for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                             mRNA_node2 = r2.getEndNode();
-                            mRNA_len2 = (int)mRNA_node2.getProperty("coding_length");
-                            if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10 && 
-                                    pro_aligner.get_similarity((String)mRNA_node1.getProperty("protein"), (String)mRNA_node2.getProperty("protein")) > 0.75 ) {
-                                    gene_nodes.add(current_gene_node);
-                                    found = true;
-                                    break;
+                            if ( mRNA_node2.getProperty("type").equals("coding_gene") ){
+                                mRNA_len2 = (int)mRNA_node2.getProperty("coding_length");
+                                if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10 && 
+                                        pro_aligner.get_similarity((String)mRNA_node1.getProperty("protein"), (String)mRNA_node2.getProperty("protein")) > 0.75 ) {
+                                        gene_nodes.add(current_gene_node);
+                                        found = true;
+                                        break;
+                                }
                             }
+                            if (found)
+                                break;
                         }
-                        if (found)
-                            break;
                     }
                 } // if
                 current_gene_id = gene_id;
@@ -623,13 +625,13 @@ public class AnnotationLayer {
                         && ! have_overlap(gene_node,current_gene_node ) ) {
                     found = false;
                     for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+                        RNA_node1 = r1.getEndNode();
+                        RNA_node1_type = (String)RNA_node1.getProperty("type");
+                        RNA_len1 = (int)RNA_node1.getProperty("length");
                         for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                             RNA_node2 = r2.getEndNode();
                             RNA_node2_type = (String)RNA_node2.getProperty("type");
-                            RNA_node1 = r1.getEndNode();
-                            RNA_node1_type = (String)RNA_node1.getProperty("type");
                             if ( RNA_node1_type.equals(RNA_node2_type) ){
-                                RNA_len1 = (int)RNA_node1.getProperty("length");
                                 RNA_len2 = (int)RNA_node2.getProperty("length");
                                 if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)/10){
                                     RNA_seq1 = (String)RNA_node1.getProperty("sequence");
