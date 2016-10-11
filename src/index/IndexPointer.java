@@ -6,8 +6,10 @@
 package index;
 
 /**
- *
- * @author siavashs
+ * Implements the data structure for an index pointer. 
+ * 
+ * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
+ * University, Netherlands
  */
 public class IndexPointer {
 
@@ -16,6 +18,9 @@ public class IndexPointer {
     public boolean canonical;
     public long next_index;
 
+    /**
+     * The default constructor of the class
+     */
     public IndexPointer() {
         node_id = -1L;
         canonical = false;
@@ -23,16 +28,24 @@ public class IndexPointer {
         next_index = -1L;
     }
 
-    public IndexPointer(long id, boolean f, int p, long n) {
+    /**
+     * The non-default constructor of the class
+     * @param id The id of the node pointer points to
+     * @param c Determines if the pointer points to the forward side 
+     * @param p The position in the node pointer points to
+     * @param n Number of the pointer to the next kmer
+     */
+    public IndexPointer(long id, boolean c, int p, long n) {
         node_id = id;
-        canonical = f;
+        canonical = c;
         position = p;
         next_index = n;
     }
 
-    //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-
-    void reset(int d) {
+    /**
+     * Clears the content of the pointer.
+     */
+    void reset() {
         node_id = -1L;
         canonical = false;
         position = -1;

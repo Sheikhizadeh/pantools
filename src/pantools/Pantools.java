@@ -9,6 +9,10 @@ package pantools;
 
 import genome.SequenceDatabase;
 import index.IndexDatabase;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
@@ -20,15 +24,12 @@ import pangenome.AnnotationLayer;
 import pangenome.SequenceLayer;
 
 /**
- *
- * @author sheik005
+ * Implements the main and shared functions. 
+ * 
+ * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
+ * University, Netherlands
  */
 public class Pantools {
-    /*
-     The main function
-     */
-
-    public static String PATH;
     public static String GRAPH_DATABASE_PATH = "/databases/graph.db/";
     public static String INDEX_DATABASE_PATH = "/databases/index.db/";
     public static String GENOME_DATABASE_PATH = "/databases/genome.db/";
@@ -36,65 +37,27 @@ public class Pantools {
     public static IndexDatabase indexDb;
     public static SequenceDatabase genomeDb;
     public static SequenceDatabase sequenceDb;
-    public static int db_trsc_limit = 1000;    //   The number of transactions to be committed in batch
+    public static int MAX_TRANSACTION_SIZE = 1000;    //   The number of transactions to be committed in batch
 
-    /*
-     There are following types of nodes:
-     - pangenome   
-     - genome
-     - sequence
-     - node
-     - degenerate
-     - gene
-     - group
-     */
     public static Label pangenome_label = DynamicLabel.label("pangenome");
     public static Label genome_label = DynamicLabel.label("genome");
     public static Label sequence_label = DynamicLabel.label("sequence");
     public static Label node_label = DynamicLabel.label("node");
     public static Label degenerate_label = DynamicLabel.label("degenerate");
     public static Label gene_label = DynamicLabel.label("gene");
-    public static Label mRNA_label = DynamicLabel.label("mRNA");
-    public static Label tRNA_label = DynamicLabel.label("tRNA");
-    public static Label ncRNA_label = DynamicLabel.label("ncRNA");
-    public static Label pgRNA_label = DynamicLabel.label("pgRNA");
+    public static Label RNA_label = DynamicLabel.label("RNA");
+    public static Label CDS_label = DynamicLabel.label("CDS");
     public static Label ortholog_lable = DynamicLabel.label("orthologs");
     public static Label homolog_lable = DynamicLabel.label("homologs");
-    /*
-     All possible relationship types between two nodes in the graph.
-     */
 
     public static enum RelTypes implements RelationshipType {
-
-        AA0, AA1, AA2, AA3,
-        AC0, AC1, AC2, AC3,
-        AG0, AG1, AG2, AG3,
-        AT0, AT1, AT2, AT3,
-        AN0, AN1, AN2, AN3,
-        CA0, CA1, CA2, CA3,
-        CC0, CC1, CC2, CC3,
-        CG0, CG1, CG2, CG3,
-        CT0, CT1, CT2, CT3,
-        CN0, CN1, CN2, CN3,
-        GA0, GA1, GA2, GA3,
-        GC0, GC1, GC2, GC3,
-        GG0, GG1, GG2, GG3,
-        GT0, GT1, GT2, GT3,
-        GN0, GN1, GN2, GN3,
-        TA0, TA1, TA2, TA3,
-        TC0, TC1, TC2, TC3,
-        TG0, TG1, TG2, TG3,
-        TT0, TT1, TT2, TT3,
-        TN0, TN1, TN2, TN3,
-        NA0, NA1, NA2, NA3,
-        NC0, NC1, NC2, NC3,
-        NG0, NG1, NG2, NG3,
-        NT0, NT1, NT2, NT3,
-        NN0, NN1, NN2, NN3,
-        begin, // for pointing to start node of a gene
-        end, // for pointing to end node of a gene
+        FF, FR, RF, RR,
         has, // for pointing to genome and sequence nodes
-        contains// for pointing to gene nodes of the group
+        visits, // for connecting genes to the nodes
+        contains, // for pointing to gene nodes of the group
+        codes_for,// for connecting genes to mRNAs
+        contributes_to,// for connecting CDSs and LTRs to mRNA
+        covers //to connect CDSs to the nodes
     }
 
     public static long startTime;
@@ -108,6 +71,10 @@ public class Pantools {
     public static SequenceLayer seqLayer;
     public static AnnotationLayer annLayer;
 
+    /**
+     * The starting point of the PanTools program
+     * @param args Command line arguments
+     */
     public static void main(String[] args) {
         if (args.length < 2 || args[1].equals("--help") || args[1].equals("-h")) {
             print_help_comment();
@@ -118,54 +85,43 @@ public class Pantools {
         System.out.println("------------------------------- PanTools -------------------------------");
         switch (args[0]) {
             case "reconstruct":
-                PATH = args[2];
-                seqLayer.reconstruct_genomes(args[1]);
+                seqLayer.reconstruct_genomes(args[1],args[2]);
                 break;
             case "build":
                 K = Integer.parseInt(args[1]);
-                if (K < 1 || K > 256) {
-                    System.out.println(" Please enter a proper K value ( 1 <= K <= 256 ).");
+                if (K < 6 || K > 256) {
+                    System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
                     System.exit(1);
                 }
-                PATH = args[2];
-                seqLayer.build(args[3]);
+                seqLayer.build(args[3],args[2]);
                 break;
             case "add":
-                PATH = args[1];
-                seqLayer.add(args[2]);
+                seqLayer.add(args[2],args[1]);
                 break;
             case "annotate":
-                PATH = args[1];
-                annLayer.annotate(args[2]);
+                annLayer.annotate(args[2],args[1]);
                 break;
             case "group":
-                PATH = args[2];
                 if (args[1].equals("denovo"))
-                    annLayer.denovo_homology_annotation();
+                    annLayer.denovo_homology_annotation(args[2]);
                 else
-                    annLayer.group_ortholog_proteins(args[1]);
+                    annLayer.group_ortholog_proteins(args[1],args[2]);
                 break;
             case "compare":
-                if (seqLayer.compare_pangenomes(args[1], args[2])) {
-                    System.out.println("Databases are equal.");
-                } else {
-                    System.out.println("Databases are different");
-                }
+                seqLayer.compare_pangenomes(args[1], args[2]);
                 break;
             case "retrieve":
-                PATH = args[2];
                 if (args[1].equals("genes")) {
-                    seqLayer.retrieve_genes(args[3]);
+                    seqLayer.retrieve_genes(args[3],args[2]);
                 } else if (args[1].equals("regions")) {
-                    seqLayer.retrieve_regions(args[3]);
+                    seqLayer.retrieve_regions(args[3],args[2]);
                 } else {
                     print_help_comment();
                     System.exit(1);
                 }
                 break;
             case "query":
-                PATH = args[1];
-                seqLayer.run_query();
+                seqLayer.run_query(args[1]);
                 break;
             default:
                 print_help_comment();
@@ -175,10 +131,10 @@ public class Pantools {
         print_peak_memory();
         System.out.println("-----------------------------------------------------------------------");
     }
-    /*
-     To print a simple manual for the users
-     */
 
+    /**
+     * Print the manual of the software.
+     */
     private static void print_help_comment() {
         System.out.println("************************************************************************\n" +
 "PanTools is a disk-based java application for computational pan-genomics\n" +
@@ -324,11 +280,11 @@ public class Pantools {
                 
 );
     }
-    /*
-     To calculates and prints peak of memory usage of the program in mega bytes.
-     */
 
-    private static void print_peak_memory() {
+    /**
+     * Estimates and prints the peak memory used during the execution of the program. 
+     */
+    public static void print_peak_memory() {
         long memoryUsage = 0;
         try {
             for (MemoryPoolMXBean pool : ManagementFactory.getMemoryPoolMXBeans()) {
@@ -340,5 +296,103 @@ public class Pantools {
             System.err.println("Exception in agent: " + t);
         }
     }
+    
+    /**
+     * Writes a sequence in a FASTA file with specified length for lines.
+     * 
+     * @param fasta_file The FASTA file object
+     * @param seq The sequence to be written in the file.
+     * @param length Length of the lines.
+     */    
+    public static void write_fasta(BufferedWriter fasta_file, String seq, int length) {
+        int i;
+        try {
+            for (i = 1; i <= seq.length(); ++i) {
+                fasta_file.write(seq.charAt(i - 1));
+                if (i % length == 0) {
+                    fasta_file.write("\n");
+                }
+            }
+            fasta_file.write("\n");
+        } catch (IOException ioe) {
 
+        }
+
+    }    
+    
+    /**
+     * Return reverse complement of the given string.
+     * 
+     * @param s    The input string
+     * @return 
+     */     
+    public static String reverse_complement(String s) {
+        StringBuilder rv = new StringBuilder();
+        for (int i = s.length() - 1; i >= 0; --i) {
+            switch (s.charAt(i)) {
+                case 'A':
+                    rv.append('T');
+                    break;
+                case 'C':
+                    rv.append('G');
+                    break;
+                case 'G':
+                    rv.append('C');
+                    break;
+                case 'T':
+                    rv.append('A');
+                    break;
+                case 'R':
+                    rv.append('Y');
+                    break;
+                case 'Y':
+                    rv.append('R');
+                    break;
+                case 'K':
+                    rv.append('M');
+                    break;
+                case 'M':
+                    rv.append('K');
+                    break;
+                case 'B':
+                    rv.append('V');
+                    break;
+                case 'V':
+                    rv.append('B');
+                    break;
+                case 'D':
+                    rv.append('H');
+                    break;
+                case 'H':
+                    rv.append('D');
+                    break;
+                default:
+                    rv.append(s.charAt(i));
+            }
+        }
+        return rv.toString();
+    }
+
+    /**
+     * Executes a shell command. 
+     * @param command The command
+     * @return The output of the bash command
+     */
+    public static String executeCommand(String command) {
+        StringBuilder exe_output = new StringBuilder();
+        String line = "";
+        Process p;
+        try {
+            p = Runtime.getRuntime().exec(command);
+            p.waitFor();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            while ((line = reader.readLine()) != null) {
+                exe_output.append(line + "\n");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return exe_output.toString();
+    }    
 }

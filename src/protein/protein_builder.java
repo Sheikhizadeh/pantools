@@ -4,12 +4,14 @@
  * and open the template in the editor.
  */
 
-/**
- *
- * @author sheik005
- */
 package protein;
 
+/**
+ * Implements some functionality to work with proteins.
+ * 
+ * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
+ * University, Netherlands
+ */
 public class protein_builder {   
     char[] table;
     int[] binary;
@@ -39,26 +41,23 @@ public class protein_builder {
         binary['C'] = 1; 
         binary['G'] = 2; 
         binary['T'] = 3; 
-    // degenerate bases will be replaces by 'A'    
+    // All degenerate bases will be replaces by 'A' in the translation  
         sequence=new StringBuilder();
     }
-    public String translate(StringBuilder mRNA, boolean forward)
+    
+    /**
+     * Translates a coding nucleotide sequence to a protein sequence.
+     * 
+     * @param mRNA The sequence of the codinf RNA
+     * @param direction The direction of the translation
+     * @return The protein sequence
+     */
+    public String translate(String mRNA)
     {
         sequence.setLength(0);
         int i;   
-        //if (mRNA.length() % 3 == 0)
-            if ( forward )
-            {
-                for(i=0;i<=mRNA.length()-6;i+=3)
-                    sequence.append(table[binary[mRNA.charAt(i)]*16+binary[mRNA.charAt(i+1)]*4+binary[mRNA.charAt(i+2)]]);
-            }
-            else 
-            {
-                for(i=mRNA.length()-1;i>=5;i-=3)
-                    sequence.append(table[(3-binary[mRNA.charAt(i)])*16+(3-binary[mRNA.charAt(i-1)])*4+(3-binary[mRNA.charAt(i-2)])]);            
-            }
-        //System.out.println("proteinn:\n"+sequence.toString());
-    return sequence.toString();
+        for(i=0;i<=mRNA.length()-3;i+=3)
+            sequence.append(table[binary[mRNA.charAt(i)]*16+binary[mRNA.charAt(i+1)]*4+binary[mRNA.charAt(i+2)]]);
+        return sequence.toString();
     }
-
 } 
