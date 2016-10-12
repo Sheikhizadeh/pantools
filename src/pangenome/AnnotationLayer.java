@@ -92,10 +92,10 @@ public class AnnotationLayer {
      * @param gff_paths_file A text file listing the paths to the annotation files
      */
     public void annotate(String gff_paths_file, String PATH) {
-        int i, j, num_genes, num_mRNAs, num_tRNAs, num_ncRNAs, protein_num, total_genes=0, position;
+        int i, j, num_genes, num_mRNAs, num_tRNAs, num_ncRNAs, protein_num = 0, total_genes=0, position;
         int num_short_RNAs, num_rRNAs, num_antisense_RNA;
-        int begin, end, isoforms_num, gene_start_pos = 0;
-        String sequence_id, current_sequence_id=null, origin = null, attribute;
+        int isoforms_num, gene_start_pos = 0, feature_len;
+        String sequence_id, current_sequence_id=null, attribute;
         Node db_node, gene_node = null, rna_node = null, cds_node;
         protein_builder pb = new protein_builder();
         StringBuilder log = new StringBuilder();
@@ -104,7 +104,7 @@ public class AnnotationLayer {
         StringBuilder gene_builder = new StringBuilder();
         String strand, gff_name, line=null, protein, ID;
         List<Long>[][] genes_list;
-        int[] address = new int[3];
+        int[] address = new int[4];
         long[] genes_array;
         int[] pair;
         PairComparator comp = new PairComparator();
@@ -139,7 +139,6 @@ public class AnnotationLayer {
                 for (address[0] = 1; gff_files.ready() && address[0] <= genomeDb.num_genomes; ++address[0]) // for each gff file
                 {
                     gene_node = null;
-                    protein_num = 0;
                     num_genes = num_mRNAs = num_tRNAs = num_ncRNAs = num_short_RNAs = num_rRNAs = num_antisense_RNA = 0;
                     gff_name = gff_files.readLine();
                     if (gff_name.equals(""))
@@ -160,9 +159,10 @@ public class AnnotationLayer {
                                 if (fields.length < 8) {
                                     continue;
                                 }
-                                begin = Integer.parseInt(fields[3]);
-                                end = Integer.parseInt(fields[4]);
+                                address[2] = Integer.parseInt(fields[3]); // begin
+                                address[3] = Integer.parseInt(fields[4]); // end
                                 strand = fields[6];
+                                feature_len = address[3] - address[2] + 1;
                                 attribute = fields[fields.length - 1];
                                 sequence_id = fields[0]; // sequence id
                             // if a feature belongs to a new sequence 
@@ -174,7 +174,6 @@ public class AnnotationLayer {
                             // if sequence found    
                                 if (address[1] > 0) 
                                 {
-                                    origin = address[0] + "_" + address[1];
                                     if (fields[2].endsWith("gene")) {
                                         // for the previous gene node. Translate the proteins of the gene.
                                             if (gene_node != null){ 
@@ -186,7 +185,7 @@ public class AnnotationLayer {
                                                         gene_node.addLabel(coding_gene_label);
                                                         for (Relationship r2: rna_node.getRelationships(RelTypes.contributes_to, Direction.INCOMING)) {
                                                             cds_node = r2.getStartNode();
-                                                            pq.add(new int[]{(int)cds_node.getProperty("start")-1,(int)cds_node.getProperty("stop")-1});
+                                                            pq.add(address);
                                                         }
                                                         for (coding_RNA.setLength(0);!pq.isEmpty();) {
                                                             pair = pq.remove();
@@ -197,27 +196,24 @@ public class AnnotationLayer {
                                                         //out.write(">" + origin + " _" + protein_num + "\n");
                                                         //write_fasta(out, protein, 70);
                                                         rna_node.setProperty("protein", protein);
-                                                        rna_node.setProperty("protein_number", origin + "_" + protein_num);
+                                                        rna_node.setProperty("protein_number", protein_num);
                                                         rna_node.setProperty("protein_length", protein.length());
                                                     }
                                                 }
                                                 gene_node.setProperty("isoforms_num", isoforms_num);
                                             }
-                                            gene_start_pos = begin - 1;
+                                            gene_start_pos = address[2];
                                         // create new gene node    
                                             gene_node = graphDb.createNode(gene_label);
-                                            gene_node.setProperty("genome", address[0]);
-                                            gene_node.setProperty("begin", begin);
-                                            gene_node.setProperty("end", end);
+                                            gene_node.setProperty("address", address);
                                             gene_node.setProperty("strand", strand);
-                                            gene_node.setProperty("length", end - begin + 1);
+                                            gene_node.setProperty("length", feature_len);
                                             gene_node.setProperty("ID", get_property(attribute,"ID"));
-                                            gene_node.setProperty("origin", origin);
                                             gene_node.setProperty("fields", fields);
                                             gene_node.setProperty("type", fields[2]);
                                         // extract gene sequence as appears in the sequence and connects it to its nodes   
                                             gene_builder.setLength(0);
-                                            connect_gene_to_nodes(gene_builder, address, begin-1, end-1, gene_node);
+                                            connect_gene_to_nodes(gene_builder, address, gene_node);
                                         // adding gene_node id to the sequence node
                                             genes_list[address[0]][address[1]].add(gene_node.getId());
                                             ++total_genes;
@@ -225,9 +221,9 @@ public class AnnotationLayer {
                                     } else if(fields[2].endsWith("RNA")) {
                                         rna_node = graphDb.createNode(RNA_label);
                                         rna_node.setProperty("ID", get_property(attribute,"ID"));
-                                        rna_node.setProperty("origin", origin);
-                                        rna_node.setProperty("fields", fields);
-                                        rna_node.setProperty("length", end - begin + 1);
+                                        gene_node.setProperty("address", address);
+                                        //rna_node.setProperty("fields", fields);
+                                        rna_node.setProperty("length", feature_len);
                                         rna_node.setProperty("type", fields[2]);
                                         gene_node.createRelationshipTo(rna_node, RelTypes.codes_for);
                                         switch (fields[2]){
@@ -266,10 +262,8 @@ public class AnnotationLayer {
                                             cds_node = graphDb.createNode(CDS_label);
                                             ID = get_property(attribute,"ID");
                                             cds_node.setProperty("ID", ID);
-                                            cds_node.setProperty("origin", origin);
-                                            cds_node.setProperty("fields", fields);
-                                            cds_node.setProperty("start", begin);
-                                            cds_node.setProperty("stop", end);
+                                            cds_node.setProperty("address", address);
+                                            //cds_node.setProperty("fields", fields);
                                             parent_ids = get_property(attribute,"Parent").split(",");
                                         // connect CDS to its parent RNA    
                                             for (i=0;i<parent_ids.length;++i)
@@ -282,7 +276,7 @@ public class AnnotationLayer {
                                         // Label the edges of the gene visiting nodes of CDS
                                             for (Relationship r: gene_node.getRelationships(RelTypes.visits, Direction.OUTGOING)){
                                                 position = (int)r.getProperty("position");
-                                                if (position >= begin - 1 && position <= end-1)    
+                                                if (position >= address[2] - 1 && position <= address[3]-1) // between begin and end   
                                                     r.setProperty("coding_cds", ID);
                                             }
                                     }
@@ -307,7 +301,7 @@ public class AnnotationLayer {
                                     gene_node.addLabel(coding_gene_label);
                                     for (Relationship r2: rna_node.getRelationships(RelTypes.contributes_to, Direction.INCOMING)) {
                                         cds_node = r2.getStartNode();
-                                        pq.add(new int[]{(int)cds_node.getProperty("start")-1,(int)cds_node.getProperty("stop")-1});
+                                        pq.add(address);
                                     }
                                     for (coding_RNA.setLength(0);!pq.isEmpty();) {
                                         pair = pq.remove();
@@ -318,7 +312,7 @@ public class AnnotationLayer {
                                     //out.write(">" + origin + " _" + protein_num + "\n");
                                     //write_fasta(out, protein, 70);
                                     rna_node.setProperty("protein", protein);
-                                    rna_node.setProperty("protein_number", origin + "_" + protein_num);
+                                    rna_node.setProperty("protein_number", protein_num);
                                     rna_node.setProperty("protein_length", protein.length());
                                 }
                             }
@@ -416,13 +410,13 @@ public class AnnotationLayer {
      * @param end Stop position of the gene
      * @param gene_node The gene node itself
      */
-    public void connect_gene_to_nodes(StringBuilder gene_builder, int[] address, int begin, int end, Node gene_node) {
+    public void connect_gene_to_nodes(StringBuilder gene_builder, int[] address, Node gene_node) {
         Relationship rel;
-        int loc, node_len, neighbor_len, seq_len = end - begin + 1, starts_at;
+        int loc, node_len, neighbor_len, seq_len = address[3] - address[2] + 1, starts_at;
         String rel_name;
         gene_builder.setLength(0);
-        loc = begin;
-        IndexPointer start_ptr = locate(address[0], address[1], begin);
+        loc = address[2]-1;
+        IndexPointer start_ptr = locate(address);
         starts_at = start_ptr.position;
         Node neighbor, node = graphDb.getNodeById(start_ptr.node_id);
         node_len = (int) node.getProperty("length");
@@ -566,15 +560,15 @@ public class AnnotationLayer {
                         break;
                 }
                 current_gene_node = graphDb.getNodeById(current_gene_id);
-                if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) // To avoid having one gene in different groups
-                        && ! have_overlap(gene_node,current_gene_node ) ) {
+                if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ){ // To avoid having one gene in different groups
+                    //    && ! have_overlap(gene_node,current_gene_node ) ) {
                     found = false;
                     for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                         mRNA_node1 = r1.getEndNode();
                         mRNA_len1 = (int)mRNA_node1.getProperty("protein_length");
                         for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                             mRNA_node2 = r2.getEndNode();
-                            //if ( mRNA_node2.getProperty("type").equals("mRNA") ){
+                            if ( mRNA_node2.hasProperty("protein_length") ){ // some genes might code different types of RNAs like a mRNA and a lncRNA
                                 mRNA_len2 = (int)mRNA_node2.getProperty("protein_length");
                                 if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10 && 
                                         pro_aligner.get_similarity((String)mRNA_node1.getProperty("protein"), (String)mRNA_node2.getProperty("protein")) > 0.75 ) {
@@ -582,7 +576,7 @@ public class AnnotationLayer {
                                         found = true;
                                         break;
                                 }
-                           // }
+                            }
                             if (found)
                                 break;
                         }
@@ -623,8 +617,8 @@ public class AnnotationLayer {
                         break;
                 }
                 current_gene_node = graphDb.getNodeById(current_gene_id);
-                if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) // To avoid having one gene in different groups
-                        && ! have_overlap(gene_node,current_gene_node ) ) {
+                if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ){ // To avoid having one gene in different groups
+                    //    && ! have_overlap(gene_node,current_gene_node ) ) {
                     found = false;
                     for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                         RNA_node1 = r1.getEndNode();
@@ -662,7 +656,7 @@ public class AnnotationLayer {
      * @param gene2 The second gene
      * @return Decision
      */
-    private boolean have_overlap(Node gene1, Node gene2){
+    /*private boolean have_overlap(Node gene1, Node gene2){
         int gene1_begin, gene1_end, gene2_begin, gene2_end;
         String gene1_origin, gene2_origin;
         gene1_origin=(String)gene1.getProperty("origin");
@@ -679,7 +673,7 @@ public class AnnotationLayer {
             return false;
         else
             return true;
-    }
+    }*/
 
     /**
      * Groups the gene families found by a orthogroup finder tool.
@@ -690,7 +684,7 @@ public class AnnotationLayer {
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             Node group_node = null, mRNA_node;
             Relationship rel;
-            String line, origin, genome;
+            String line;
             String protein_number, group_name = null;
             String[] fields;
             ResourceIterator<Node> mRNAs;
@@ -699,6 +693,7 @@ public class AnnotationLayer {
             ListIterator<String> p_numbers_iterator;
             int i, j, total_proteins = 0, num_proteins, num_groups = 0;
             boolean found;
+            int[] address;
             System.out.println("Grouping protein_coding genes ...");
             try (BufferedReader in = new BufferedReader(new FileReader(group_file))) {
                 graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
@@ -736,21 +731,9 @@ public class AnnotationLayer {
                                 for (found = false, j = 0; !found && p_numbers_iterator.hasNext(); ++j) {
                                     if (p_numbers_iterator.next().equals(protein_number)) {
                                         mRNA_node = graphDb.getNodeById(mRNA_ids.get(j));
-                                        origin = (String) mRNA_node.getProperty("origin");
-                                        genome = origin.split("_")[0];
+                                        address = (int[]) mRNA_node.getProperty("address");
                                         rel = group_node.createRelationshipTo(mRNA_node, RelTypes.has);
-                                        rel.setProperty("origin", "in_" + origin);
-                                        rel.setProperty("genome", "in_" + genome);
-                                        if (group_node.hasProperty("num_" + origin)) {
-                                            group_node.setProperty("num_" + origin, (int) group_node.getProperty("num_" + origin) + 1);
-                                        } else {
-                                            group_node.setProperty("num_" + origin, 1);
-                                        }
-                                        if (group_node.hasProperty("num_" + genome)) {
-                                            group_node.setProperty("num_" + genome, (int) group_node.getProperty("num_" + genome) + 1);
-                                        } else {
-                                            group_node.setProperty("num_" + genome, 1);
-                                        }
+                                        rel.setProperty("address", address);
                                         found = true;
                                     }
                                 }

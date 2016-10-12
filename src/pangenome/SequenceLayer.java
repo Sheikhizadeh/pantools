@@ -158,8 +158,9 @@ public class SequenceLayer {
      * @param genome_paths_file Path to the FASTA genome files. 
      */
     public void add(String genome_paths_file, String PATH) {
-        int i, j, g, s, len, previous_num_genomes;
+        int i, j, s, len, previous_num_genomes;
         long byte_number = 0;
+        int[] address = new int[4];
         Node start, seq_node;
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
@@ -185,11 +186,13 @@ public class SequenceLayer {
                 // read genomes information from the graph and rebuild the genomes database
                     genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, graphDb);
                     StringBuilder seq = new StringBuilder();
-                    for (g = 1; g <= genomeDb.num_genomes; ++g) {
-                        for (s = 1; s <= genomeDb.num_sequences[g]; ++s) {
-                            seq_node = graphDb.findNode(sequence_label, "number", g + "_" + s);
+                    for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
+                        for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
+                            seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
                             start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
-                            extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1), new int[]{g,s,-1}, 0, (int) genomeDb.sequence_length[g][s] - 1);
+                            address[2] = 1;
+                            address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
+                            extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1), address);
                             len = seq.length();
                             if (len % 2 == 1) {
                                 --len;
@@ -260,12 +263,12 @@ public class SequenceLayer {
             ResourceIterator<Node> gene_nodes;
             Relationship rstart;
             Node start, gene;
-            String origin, record;
+            String record;
             String line;
             boolean strand;
-            int i, j, begin, end, num_genes;
+            int i, j, num_genes;
             int[] address;
-            String[] fields, origin_fields;
+            String[] fields;
             StringBuilder gene_seq;
 
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
@@ -325,18 +328,13 @@ public class SequenceLayer {
                             //System.out.println(record);
                             start = graphDb.getNodeById((long)gene.getProperty("start_node_id"));
                             rstart = graphDb.getRelationshipById((long)gene.getProperty("start_edge_id"));
-                            origin = (String) gene.getProperty("origin");
-                            origin_fields = origin.split("_");
-                            address[0] = Integer.parseInt(origin_fields[0]);
-                            address[1] = Integer.parseInt(origin_fields[1]);
-                            begin = (int) gene.getProperty("begin");
-                            end = (int) gene.getProperty("end");
+                            address = (int[]) gene.getProperty("address");
                             strand = gene.getProperty("strand").toString().equals("+");
-                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("starts_at"), -1l), address, begin - 1, end - 1);//
+                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("starts_at"), -1l), address);//
                             //genomeDb=new sequence_database(PATH+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
-                            if (gene_seq.length() == end - begin + 1) {
+                            if (gene_seq.length() == address[3] - address[2] + 1) {
                                 ++j;
                                 out.write(">" + record + "\n");
                                 if (strand) {
@@ -381,8 +379,8 @@ public class SequenceLayer {
             IndexPointer start_ptr;
             Node start_node;
             StringBuilder seq;
-            int c, g, s, from, to, num_regions;
-            
+            int c, num_regions;
+            int[] address = new int[4];
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
                     .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
             registerShutdownHook(graphDb);
@@ -416,17 +414,14 @@ public class SequenceLayer {
                             continue;
                         }
                         fields = line.split("\\s");
-                        g = Integer.parseInt(fields[0]);
-                        s = Integer.parseInt(fields[1]);
-                        from = Integer.parseInt(fields[2]);
-                        to = Integer.parseInt(fields[3]);
-                        start_ptr = locate(g, s,from);
+                        address[0] = Integer.parseInt(fields[0]);
+                        address[1] = Integer.parseInt(fields[1]);
+                        address[2] = Integer.parseInt(fields[2]);
+                        address[3] = Integer.parseInt(fields[3]);
+                        start_ptr = locate(address);
                         start_node = graphDb.getNodeById(start_ptr.node_id);
-                        extract_sequence(seq, new IndexPointer(start_node.getId(), start_ptr.canonical, start_ptr.position, -1l), new int[]{g,s,-1}, from, to);
-                        if (seq.length() != to - from + 1) {
-                            System.out.println("Failed to assemble region!");
-                        }
-                        out.write(">genome:" + g + " sequence:" + s + " from:" + from + " to:" + to + " length:" + seq.length() + "\n");
+                        extract_sequence(seq, new IndexPointer(start_node.getId(), start_ptr.canonical, start_ptr.position, -1l), address);
+                        out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
                         write_fasta(out, seq.toString(), 70);
                         seq.setLength(0);
                         ++c;
@@ -455,13 +450,12 @@ public class SequenceLayer {
         if (new File(PATH + GENOME_DATABASE_PATH).exists()) {
             BufferedReader in;
             BufferedWriter out;
-            Node seq_node, start;
+            Node seq_node;
             Relationship rel;
             String[] fields;
             String line;
             int[] address;
             StringBuilder seq;
-            
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
                     .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
             registerShutdownHook(graphDb);
@@ -485,8 +479,9 @@ public class SequenceLayer {
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
                                 rel = seq_node.getRelationships(Direction.OUTGOING).iterator().next();
-                                start = rel.getEndNode();
-                                extract_sequence(seq, locate(address[0], address[1],0), address, 0, (int) genomeDb.sequence_length[address[0]][address[1]] - 1);
+                                address[2] = 1;
+                                address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
+                                extract_sequence(seq, locate(address), address);
                                 write_fasta(out, seq.toString(), 80);
                                 seq.setLength(0);
                             }
@@ -513,8 +508,9 @@ public class SequenceLayer {
                                     out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                     seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
                                     rel = seq_node.getRelationships(Direction.OUTGOING).iterator().next();
-                                    start = rel.getEndNode();
-                                    extract_sequence(seq, locate(address[0], address[1],0), address, 0, (int) genomeDb.sequence_length[address[0]][address[1]] - 1);
+                                    address[2] = 1;
+                                    address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
+                                    extract_sequence(seq, locate(address), address);
                                     write_fasta(out, seq.toString(), 80);
                                     seq.setLength(0);
                                 }
@@ -682,9 +678,10 @@ public class SequenceLayer {
      * @param begin The start coordinate of the region.
      * @param end  The stop coordinate of the region.
      */
-    public static void extract_sequence(StringBuilder seq, IndexPointer start_ptr, int[] address, int begin, int end) {
+    public static void extract_sequence(StringBuilder seq, IndexPointer start_ptr, int[] address) {
         Relationship rel;
         Node neighbor, node;
+        int begin = address[2] - 1, end = address[3] - 1;
         int loc, node_len, neighbor_len, seq_len, position;
         String rel_name;
         
@@ -779,23 +776,18 @@ public class SequenceLayer {
     /**
      * Returns a pangenome pointer pointing to the specified genomic position.
      * 
-     * @param genome The genome number
-     * @param sequence The sequence number 
-     * @param position The position of interest
+     * @param address An integer array lile {genome_number, sequence_number, begin_position, end_position}
      * @return A pointer to the genomic position in the pangenome
      */
-    public static IndexPointer locate(int genome, int sequence, int position) {
-        int loc, low, high, mid , node_len;
+    public static IndexPointer locate(int[] address) {
+        int loc, low, high, mid , node_len, position = address[2] - 1;
         boolean forward;
         Node node, neighbor, seq_node;
         Relationship rel;
-        String origin, anchor_sides;
+        String anchor_sides;
         long[] anchor_nodes;
-        int[] anchor_positions, address;
-        
-        address = new int[]{genome,sequence,0};
-        origin = genome + "_" + sequence;
-        seq_node = graphDb.findNode(sequence_label, "number", origin);
+        int[] anchor_positions;
+        seq_node = graphDb.findNode(sequence_label, "number", address[0]+"_"+address[1]);
         anchor_nodes = (long[]) seq_node.getProperty("anchor_nodes");
         anchor_positions = (int[]) seq_node.getProperty("anchor_positions");
         anchor_sides = (String) seq_node.getProperty("anchor_sides");
