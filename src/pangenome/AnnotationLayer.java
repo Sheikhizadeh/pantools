@@ -106,7 +106,7 @@ public class AnnotationLayer {
         List<Long>[][] genes_list;
         int[] address = new int[4];
         long[] genes_array;
-        int[] pair;
+        int[] begin_end;
         PairComparator comp = new PairComparator();
         PriorityQueue<int[]> pq = new PriorityQueue(comp);
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
@@ -188,8 +188,8 @@ public class AnnotationLayer {
                                                             pq.add((int[])cds_node.getProperty("address"));
                                                         }
                                                         for (coding_RNA.setLength(0);!pq.isEmpty();) {
-                                                            pair = pq.remove();
-                                                            coding_RNA.append(gene_builder.substring(pair[0] - gene_start_pos, pair[1] - gene_start_pos + 1));
+                                                            begin_end = pq.remove();
+                                                            coding_RNA.append(gene_builder.substring(begin_end[2] - gene_start_pos, begin_end[3] - gene_start_pos + 1));
                                                         }
                                                         protein = pb.translate(gene_node.getProperty("strand").equals("+")?coding_RNA.toString():reverse_complement(coding_RNA.toString()));
                                                         ++protein_num;
@@ -304,8 +304,8 @@ public class AnnotationLayer {
                                         pq.add((int[])cds_node.getProperty("address"));
                                     }
                                     for (coding_RNA.setLength(0);!pq.isEmpty();) {
-                                        pair = pq.remove();
-                                        coding_RNA.append(gene_builder.substring(pair[0] - gene_start_pos, pair[1] - gene_start_pos + 1));
+                                        begin_end = pq.remove();
+                                        coding_RNA.append(gene_builder.substring(begin_end[2] - gene_start_pos, begin_end[3] - gene_start_pos + 1));
                                     }
                                     protein = pb.translate(gene_node.getProperty("strand").equals("+")?coding_RNA.toString():reverse_complement(coding_RNA.toString()));
                                     ++protein_num;
