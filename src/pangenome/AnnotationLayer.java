@@ -501,11 +501,11 @@ public class AnnotationLayer {
                                     group_node.setProperty("num_members", group_size );
                                 // Because the gene has not been added to the group itself    
                                     group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                                    copy_number[(int)gene_node.getProperty("genome")] += 1;
+                                    copy_number[((int[])gene_node.getProperty("address"))[0]] += 1;
                                     while (!gene_nodes.isEmpty()) {
                                         current_gene_node = gene_nodes.removeFirst();
                                         group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
-                                        copy_number[(int)current_gene_node.getProperty("genome")] += 1;
+                                        copy_number[((int[])current_gene_node.getProperty("address"))[0]] += 1;
                                     }
                                     group_node.setProperty("copy_number_variation", copy_number);
                                     for (i = 1; i <= genomeDb.num_genomes; ++i) 
