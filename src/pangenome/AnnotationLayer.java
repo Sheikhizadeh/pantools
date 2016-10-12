@@ -185,7 +185,7 @@ public class AnnotationLayer {
                                                         gene_node.addLabel(coding_gene_label);
                                                         for (Relationship r2: rna_node.getRelationships(RelTypes.contributes_to, Direction.INCOMING)) {
                                                             cds_node = r2.getStartNode();
-                                                            pq.add(address);
+                                                            pq.add((int[])cds_node.getProperty("address"));
                                                         }
                                                         for (coding_RNA.setLength(0);!pq.isEmpty();) {
                                                             pair = pq.remove();
@@ -301,7 +301,7 @@ public class AnnotationLayer {
                                     gene_node.addLabel(coding_gene_label);
                                     for (Relationship r2: rna_node.getRelationships(RelTypes.contributes_to, Direction.INCOMING)) {
                                         cds_node = r2.getStartNode();
-                                        pq.add(address);
+                                        pq.add((int[])cds_node.getProperty("address"));
                                     }
                                     for (coding_RNA.setLength(0);!pq.isEmpty();) {
                                         pair = pq.remove();
