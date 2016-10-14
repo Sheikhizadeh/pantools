@@ -90,6 +90,7 @@ public class SequenceLayer {
      * Constructs a pangenome database from given genomes.
      * 
      * @param genome_paths_file Path to the FASTA genome files. 
+     * @param PATH Path to the database folder
      */  
     public void build(String genome_paths_file, String PATH) {
     // If a database folder is already exist in the specified path, removes all the content of it.    
@@ -156,6 +157,7 @@ public class SequenceLayer {
      * Adds new genomes to an available pangenome.
      * 
      * @param genome_paths_file Path to the FASTA genome files. 
+     * @param PATH Path to the database folder
      */
     public void add(String genome_paths_file, String PATH) {
         int i, j, s, len, previous_num_genomes;
@@ -256,6 +258,7 @@ public class SequenceLayer {
      * Retrieves sequence of the genes sequence from the pangenome and stores them in a FASTA file. 
      * 
      * @param annotation_records_file a text file containing annotation records of the genes to be retrieved.
+     * @param PATH Path to the database folder
      */
     public void retrieve_genes(String annotation_records_file, String PATH) {
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
@@ -348,7 +351,7 @@ public class SequenceLayer {
                             gene_seq.setLength(0);
                         }
                         if (i % (num_genes / 100 + 1) == 0) {
-                            System.out.print((long) i * 100 / num_genes + 1 + "%\r");
+                            System.out.print((long) i * 100 / num_genes + 1 + "%r");
                         }
                     }//for i
                     System.out.println(j + " out of " + i + " found genes retrieved successfully.");
@@ -369,8 +372,9 @@ public class SequenceLayer {
     /**
      * Retrieves the sequence of a number of genomic regions from the pangenome and stores them in a FASTA file.
      * 
-     * @param region_records a text file with lines containing genome number, sequence number, start and stop positions
+     * @param region_records_file a text file with lines containing genome number, sequence number, start and stop positions
      *        of the genomic regions seperated by one space.
+     * @param PATH Path to the database folder
      */
     public void retrieve_regions(String region_records_file, String PATH) {
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
@@ -445,6 +449,7 @@ public class SequenceLayer {
      * Reconstructs all or some of the genomes in separated FASTA files.
      * 
      * @param genome_records_file A text file containing the number and a given name for each genome. 
+     * @param PATH Path to the database folder
      */
     public void reconstruct_genomes(String genome_records_file, String PATH) {
         if (new File(PATH + GENOME_DATABASE_PATH).exists()) {
@@ -541,7 +546,6 @@ public class SequenceLayer {
      * Compares the topology of two pangenomes. 
      * @param path1 Path to the first pangenome
      * @param path2 Path to the second pangenome
-     * @return TRUE if pangenomes are the same, FALSE otherwise.
      */
     public void compare_pangenomes(String path1, String path2) {
         int sq_num1, sq_num2, ed_num1, ed_num2, K1, K2, ng1, ng2, len1, len2;
@@ -626,57 +630,11 @@ public class SequenceLayer {
     }
     
     /**
-     * To iteratively receive and run Cypher queries. Results will be written in output files.
-     */
-    public void run_query(String PATH) {
-        int i;
-        String query;
-        BufferedWriter out;
-        
-        if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
-            registerShutdownHook(graphDb);
-            startTime = System.currentTimeMillis();
-            for (i = 1;; ++i) {
-                Console console = System.console();
-                query = console.readLine("Enter a query or type exit : ");
-                if (query.equals("exit")) {
-                    break;
-                }
-                try (Transaction ignored = graphDb.beginTx(); Result result = graphDb.execute(query)) 
-                {
-                    try {
-                        out = new BufferedWriter(new FileWriter(PATH + "/query" + i + ".result"));
-                        while (result.hasNext()) {
-                            Map<String, Object> row = result.next();
-                            for (Entry<String, Object> column : row.entrySet()) {
-                                out.write(column.getKey() + ": " + column.getValue() + "\n");
-                                System.out.println(column.getKey() + ": " + column.getValue());
-                            }
-                        }
-                        out.close();
-                    } catch (IOException ioe) {
-                        System.out.println("Failed to write the result of query!");
-                        System.exit(1);
-                    }
-                    ignored.success();
-                } catch (QueryExecutionException qee) {
-                    System.out.println(qee.getMessage());
-                }
-            }
-            graphDb.shutdown();
-        }
-    }
-    
-    /**
      * Extracts the genomic region belonging to the specified sequence starting at th specified node.
      * 
      * @param seq Will contains the sequence after function ends.
      * @param start_ptr A pangenome pointer which points to the node where the sequence starts.
-     * @param address An array which its first two elements determine the genome and sequence number of the region, respectively. 
-     * @param begin The start coordinate of the region.
-     * @param end  The stop coordinate of the region.
+     * @param address An array determining {genome, sequence, begin, end}properties of the sequence.
      */
     public static void extract_sequence(StringBuilder seq, IndexPointer start_ptr, int[] address) {
         Relationship rel;
@@ -735,12 +693,13 @@ public class SequenceLayer {
      * @return The outgoing edge.
      */
     public static Relationship get_outgoing_edge(Node current_node, int[] address) {
-        String rel_name, origin;
+        String origin;
+        int[] occurrence;
         origin = address[0] + "_" + address[1];
         for (Relationship r_out : current_node.getRelationships(Direction.OUTGOING)) {
-            rel_name = r_out.getType().name();
-            if (r_out.hasProperty(origin)) {
-                if (Arrays.binarySearch((int[]) r_out.getProperty(origin), address[2])>=0)
+            occurrence = (int[])r_out.getProperty(origin, null);
+            if (occurrence!=null) {
+                if (Arrays.binarySearch(occurrence, address[2])>=0)
                     return r_out;
             }
         }
@@ -825,24 +784,6 @@ public class SequenceLayer {
         return new IndexPointer(node.getId(), forward, forward ? position - loc : node_len - 1 - (position - loc), -1L);
     }
     
-    /***
-     * Creates an edge between source and destination nodes.
-     * 
-     * @param src Source node
-     * @param des Destination node
-     * @param edge_type One of the four possible edge types: FF, FR, RF, RR
-     * @param address Specifies which genomic address the edge points to. 
-     * @return The newly created edge
-     */
-    private Relationship connect(Node src, Node des, RelationshipType edge_type) {
-        //System.out.println("connect "+src.getId()+" "+edge_type.name()+" "+des.getId()+" "+address[2]);
-        for (Relationship r: src.getRelationships(edge_type, Direction.OUTGOING))
-            if (r.getEndNode().equals(des))
-                return null;
-        ++num_edges;
-        return src.createRelationshipTo(des, edge_type);
-    }
-    
     /**
      * Splits a node at a specified position by creating a new node called split_node as a part separated from the node.
      * @param node The node which should be split.
@@ -852,7 +793,7 @@ public class SequenceLayer {
     private Node split(Node node, int pos) {
         //System.out.println("split "+node.getId()+" "+pos);
         int split_len, node_len;
-        int i, s_id, gen, seq, loc;
+        int i, s_id, gen, seq, loc,starts_at;
         long inx, split_first_kmer, node_last_kmer;
         int[] address;
         Node neighbor, split_node;
@@ -873,16 +814,16 @@ public class SequenceLayer {
         split_len = node_len - pos;
         split_node.setProperty("length", split_len);
     // Updates the edges comming from gene level to the node.    
-        if (node.hasRelationship(Direction.INCOMING, RelTypes.visits)) {
-            for (Relationship r : node.getRelationships(RelTypes.visits, Direction.INCOMING)) 
-            {
-                rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.visits);
-                if (r.hasProperty("starts_at") && (int) r.getProperty("starts_at") >= pos) {
-                    rel.setProperty("starts_at", (int) r.getProperty("starts_at") - pos);
-                    rel.setProperty("forward", r.getProperty("forward"));
-                    r.delete();
-                } 
-            }
+        for (Relationship r : node.getRelationships(RelTypes.visits, Direction.INCOMING)) 
+        {
+            rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.visits);
+            starts_at = (int) r.getProperty("starts_at",-1);
+            if (starts_at >= pos) {
+                rel.setProperty("starts_at", (int) r.getProperty("starts_at") - pos);
+                rel.setProperty("forward", r.getProperty("forward"));
+                rel.setProperty("position", r.getProperty("position"));
+                r.delete();
+            } 
         }
     // Updating the Kmers chain in the index    
         node_last_kmer = indexDb.find(make_kmer(gen, seq, loc + pos - 1)); 
@@ -902,23 +843,25 @@ public class SequenceLayer {
             neighbor = r.getEndNode();
             if (neighbor.equals(node)) 
                 neighbor = r.isType(RelTypes.FF) ? node : split_node;
-            connect(split_node,neighbor, r.getType());
-            --num_edges;
+            split_node.createRelationshipTo(neighbor, r.getType());
             r.delete();
         }
         for (Relationship r : node.getRelationships(Direction.INCOMING,RelTypes.RR,RelTypes.FR)) {
             neighbor = r.getStartNode();
             if (neighbor.equals(node)) 
                 neighbor = r.isType(RelTypes.RR) ? node : split_node;
-            connect(neighbor,split_node, r.getType());
-            --num_edges;
+            neighbor.createRelationshipTo(split_node, r.getType());
             r.delete();
         }
     //  Connecting node to split node
-        if (node.hasRelationship(Direction.INCOMING, RelTypes.FF, RelTypes.RF))
-            connect(node,split_node,RelTypes.FF);
-        if (split_node.hasRelationship(Direction.INCOMING, RelTypes.FR, RelTypes.RR))
-            connect(split_node,node,RelTypes.RR);
+        if (node.hasRelationship(Direction.INCOMING, RelTypes.FF, RelTypes.RF)){
+            node.createRelationshipTo(split_node, RelTypes.FF);
+            ++num_edges;
+        }
+        if (split_node.hasRelationship(Direction.INCOMING, RelTypes.FR, RelTypes.RR)){
+            split_node.createRelationshipTo(node, RelTypes.RR);
+            ++num_edges;
+        }
         node.setProperty("last_kmer", node_last_kmer);
         node.setProperty("length", pos + K - 1);
         return split_node;
@@ -972,7 +915,8 @@ public class SequenceLayer {
                 jump();
                 int[] add = new int[]{genome,sequence,begin};
                 create_degenerate(add);
-                connect(curr_node, degenerate_node, RelTypes.FF); //.values()[curr_side*2]
+                curr_node.createRelationshipTo(degenerate_node, RelTypes.FF); 
+                ++num_edges;
                 curr_node = degenerate_node;
                 //curr_side = 0; // we have set it zero already in create()
                 degenerate = true;
@@ -1031,7 +975,8 @@ public class SequenceLayer {
         pointer.position = 0;
         pointer.next_index = -1L;
         indexDb.put_pointer(pointer, curr_index);
-        connect(curr_node, new_node, RelTypes.values()[curr_side*2]);
+        curr_node.createRelationshipTo(new_node, RelTypes.values()[curr_side*2]);
+        ++num_edges;
         curr_node = new_node;
         curr_side = 0;
     }
@@ -1042,8 +987,9 @@ public class SequenceLayer {
     private void follow_forward() {
         int l, pos, begin, g, s, loc, side;
         Node node, split_node1, split_node2,des, src;
+        RelationshipType rel_type;
         int[] address;
-        boolean degenerated, loop;
+        boolean degenerated, loop, repeated_edge;
         pos = pointer.position;
         node = graphDb.getNodeById(pointer.node_id);
     // The first split might be done to seperate the part we need to enter in.
@@ -1085,7 +1031,8 @@ public class SequenceLayer {
                 degenerated = true;
                 int[] add = new int[]{genome,sequence,begin};
                 create_degenerate(add);
-                connect(node, degenerate_node, RelTypes.FF);//.values()[curr_side*2]
+                node.createRelationshipTo(degenerate_node, RelTypes.FF);
+                ++num_edges;
                 break;
             }
             if (position % (seq_len / 100 + 1) == 0) {
@@ -1105,7 +1052,17 @@ public class SequenceLayer {
                 src = split_node2;
         }
     // connect the current node before doing splits to the split_node1    
-        connect(src,des,RelTypes.values()[side]);//graphDb.getNodeById(src),graphDb.getNodeById(des)
+        rel_type = RelTypes.values()[side];
+        repeated_edge = false;
+        for (Relationship r: src.getRelationships(rel_type, Direction.OUTGOING))
+            if (r.getEndNode().equals(des)){
+                repeated_edge = true;
+                break;
+            }
+        if (!repeated_edge){
+            src.createRelationshipTo(des,rel_type);
+            ++num_edges;
+        }
         if (degenerated) {
             curr_node = degenerate_node;
             curr_side = 0; // not really needed
@@ -1123,9 +1080,10 @@ public class SequenceLayer {
         int pos, begin, g, s, loc, side;
         int[] address;
         Node node, split_node1, split_node2 ,des, src;
-        boolean degenerated = false, loop = false, first_split = false;
+        boolean degenerated = false, loop, first_split = false, repeated_edge;
         pos = pointer.position;
         node = graphDb.getNodeById(pointer.node_id);
+        RelationshipType rel_type;
         split_node2 = node; //if the second split does not happens remains unchanged
         if (pos < (int) node.getProperty("length") - K) {
             first_split = true;
@@ -1161,7 +1119,8 @@ public class SequenceLayer {
                 }
                 int[] add = new int[]{genome,sequence,begin};
                 create_degenerate(add);
-                connect(split_node2, degenerate_node, RelTypes.RF);
+                split_node2.createRelationshipTo(degenerate_node, RelTypes.RF);
+                ++num_edges;
                 degenerated = true;
                 break;
             }
@@ -1181,7 +1140,17 @@ public class SequenceLayer {
             if (!first_split && loop)
                 src = split_node2;
         }
-        connect(src,des,RelTypes.values()[side]);
+        rel_type = RelTypes.values()[side];
+        repeated_edge = false;
+        for (Relationship r: src.getRelationships(rel_type, Direction.OUTGOING))
+            if (r.getEndNode().equals(des)){
+                repeated_edge = true;
+                break;
+            }
+        if (!repeated_edge){
+            src.createRelationshipTo(des,rel_type);
+            ++num_edges;
+        }
         if (degenerated) {
             curr_node = degenerate_node;
             curr_side = 0;
@@ -1276,7 +1245,8 @@ public class SequenceLayer {
                 jump();
                 int[] add = new int[]{genome,sequence,0};
                 create_degenerate(add);
-                connect(curr_node, degenerate_node, RelTypes.values()[curr_side*2]);
+                curr_node.createRelationshipTo(degenerate_node, RelTypes.values()[curr_side*2]);
+                ++num_edges;
                 curr_node = degenerate_node;
                 break;
             }
@@ -1343,7 +1313,8 @@ public class SequenceLayer {
                     }
                 }//while position<n
                 try (Transaction tx = graphDb.beginTx()) {
-                    connect(curr_node, sequence_node, RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
+                    curr_node.createRelationshipTo(sequence_node, RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
+                    ++num_edges;
                     tx.success();
                 }
             }//sequences
@@ -1415,8 +1386,8 @@ public class SequenceLayer {
                                 if ((is_node && genomeDb.compare(genomeDb, address, addr, K - 1, neighbor_side == 'F' ? K - 1 : neighbor_length - K, 1, neighbor_side == 'F'))
                                         || (is_degenerate && Arrays.equals(addr, address))) {
                                     //System.out.println("found "+address[2]+" "+seq_len+" "+neighbor.getId());
-                                    if (r.hasProperty(origin)) {
-                                        positions = (int[]) r.getProperty(origin);
+                                    positions = (int[]) r.getProperty(origin, null);
+                                    if (positions != null) {
                                         len = positions.length;
                                         new_positions = new int[len + 1];
                                         for (i = 0; i < len; ++i) {

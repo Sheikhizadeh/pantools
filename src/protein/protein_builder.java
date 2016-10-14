@@ -49,7 +49,6 @@ public class protein_builder {
      * Translates a coding nucleotide sequence to a protein sequence.
      * 
      * @param mRNA The sequence of the codinf RNA
-     * @param direction The direction of the translation
      * @return The protein sequence
      */
     public String translate(String mRNA)

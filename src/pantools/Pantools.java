@@ -103,10 +103,7 @@ public class Pantools {
                 annLayer.annotate(args[2],args[1]);
                 break;
             case "group":
-                if (args[1].equals("denovo"))
-                    annLayer.denovo_homology_annotation(args[2]);
-                else
-                    annLayer.group_ortholog_proteins(args[1],args[2]);
+                annLayer.group_homologs(args[1]);
                 break;
             case "compare":
                 seqLayer.compare_pangenomes(args[1], args[2]);
@@ -120,9 +117,6 @@ public class Pantools {
                     print_help_comment();
                     System.exit(1);
                 }
-                break;
-            case "query":
-                seqLayer.run_query(args[1]);
                 break;
             default:
                 print_help_comment();
@@ -324,8 +318,8 @@ public class Pantools {
     /**
      * Return reverse complement of the given string.
      * 
-     * @param s    The input string
-     * @return 
+     * @param s The input string
+     * @return The reverse complement of the input string
      */     
     public static String reverse_complement(String s) {
         StringBuilder rv = new StringBuilder();
