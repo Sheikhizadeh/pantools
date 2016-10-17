@@ -784,6 +784,20 @@ public class SequenceLayer {
         return new IndexPointer(node.getId(), forward, forward ? position - loc : node_len - 1 - (position - loc), -1L);
     }
     
+    /***
+     * Creates an edge between source and destination nodes.
+     * 
+     * @param src Source node
+     * @param des Destination node
+     * @param edge_type One of the four possible edge types: FF, FR, RF, RR
+     * @param address Specifies which genomic address the edge points to. 
+     * @return The newly created edge
+     */
+    private void connect(Node src, Node des, RelationshipType edge_type) {
+        //System.out.println("connect "+src.getId()+" "+edge_type.name()+" "+des.getId());
+        src.createRelationshipTo(des, edge_type);
+    }
+    
     /**
      * Splits a node at a specified position by creating a new node called split_node as a part separated from the node.
      * @param node The node which should be split.
@@ -791,7 +805,6 @@ public class SequenceLayer {
      * @return The newly created split node.
      */
     private Node split(Node node, int pos) {
-        //System.out.println("split "+node.getId()+" "+pos);
         int split_len, node_len;
         int i, s_id, gen, seq, loc,starts_at;
         long inx, split_first_kmer, node_last_kmer;
@@ -807,6 +820,7 @@ public class SequenceLayer {
         num_bases += (K - 1);
         ++num_nodes;
         split_node = graphDb.createNode(node_label);
+        //System.out.println("split "+node.getId()+" at "+pos+" in "+split_node.getId());
         address[0] = gen;
         address[1] = seq;
         address[2] = loc + pos;
@@ -843,23 +857,23 @@ public class SequenceLayer {
             neighbor = r.getEndNode();
             if (neighbor.equals(node)) 
                 neighbor = r.isType(RelTypes.FF) ? node : split_node;
-            split_node.createRelationshipTo(neighbor, r.getType());
+            connect(split_node, neighbor, r.getType());
             r.delete();
         }
         for (Relationship r : node.getRelationships(Direction.INCOMING,RelTypes.RR,RelTypes.FR)) {
             neighbor = r.getStartNode();
             if (neighbor.equals(node)) 
                 neighbor = r.isType(RelTypes.RR) ? node : split_node;
-            neighbor.createRelationshipTo(split_node, r.getType());
+            connect(neighbor, split_node, r.getType());
             r.delete();
         }
     //  Connecting node to split node
         if (node.hasRelationship(Direction.INCOMING, RelTypes.FF, RelTypes.RF)){
-            node.createRelationshipTo(split_node, RelTypes.FF);
+            connect(node, split_node, RelTypes.FF);
             ++num_edges;
         }
         if (split_node.hasRelationship(Direction.INCOMING, RelTypes.FR, RelTypes.RR)){
-            split_node.createRelationshipTo(node, RelTypes.RR);
+            connect(split_node ,node, RelTypes.RR);
             ++num_edges;
         }
         node.setProperty("last_kmer", node_last_kmer);
@@ -915,7 +929,7 @@ public class SequenceLayer {
                 jump();
                 int[] add = new int[]{genome,sequence,begin};
                 create_degenerate(add);
-                curr_node.createRelationshipTo(degenerate_node, RelTypes.FF); 
+                connect(curr_node ,degenerate_node, RelTypes.FF); 
                 ++num_edges;
                 curr_node = degenerate_node;
                 //curr_side = 0; // we have set it zero already in create()
@@ -975,7 +989,7 @@ public class SequenceLayer {
         pointer.position = 0;
         pointer.next_index = -1L;
         indexDb.put_pointer(pointer, curr_index);
-        curr_node.createRelationshipTo(new_node, RelTypes.values()[curr_side*2]);
+        connect(curr_node ,new_node, RelTypes.values()[curr_side*2]);
         ++num_edges;
         curr_node = new_node;
         curr_side = 0;
@@ -992,6 +1006,7 @@ public class SequenceLayer {
         boolean degenerated, loop, repeated_edge;
         pos = pointer.position;
         node = graphDb.getNodeById(pointer.node_id);
+        //System.out.println("follow_forward "+pointer.node_id);
     // The first split might be done to seperate the part we need to enter in.
         if (pos > 0) {  
             split_node1 = split(node, pos);
@@ -1031,7 +1046,7 @@ public class SequenceLayer {
                 degenerated = true;
                 int[] add = new int[]{genome,sequence,begin};
                 create_degenerate(add);
-                node.createRelationshipTo(degenerate_node, RelTypes.FF);
+                connect(node ,degenerate_node, RelTypes.FF);
                 ++num_edges;
                 break;
             }
@@ -1060,7 +1075,7 @@ public class SequenceLayer {
                 break;
             }
         if (!repeated_edge){
-            src.createRelationshipTo(des,rel_type);
+            connect(src ,des, rel_type);
             ++num_edges;
         }
         if (degenerated) {
@@ -1083,18 +1098,19 @@ public class SequenceLayer {
         boolean degenerated = false, loop, first_split = false, repeated_edge;
         pos = pointer.position;
         node = graphDb.getNodeById(pointer.node_id);
+        //System.out.println("follow_reverse "+pointer.node_id);
         RelationshipType rel_type;
         split_node2 = node; //if the second split does not happens remains unchanged
         if (pos < (int) node.getProperty("length") - K) {
             first_split = true;
             split_node1 = split(node, pos+1);
-            if (loop = curr_node.equals(node))
+            if (loop = curr_node.equals(node) && curr_side == 0) // might be in reverse side due to a follow reverse
                 src = split_node1;
             else 
                 src = curr_node;
         } else {
             split_node1 = node;
-            if (loop = curr_node.equals(node))
+            if (loop = curr_node.equals(node) && curr_side == 0)
                 src = split_node1;
             else 
                 src = curr_node;
@@ -1119,7 +1135,7 @@ public class SequenceLayer {
                 }
                 int[] add = new int[]{genome,sequence,begin};
                 create_degenerate(add);
-                split_node2.createRelationshipTo(degenerate_node, RelTypes.RF);
+                connect(split_node2, degenerate_node, RelTypes.RF);
                 ++num_edges;
                 degenerated = true;
                 break;
@@ -1148,7 +1164,7 @@ public class SequenceLayer {
                 break;
             }
         if (!repeated_edge){
-            src.createRelationshipTo(des,rel_type);
+            connect(src ,des, rel_type);
             ++num_edges;
         }
         if (degenerated) {
@@ -1245,7 +1261,7 @@ public class SequenceLayer {
                 jump();
                 int[] add = new int[]{genome,sequence,0};
                 create_degenerate(add);
-                curr_node.createRelationshipTo(degenerate_node, RelTypes.values()[curr_side*2]);
+                connect(curr_node ,degenerate_node, RelTypes.values()[curr_side*2]);
                 ++num_edges;
                 curr_node = degenerate_node;
                 break;
@@ -1313,7 +1329,7 @@ public class SequenceLayer {
                     }
                 }//while position<n
                 try (Transaction tx = graphDb.beginTx()) {
-                    curr_node.createRelationshipTo(sequence_node, RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
+                    connect(curr_node, sequence_node, RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
                     ++num_edges;
                     tx.success();
                 }

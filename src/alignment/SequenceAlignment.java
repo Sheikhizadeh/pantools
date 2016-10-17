@@ -8,27 +8,28 @@ package alignment;
  */
 public class SequenceAlignment {
 
-    private int match[][];
-    private int matrix[][];
-    private int up[][];
-    private int left[][];
+    private double match[][];
+    private double matrix[][];
+    private double up[][];
+    private double left[][];
     public int alignment_length;
     public static int MAX_LENGTH = 10000;
     public static int MATCH_SCORE = 4;
     public static int MISMATCH_SCORE = -2;
     public static int GAP_OPEN = -2;
     public static int GAP_EXT = -1;
+    public static double THRESHOLD = 0.7;
     
     /**
      * The constructor of the class
      */
     public SequenceAlignment() {
     // initialize matrixes
-        matrix = new int[MAX_LENGTH+1][MAX_LENGTH+1];
-        up = new int[MAX_LENGTH+1][MAX_LENGTH+1];
-        left = new int[MAX_LENGTH+1][MAX_LENGTH+1];
+        matrix = new double[MAX_LENGTH+1][MAX_LENGTH+1];
+        up = new double[MAX_LENGTH+1][MAX_LENGTH+1];
+        left = new double[MAX_LENGTH+1][MAX_LENGTH+1];
     // initialize match matrix
-        match = new int[256][256];
+        match = new double[256][256];
         for (int i = 0; i < 256; i++) {
             for (int j = 0; j < 256; j++) {
                 if (i == j) 
@@ -133,7 +134,7 @@ public class SequenceAlignment {
      * Calculates the similarity score of two nucleotide sequences (score is not greater than 1).
      * @param s1 First sequence
      * @param s2 Second sequence
-     * @return Tht similarity score
+     * @return ThE similarity score
      */
     public double get_similarity(String s1, String s2) {
         int i, j;
@@ -153,7 +154,7 @@ public class SequenceAlignment {
                 matrix[i][j] = Math.max( match[s1.charAt(i)][s2.charAt(j)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
-        // compute alignment length
+        /* compute alignment length
         alignment_length = 0;
         for (i = m, j = n ; i > 0 && j > 0 ; ++alignment_length) {
             if (matrix[i][j] == up[i][j]) 
@@ -164,8 +165,8 @@ public class SequenceAlignment {
                 i = i - 1;
                 j = j - 1;
             }
-        }   
+        }   */
         //System.out.println((double) matrix[m][n] / alignment_length / MATCH_SCORE);
-        return (double) matrix[m][n] / alignment_length / MATCH_SCORE;
+        return matrix[m][n] / (Math.max(m, n) * MATCH_SCORE);
     }
 }

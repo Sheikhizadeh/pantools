@@ -145,7 +145,7 @@ public class AnnotationLayer {
                     if (gff_name.equals(""))
                         continue;
                     BufferedReader in = new BufferedReader(new FileReader(gff_name));
-                    //BufferedWriter out = new BufferedWriter(new FileWriter(gff_name + ".proteins.fasta"));
+                    BufferedWriter out = new BufferedWriter(new FileWriter(gff_name + ".proteins.fasta"));
                 // for each record of gff file
                     while (in.ready()) 
                     {
@@ -194,8 +194,8 @@ public class AnnotationLayer {
                                                         }
                                                         protein = pb.translate(gene_node.getProperty("strand").equals("+")?coding_RNA.toString():reverse_complement(coding_RNA.toString()));
                                                         ++protein_num;
-                                                        //out.write(">" + protein_num + "\n");
-                                                        //write_fasta(out, protein, 70);
+                                                        out.write(">" + protein_num + "\n");
+                                                        write_fasta(out, protein, 70);
                                                         rna_node.setProperty("protein", protein);
                                                         rna_node.setProperty("protein_number", protein_num);
                                                         rna_node.setProperty("protein_length", protein.length());
@@ -308,8 +308,8 @@ public class AnnotationLayer {
                                     }
                                     protein = pb.translate(gene_node.getProperty("strand").equals("+")?coding_RNA.toString():reverse_complement(coding_RNA.toString()));
                                     ++protein_num;
-                                    //out.write(">" + protein_num + "\n");
-                                    //write_fasta(out, protein, 70);
+                                    out.write(">" + protein_num + "\n");
+                                    write_fasta(out, protein, 70);
                                     rna_node.setProperty("protein", protein);
                                     rna_node.setProperty("protein_number", protein_num);
                                     rna_node.setProperty("protein_length", protein.length());
@@ -320,7 +320,7 @@ public class AnnotationLayer {
                         tx.success();
                     }
                     in.close();
-                    //out.close();
+                    out.close();
                     System.out.println("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_ncRNAs + "\t" + num_short_RNAs+ "\t" + num_rRNAs+ "\t" + num_antisense_RNA);
                 } // for genomes
                 gff_files.close();
@@ -483,7 +483,7 @@ public class AnnotationLayer {
                 System.out.println("genes\tgroups");
                 while (genes_iterator.hasNext()) {
                     try (Transaction tx2 = graphDb.beginTx()) {
-                        for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/10; ++trsc) {
+                        for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/100; ++trsc) {
                             gene_node=genes_iterator.next();
                             if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { // To avoid having one gene in different groups
                                 if (gene_node.hasLabel(coding_gene_label))
@@ -568,7 +568,7 @@ public class AnnotationLayer {
                                 mRNA_len2 = (int)mRNA_node2.getProperty("protein_length", -1);
                                 if ( mRNA_len2 > 0 ){ // some genes might code different types of RNAs like a mRNA and a lncRNA
                                     if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10 && 
-                                            pro_aligner.get_similarity((String)mRNA_node1.getProperty("protein"), (String)mRNA_node2.getProperty("protein")) > 0.75 ) {
+                                            pro_aligner.get_similarity((String)mRNA_node1.getProperty("protein"), (String)mRNA_node2.getProperty("protein")) > pro_aligner.THRESHOLD ) {
                                             gene_nodes.add(current_gene_node);
                                             found = true;
                                             break;
@@ -629,7 +629,7 @@ public class AnnotationLayer {
                                 if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)/10){
                                     RNA_seq1 = (String)RNA_node1.getProperty("sequence");
                                     RNA_seq2 = (String)RNA_node2.getProperty("sequence");
-                                    if ( seq_aligner.get_similarity(RNA_seq1,RNA_seq2) > 0.75 ) {
+                                    if ( seq_aligner.get_similarity(RNA_seq1,RNA_seq2) > seq_aligner.THRESHOLD ) {
                                         gene_nodes.add(current_gene_node);
                                         found = true;
                                         break;

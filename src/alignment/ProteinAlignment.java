@@ -8,25 +8,26 @@ package alignment;
  */
 public class ProteinAlignment {
 
-    private int match[][];
-    private int matrix[][];
-    private int up[][];
-    private int left[][];
+    private double match[][];
+    private double matrix[][];
+    private double up[][];
+    private double left[][];
     public int alignment_length;
     public static int MAX_LENGTH = 5000;
-    public static int GAP_OPEN = -2;
-    public static int GAP_EXT = -1;
+    public static double GAP_OPEN = -1.0;
+    public static double GAP_EXT = -0.25;
+    public static double THRESHOLD = 0.7;
     
     /**
      * The constructor of the class
      */
     public ProteinAlignment() {
     // initialize matrixes
-        matrix = new int[MAX_LENGTH+1][MAX_LENGTH+1];
-        up = new int[MAX_LENGTH+1][MAX_LENGTH+1];
-        left = new int[MAX_LENGTH+1][MAX_LENGTH+1];
-    // initialize match matrix
-        match = new int[256][256];
+        matrix = new double[MAX_LENGTH+1][MAX_LENGTH+1];
+        up = new double[MAX_LENGTH+1][MAX_LENGTH+1];
+        left = new double[MAX_LENGTH+1][MAX_LENGTH+1];
+    // initialize similarity matrix BLOSUM62
+        match = new double[256][256];
         match['A']['A'] = 4;
         match['A']['R'] = -1;
         match['A']['N'] = -2;
@@ -688,7 +689,7 @@ public class ProteinAlignment {
      * Calculates the similarity score of two nucleotide sequences (score is not greater than 1).
      * @param s1 First sequence
      * @param s2 Second sequence
-     * @return Tht similarity score
+     * @return The similarity score
      */
     public double get_similarity(String s1, String s2) {
         int i, j, maxscore, maxlen;
@@ -714,7 +715,7 @@ public class ProteinAlignment {
                 matrix[i][j] = Math.max( match[s1.charAt(i)][s2.charAt(j)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
-        // compute alignment length
+        /* compute alignment length
         alignment_length = 0;
         for (i = m, j = n ; i > 0 && j > 0 ; ++alignment_length) {
             if (matrix[i][j] == up[i][j]) 
@@ -725,8 +726,7 @@ public class ProteinAlignment {
                 i = i - 1;
                 j = j - 1;
             }
-        }   
-        //System.out.println((double) matrix[m][n] / alignment_length / MATCH_SCORE);
-        return (double) matrix[m][n] / maxscore;
+        }   */
+        return matrix[m][n] / maxscore;
     }
 }

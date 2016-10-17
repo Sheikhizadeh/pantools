@@ -89,12 +89,19 @@ public class Pantools {
                 seqLayer.reconstruct_genomes(args[1],args[2]);
                 break;
             case "build":
-                K = Integer.parseInt(args[1]);
-                if (K < 6 || K > 256) {
-                    System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
+                try{
+                    K = Integer.parseInt(args[1]);
+                    if (K < 6 || K > 256) {
+                        System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
+                        System.exit(1);
+                    }
+                    seqLayer.build(args[3],args[2]);
+                    }
+                catch(NumberFormatException nfe)
+                {
+                    print_help_comment();
                     System.exit(1);
                 }
-                seqLayer.build(args[3],args[2]);
                 break;
             case "add":
                 seqLayer.add(args[2],args[1]);
