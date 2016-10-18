@@ -13,10 +13,10 @@ public class ProteinAlignment {
     private double up[][];
     private double left[][];
     public int alignment_length;
-    public static int MAX_LENGTH = 5000;
-    public static double GAP_OPEN = -1.0;
-    public static double GAP_EXT = -0.25;
-    public static double THRESHOLD = 0.7;
+    public static int MAX_LENGTH = 3000;
+    public static double GAP_OPEN = -2;
+    public static double GAP_EXT = -1;
+    public static double THRESHOLD = 0.75;
     
     /**
      * The constructor of the class
@@ -715,18 +715,6 @@ public class ProteinAlignment {
                 matrix[i][j] = Math.max( match[s1.charAt(i)][s2.charAt(j)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
-        /* compute alignment length
-        alignment_length = 0;
-        for (i = m, j = n ; i > 0 && j > 0 ; ++alignment_length) {
-            if (matrix[i][j] == up[i][j]) 
-                i = i - 1;
-            else if (matrix[i][j] == left[i][j]) 
-                j = j - 1;
-            else {
-                i = i - 1;
-                j = j - 1;
-            }
-        }   */
         return matrix[m][n] / maxscore;
     }
 }

@@ -47,6 +47,7 @@ public class Pantools {
     public static Label gene_label = DynamicLabel.label("gene");
     public static Label coding_gene_label = DynamicLabel.label("coding_gene");
     public static Label RNA_label = DynamicLabel.label("RNA");
+    public static Label coding_RNA_label = DynamicLabel.label("coding_RNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
     public static Label ortholog_lable = DynamicLabel.label("orthologs");
     public static Label homolog_lable = DynamicLabel.label("homologs");
@@ -58,7 +59,8 @@ public class Pantools {
         contains, // for pointing to gene nodes of the group
         codes_for,// for connecting genes to mRNAs
         contributes_to,// for connecting CDSs and LTRs to mRNA
-        covers //to connect CDSs to the nodes
+        covers, //to connect CDSs to the nodes
+        resembles //to connect similar proteins (coding_mRNA) nodes
     }
 
     public static long startTime;

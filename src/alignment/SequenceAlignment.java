@@ -13,12 +13,12 @@ public class SequenceAlignment {
     private double up[][];
     private double left[][];
     public int alignment_length;
-    public static int MAX_LENGTH = 10000;
+    public static int MAX_LENGTH = 9000;
     public static int MATCH_SCORE = 4;
     public static int MISMATCH_SCORE = -2;
     public static int GAP_OPEN = -2;
     public static int GAP_EXT = -1;
-    public static double THRESHOLD = 0.7;
+    public static double THRESHOLD = 0.75;
     
     /**
      * The constructor of the class
@@ -154,19 +154,6 @@ public class SequenceAlignment {
                 matrix[i][j] = Math.max( match[s1.charAt(i)][s2.charAt(j)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
-        /* compute alignment length
-        alignment_length = 0;
-        for (i = m, j = n ; i > 0 && j > 0 ; ++alignment_length) {
-            if (matrix[i][j] == up[i][j]) 
-                i = i - 1;
-            else if (matrix[i][j] == left[i][j]) 
-                j = j - 1;
-            else {
-                i = i - 1;
-                j = j - 1;
-            }
-        }   */
-        //System.out.println((double) matrix[m][n] / alignment_length / MATCH_SCORE);
         return matrix[m][n] / (Math.max(m, n) * MATCH_SCORE);
     }
 }

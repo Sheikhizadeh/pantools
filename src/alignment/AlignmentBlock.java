@@ -34,4 +34,13 @@ public class AlignmentBlock {
         two.setLength(0);
         score = 0;
     }
+    
+    /**
+     * Prints the alignment
+     */
+    public void print() {
+        System.out.println("Similarity: " + score);
+        System.out.println(one.reverse());
+        System.out.println(two.reverse());
+    }
 }

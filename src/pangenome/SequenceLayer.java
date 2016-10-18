@@ -283,7 +283,7 @@ public class SequenceLayer {
                 tx.success();
             }
             num_genes = 0;
-            address = new int[3];
+            address = new int[4];
             gene_seq = new StringBuilder();
             try {
                 in = new BufferedReader(new FileReader(annotation_records_file));
@@ -466,7 +466,7 @@ public class SequenceLayer {
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, graphDb);
-            address = new int[3];
+            address = new int[4];
             seq = new StringBuilder();
             try (Transaction tx = graphDb.beginTx()) {
                 db_node = graphDb.findNodes(pangenome_label).next();
