@@ -73,13 +73,13 @@ public class AnnotationLayer {
     public class PairComparator implements Comparator<int[]> {
         @Override
         public int compare(int[] x, int[] y) {
-            if (x[0] < y[0]) 
+            if (x[2] < y[2]) 
                 return -1;
-            else if (x[0] > y[0]) 
+            else if (x[2] > y[2]) 
                 return 1;
-            else if (x[1] < y[1]) 
+            else if (x[3] < y[3]) 
                 return -1;
-            else if (x[1] > y[1]) 
+            else if (x[3] > y[3]) 
                 return 1;
             else
                 return 0;
@@ -220,7 +220,7 @@ public class AnnotationLayer {
                                             genes_list[address[0]][address[1]].add(gene_node.getId());
                                             ++total_genes;
                                             ++num_genes;
-                                    } else if(fields[2].endsWith("RNA")) {
+                                    } else if(fields[2].endsWith("RNA") || fields[2].equals("pseudogenic_transcript") ) {
                                         rna_node = graphDb.createNode(RNA_label);
                                         rna_node.setProperty("ID", get_property(attribute,"ID"));
                                         gene_node.setProperty("address", address);
@@ -420,7 +420,7 @@ public class AnnotationLayer {
         Node neighbor, node = graphDb.getNodeById(start_ptr.node_id);
         node_len = (int) node.getProperty("length");
         rel = gene_node.createRelationshipTo(node, RelTypes.visits);
-        rel.setProperty("position", 0);
+        rel.setProperty("position", loc);
         rel.setProperty("forward", start_ptr.canonical);
         rel.setProperty("starts_at", starts_at);
         gene_node.setProperty("start_node_id", node.getId());
@@ -493,7 +493,8 @@ public class AnnotationLayer {
                                 else 
                                     get_gene_family(gene_nodes, pq, gene_node, seq_aligner);
                                 group_size = gene_nodes.size()+1;
-                                if( group_size > 1 ) {
+                                //if( group_size > 1 ) 
+                                {
                                     group_node = graphDb.createNode(homolog_lable);
                                     ++num_groups;
                                     total_genes += group_size;
@@ -553,43 +554,41 @@ public class AnnotationLayer {
         }
         if (!pq.isEmpty())
         {
-            current_gene_id = pq.peek();
+            gene_id = -1l;
             while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
-                while (!pq.isEmpty()) { 
-                    gene_id = pq.remove();
-                    if(gene_id != current_gene_id)
-                        break;
-                }
-                current_gene_node = graphDb.getNodeById(current_gene_id);
-                if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ){ // To avoid having one gene in different groups
-                    found = false;
-                    for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                        mRNA_node1 = r1.getEndNode();
-                        if ( mRNA_node1.hasLabel(coding_RNA_label) ){
-                            p1 = (String)mRNA_node1.getProperty("protein");
-                            mRNA_len1 = p1.length();
-                            for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                                mRNA_node2 = r2.getEndNode();
-                                if ( mRNA_node2.hasLabel(coding_RNA_label) ){ // some genes might code different types of RNAs like a mRNA and a lncRNA
-                                    p2 = (String)mRNA_node2.getProperty("protein");
-                                    mRNA_len2 = p2.length();
-                                    if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10){
-                                        similarity = pro_aligner.get_similarity(p1, p2);
-                                        mRNA_node1.createRelationshipTo(mRNA_node2, RelTypes.resembles).setProperty("score", similarity);
-                                        if ( similarity > pro_aligner.THRESHOLD ) {
-                                            gene_nodes.add(current_gene_node);
-                                            found = true;
-                                            break;
+                current_gene_id = pq.remove();
+                if(gene_id != current_gene_id){
+                    current_gene_node = graphDb.getNodeById(current_gene_id);
+                    if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ){ // To avoid having one gene in different groups
+                        found = false;
+                        for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+                            mRNA_node1 = r1.getEndNode();
+                            if ( mRNA_node1.hasLabel(coding_RNA_label) ){
+                                p1 = (String)mRNA_node1.getProperty("protein");
+                                mRNA_len1 = p1.length();
+                                for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+                                    mRNA_node2 = r2.getEndNode();
+                                    if ( mRNA_node2.hasLabel(coding_RNA_label) ){ // some genes might code different types of RNAs like a mRNA and a lncRNA
+                                        p2 = (String)mRNA_node2.getProperty("protein");
+                                        mRNA_len2 = p2.length();
+                                        if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10){
+                                            similarity = pro_aligner.get_similarity(p1, p2);
+                                            //mRNA_node1.createRelationshipTo(mRNA_node2, RelTypes.resembles).setProperty("score", similarity);
+                                            if ( similarity > pro_aligner.THRESHOLD ) {
+                                                gene_nodes.add(current_gene_node);
+                                                found = true;
+                                                break;
+                                            }
                                         }
                                     }
-                                }
-                                if (found)
-                                    break;
-                            } // for
-                        } // if
-                    } // for
-                } // if
-                current_gene_id = gene_id;
+                                    if (found)
+                                        break;
+                                } // for
+                            } // if
+                        } // for
+                    } // if
+                    gene_id = current_gene_id;
+                }
             }// while
         }
     }
@@ -617,43 +616,41 @@ public class AnnotationLayer {
             }
         }
         if (!pq.isEmpty()) {
-            current_gene_id = pq.peek();
+            gene_id = -1l;
             while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
-                while (!pq.isEmpty()) { // take all the same ids 
-                    gene_id = pq.remove();
-                    if(gene_id != current_gene_id)
-                        break;
-                }
-                current_gene_node = graphDb.getNodeById(current_gene_id);
-                if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ){ // To avoid having one gene in different groups
-                    found = false;
-                    for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                        RNA_node1 = r1.getEndNode();
-                        RNA_node1_type = (String)RNA_node1.getProperty("type");
-                        for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                            RNA_node2 = r2.getEndNode();
-                            RNA_node2_type = (String)RNA_node2.getProperty("type");
-                            if ( RNA_node1_type.equals(RNA_node2_type) && !RNA_node1_type.equals("mRNA")){
-                                RNA_seq1 = (String)RNA_node1.getProperty("sequence");
-                                RNA_seq2 = (String)RNA_node2.getProperty("sequence");
-                                RNA_len1 = RNA_seq1.length();
-                                RNA_len2 = RNA_seq2.length();
-                                if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)/10){
-                                    similarity = seq_aligner.get_similarity(RNA_seq1,RNA_seq2);
-                                    RNA_node1.createRelationshipTo(RNA_node2, RelTypes.resembles).setProperty("score", similarity);
-                                    if ( similarity > seq_aligner.THRESHOLD ) {
-                                        gene_nodes.add(current_gene_node);
-                                        found = true;
-                                        break;
+                current_gene_id = pq.remove();
+                if(gene_id != current_gene_id){
+                    current_gene_node = graphDb.getNodeById(current_gene_id);
+                    if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ){ // To avoid having one gene in different groups
+                        found = false;
+                        for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+                            RNA_node1 = r1.getEndNode();
+                            RNA_node1_type = (String)RNA_node1.getProperty("type");
+                            for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+                                RNA_node2 = r2.getEndNode();
+                                RNA_node2_type = (String)RNA_node2.getProperty("type");
+                                if ( RNA_node1_type.equals(RNA_node2_type) && !RNA_node1_type.equals("mRNA")){
+                                    RNA_seq1 = (String)RNA_node1.getProperty("sequence");
+                                    RNA_seq2 = (String)RNA_node2.getProperty("sequence");
+                                    RNA_len1 = RNA_seq1.length();
+                                    RNA_len2 = RNA_seq2.length();
+                                    if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)/10){
+                                        similarity = seq_aligner.get_similarity(RNA_seq1,RNA_seq2);
+                                        //RNA_node1.createRelationshipTo(RNA_node2, RelTypes.resembles).setProperty("score", similarity);
+                                        if ( similarity > seq_aligner.THRESHOLD ) {
+                                            gene_nodes.add(current_gene_node);
+                                            found = true;
+                                            break;
+                                        }
                                     }
                                 }
                             }
+                            if (found)
+                                break;
                         }
-                        if (found)
-                            break;
-                    }
-                } // if
-                current_gene_id = gene_id;
+                    } // if
+                    gene_id = current_gene_id;
+                }
             }// while
         }        
     }    

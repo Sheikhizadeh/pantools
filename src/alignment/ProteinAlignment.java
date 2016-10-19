@@ -16,7 +16,7 @@ public class ProteinAlignment {
     public static int MAX_LENGTH = 3000;
     public static double GAP_OPEN = -2;
     public static double GAP_EXT = -1;
-    public static double THRESHOLD = 0.75;
+    public static double THRESHOLD = 0.6; // The longer the proteins the smaller the score
     
     /**
      * The constructor of the class
