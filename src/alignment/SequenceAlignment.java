@@ -13,12 +13,12 @@ public class SequenceAlignment {
     private double up[][];
     private double left[][];
     public int alignment_length;
-    public static int MAX_LENGTH = 3000;
+    public static int MAX_LENGTH = 1000;
     public static int MATCH_SCORE = 4;
     public static int MISMATCH_SCORE = -2;
     public static int GAP_OPEN = -2;
     public static int GAP_EXT = -1;
-    public static double THRESHOLD = 0.6;
+    public static double THRESHOLD = 0.75;
     
     /**
      * The constructor of the class

@@ -24,6 +24,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.PriorityQueue;
+import java.util.Queue;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
@@ -41,13 +42,10 @@ import static pantools.Pantools.RelTypes;
 import static pantools.Pantools.gene_label;
 import static pantools.Pantools.genomeDb;
 import static pantools.Pantools.graphDb;
-import static pantools.Pantools.homolog_lable;
 import static pantools.Pantools.RNA_label;
 import static pantools.Pantools.num_edges;
 import static pantools.Pantools.num_nodes;
-import static pantools.Pantools.ortholog_lable;
 import static pantools.Pantools.pangenome_label;
-//import static pantools.Pantools.pgRNA_label;
 import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
 import static pangenome.SequenceLayer.locate;
@@ -56,6 +54,8 @@ import static pantools.Pantools.CDS_label;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.coding_RNA_label;
 import static pantools.Pantools.coding_gene_label;
+import static pantools.Pantools.family_lable;
+import static pantools.Pantools.group_lable;
 import static pantools.Pantools.reverse_complement;
 import static pantools.Pantools.write_fasta;
 
@@ -66,6 +66,7 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
+    public static double LEN_FACTOR = 0.5;
 
     /**
      * Implements a comparator for integer arrays of size two
@@ -275,11 +276,11 @@ public class AnnotationLayer {
                                                         cds_node.createRelationshipTo(rna_node, RelTypes.contributes_to);
                                                 }
                                         // Label the edges of the gene visiting nodes of CDS
-                                            for (Relationship r: gene_node.getRelationships(RelTypes.visits, Direction.OUTGOING)){
+                                            /*for (Relationship r: gene_node.getRelationships(RelTypes.visits, Direction.OUTGOING)){
                                                 position = (int)r.getProperty("position");
                                                 if (position >= address[2] - 1 && position <= address[3]-1) // between begin and end   
                                                     r.setProperty("coding_cds", ID);
-                                            }
+                                            }*/
                                     }
                                 } else // if sequence not found
                                 {
@@ -463,7 +464,7 @@ public class AnnotationLayer {
      * Groups the highly similar genes together
      */
     public void group_homologs(String PATH) {
-        int i, num_groups=0, total_genes=0, group_size, num_genes,trsc;
+        int i, j, num_groups=0, total_genes=0, group_size, num_genes,trsc;
         int[] copy_number;
         Node group_node, gene_node, current_gene_node;
         ResourceIterator<Node> genes_iterator;
@@ -473,7 +474,9 @@ public class AnnotationLayer {
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
-            LinkedList<Node> gene_nodes = new LinkedList(); 
+            Queue<Node> gene_nodes = new LinkedList(); 
+            Queue<Node> queue = new LinkedList();
+            Iterator<Node> gene_nodes_iterator;
             PriorityQueue<Long> pq = new PriorityQueue();
             copy_number = new int[genomeDb.num_genomes+1];
             SequenceAlignment seq_aligner = new SequenceAlignment();
@@ -487,30 +490,34 @@ public class AnnotationLayer {
                     try (Transaction tx2 = graphDb.beginTx()) {
                         for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/100; ++trsc) {
                             gene_node=genes_iterator.next();
-                            if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { // To avoid having one gene in different groups
+                        // To avoid having one gene in different groups    
+                            if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { 
                                 if (gene_node.hasLabel(coding_gene_label) )
-                                    get_homologs(gene_nodes, pq, gene_node, pro_aligner);
+                                    group_node = get_homologs(gene_nodes, pq, gene_node, pro_aligner);
                                 else 
-                                    get_gene_family(gene_nodes, pq, gene_node, seq_aligner);
+                                    group_node = get_gene_family(gene_nodes, pq, gene_node, seq_aligner);
                                 group_size = gene_nodes.size()+1;
-                                //if( group_size > 1 ) 
-                                {
-                                    group_node = graphDb.createNode(homolog_lable);
+                                if (group_node == null){
+                                    group_node = graphDb.createNode(gene_node.hasLabel(coding_gene_label)?family_lable:group_lable);
                                     ++num_groups;
-                                    total_genes += group_size;
                                     group_node.setProperty("num_members", group_size );
-                                // Because the gene has not been added to the group itself    
-                                    group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                                    copy_number[((int[])gene_node.getProperty("address"))[0]] += 1;
-                                    while (!gene_nodes.isEmpty()) {
-                                        current_gene_node = gene_nodes.removeFirst();
-                                        group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
-                                        copy_number[((int[])current_gene_node.getProperty("address"))[0]] += 1;
-                                    }
-                                    group_node.setProperty("copy_number_variation", copy_number);
-                                    for (i = 1; i <= genomeDb.num_genomes; ++i) 
-                                        copy_number[i] = 0;
                                 }
+                                else {
+                                    group_node.setProperty("num_members", (int)group_node.getProperty("num_members")+1 );
+                                    copy_number = (int[])group_node.getProperty("copy_number_variation");
+                                }
+                                total_genes += group_size;
+                            // Because the gene has not been added to the group itself    
+                                group_node.createRelationshipTo(gene_node, RelTypes.contains);
+                                copy_number[((int[])gene_node.getProperty("address"))[0]] += 1;
+                                while (!gene_nodes.isEmpty()) {
+                                    current_gene_node = gene_nodes.remove();
+                                    group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
+                                    copy_number[((int[])current_gene_node.getProperty("address"))[0]] += 1;
+                                }
+                                group_node.setProperty("copy_number_variation", copy_number);
+                                for (i = 1; i <= genomeDb.num_genomes; ++i) 
+                                    copy_number[i] = 0;
                                 if (num_groups % 10 == 1 )
                                     break;
                             }
@@ -535,7 +542,7 @@ public class AnnotationLayer {
      * @param gene_node
      * @param pro_aligner 
      */
-    private void get_homologs(LinkedList<Node> gene_nodes, PriorityQueue<Long> pq, Node gene_node, ProteinAlignment pro_aligner){
+    private Node get_homologs(Queue<Node> gene_nodes, PriorityQueue<Long> pq, Node gene_node, ProteinAlignment pro_aligner){
         int mRNA_len1, mRNA_len2;
         double similarity;
         Node mRNA_node1, mRNA_node2, current_gene_node,node;
@@ -543,11 +550,13 @@ public class AnnotationLayer {
         boolean found;
         String p1, p2;
         for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.visits)) {
-            if (r1.hasProperty("coding_cds")){
+            //if (r1.hasProperty("coding_cds"))
+            {
                 node = r1.getEndNode();
                 for (Relationship r2: node.getRelationships(Direction.INCOMING,RelTypes.visits)) {
                     current_gene_node = r2.getStartNode();
-                    if(!current_gene_node.equals(gene_node)) // avoid comparisons to the gene itself  
+                // avoid comparisons to the gene itself  
+                    if(!current_gene_node.equals(gene_node))  
                         pq.offer(current_gene_node.getId());
                 }
             }
@@ -557,9 +566,10 @@ public class AnnotationLayer {
             gene_id = -1l;
             while (!pq.isEmpty()) { // for all the candidates with some shared node with the gene
                 current_gene_id = pq.remove();
-                if(gene_id != current_gene_id){
+                if(gene_id != current_gene_id){ // to skip the repetetive candidate mate genes
                     current_gene_node = graphDb.getNodeById(current_gene_id);
-                    if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ){ // To avoid having one gene in different groups
+                    //if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) )
+                    { // To avoid having one gene in different groups
                         found = false;
                         for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                             mRNA_node1 = r1.getEndNode();
@@ -571,19 +581,23 @@ public class AnnotationLayer {
                                     if ( mRNA_node2.hasLabel(coding_RNA_label) ){ // some genes might code different types of RNAs like a mRNA and a lncRNA
                                         p2 = (String)mRNA_node2.getProperty("protein");
                                         mRNA_len2 = p2.length();
-                                        if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)/10){
+                                        if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)*LEN_FACTOR){
                                             similarity = pro_aligner.get_similarity(p1, p2);
                                             //mRNA_node1.createRelationshipTo(mRNA_node2, RelTypes.resembles).setProperty("score", similarity);
                                             if ( similarity > pro_aligner.THRESHOLD ) {
                                                 gene_nodes.add(current_gene_node);
                                                 found = true;
+                                                if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){
+                                                    gene_nodes.clear();
+                                                    return current_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
+                                                }
                                                 break;
                                             }
                                         }
                                     }
-                                    if (found)
-                                        break;
                                 } // for
+                                if (found)
+                                    break;
                             } // if
                         } // for
                     } // if
@@ -591,6 +605,7 @@ public class AnnotationLayer {
                 }
             }// while
         }
+        return null;
     }
     
     /**
@@ -600,7 +615,7 @@ public class AnnotationLayer {
      * @param gene_node
      * @param seq_aligner 
      */
-    private void get_gene_family(LinkedList<Node> gene_nodes, PriorityQueue<Long> pq, Node gene_node, SequenceAlignment seq_aligner){
+    private Node get_gene_family(Queue<Node> gene_nodes, PriorityQueue<Long> pq, Node gene_node, SequenceAlignment seq_aligner){
         int RNA_len1,RNA_len2;
         double similarity;
         Node RNA_node1, RNA_node2, current_gene_node, node;
@@ -611,7 +626,8 @@ public class AnnotationLayer {
             node = r1.getEndNode();
             for (Relationship r2: node.getRelationships(Direction.INCOMING,RelTypes.visits)) {
                 current_gene_node = r2.getStartNode();
-                if(!current_gene_node.equals(gene_node)) // avoid comparisons to the gene itself  
+            // avoid comparisons to the gene itself  
+                if(!current_gene_node.equals(gene_node))  
                     pq.offer(current_gene_node.getId());
             }
         }
@@ -621,7 +637,8 @@ public class AnnotationLayer {
                 current_gene_id = pq.remove();
                 if(gene_id != current_gene_id){
                     current_gene_node = graphDb.getNodeById(current_gene_id);
-                    if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) ){ // To avoid having one gene in different groups
+                    //if ( ! current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING) )
+                    { // To avoid having one gene in different groups
                         found = false;
                         for (Relationship r1: gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
                             RNA_node1 = r1.getEndNode();
@@ -634,12 +651,16 @@ public class AnnotationLayer {
                                     RNA_seq2 = (String)RNA_node2.getProperty("sequence");
                                     RNA_len1 = RNA_seq1.length();
                                     RNA_len2 = RNA_seq2.length();
-                                    if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)/10){
+                                    if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)*LEN_FACTOR){
                                         similarity = seq_aligner.get_similarity(RNA_seq1,RNA_seq2);
                                         //RNA_node1.createRelationshipTo(RNA_node2, RelTypes.resembles).setProperty("score", similarity);
                                         if ( similarity > seq_aligner.THRESHOLD ) {
                                             gene_nodes.add(current_gene_node);
                                             found = true;
+                                            if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){
+                                                gene_nodes.clear();
+                                                return current_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
+                                            }
                                             break;
                                         }
                                     }
@@ -652,7 +673,8 @@ public class AnnotationLayer {
                     gene_id = current_gene_id;
                 }
             }// while
-        }        
+        }
+        return null;
     }    
 
     /**

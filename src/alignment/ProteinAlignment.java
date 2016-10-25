@@ -13,10 +13,10 @@ public class ProteinAlignment {
     private double up[][];
     private double left[][];
     public int alignment_length;
-    public static int MAX_LENGTH = 3000;
-    public static double GAP_OPEN = -2;
-    public static double GAP_EXT = -1;
-    public static double THRESHOLD = 0.6; // The longer the proteins the smaller the score
+    public static int MAX_LENGTH = 1000;
+    public static double GAP_OPEN = -1;
+    public static double GAP_EXT = -0.25;
+    public static double THRESHOLD = 0.75; 
     
     /**
      * The constructor of the class
@@ -692,14 +692,9 @@ public class ProteinAlignment {
      * @return The similarity score
      */
     public double get_similarity(String s1, String s2) {
-        int i, j, maxscore, maxlen;
+        int i, j;
+        double match_score = 0, max_score = 0, length = 0;
         int m = Math.min(s1.length() - 1, MAX_LENGTH), n = Math.min(s2.length() - 1, MAX_LENGTH);
-        if (s1.length() > s2.length())
-            for (maxlen = s1.length(), maxscore = 0,i=0;i<maxlen;++i)
-                maxscore += match[s1.charAt(i)][s1.charAt(i)];
-        else
-            for (maxlen = s2.length(), maxscore = 0,i=0;i<maxlen;++i)
-                maxscore += match[s2.charAt(i)][s2.charAt(i)];
         for (i = 1; i <= m; i++) {
             left[i][0] = -1000;
             matrix[i][0] = GAP_OPEN + i*GAP_EXT;
@@ -715,6 +710,21 @@ public class ProteinAlignment {
                 matrix[i][j] = Math.max( match[s1.charAt(i)][s2.charAt(j)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
-        return matrix[m][n] / maxscore;
+        i = m;
+        j = n;
+        while (i > 0 && j > 0) {
+            if (matrix[i][j] == up[i][j]) {
+                i = i - 1;
+            } else if (matrix[i][j] == left[i][j]) {
+                j = j - 1;
+            } else {
+                match_score += match[s1.charAt(i)][s2.charAt(j)];
+                max_score += match[s1.charAt(i)][s1.charAt(i)];
+                ++length;
+                i = i - 1;
+                j = j - 1;
+            }
+        }        
+        return (match_score / max_score)*(length/Math.min(m,n));
     }
 }
