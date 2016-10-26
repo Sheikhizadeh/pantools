@@ -224,7 +224,7 @@ public class AnnotationLayer {
                                     } else if(fields[2].endsWith("RNA") || fields[2].equals("pseudogenic_transcript") ) {
                                         rna_node = graphDb.createNode(RNA_label);
                                         rna_node.setProperty("ID", get_property(attribute,"ID"));
-                                        gene_node.setProperty("address", address);
+                                        rna_node.setProperty("address", address);
                                         rna_node.setProperty("length", feature_len);
                                         rna_node.setProperty("type", fields[2]);
                                         gene_node.createRelationshipTo(rna_node, RelTypes.codes_for);
