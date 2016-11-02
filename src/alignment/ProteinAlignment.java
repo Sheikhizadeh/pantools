@@ -16,7 +16,7 @@ public class ProteinAlignment {
     public static int MAX_LENGTH = 1000;
     public static double GAP_OPEN = -1;
     public static double GAP_EXT = -0.25;
-    public static double THRESHOLD = 0.75; 
+    public static double THRESHOLD = 0.9; 
     
     /**
      * The constructor of the class
@@ -695,6 +695,13 @@ public class ProteinAlignment {
         int i, j;
         double match_score = 0, max_score = 0, length = 0;
         int m = Math.min(s1.length() - 1, MAX_LENGTH), n = Math.min(s2.length() - 1, MAX_LENGTH);
+        if ( m > n )
+            for (i=0; i<=m; ++i)
+                max_score += match[s1.charAt(i)][s1.charAt(i)];
+        else
+            for (j=0; j<=n; ++j)
+                max_score += match[s2.charAt(j)][s2.charAt(j)];
+            
         for (i = 1; i <= m; i++) {
             left[i][0] = -1000;
             matrix[i][0] = GAP_OPEN + i*GAP_EXT;
@@ -710,7 +717,7 @@ public class ProteinAlignment {
                 matrix[i][j] = Math.max( match[s1.charAt(i)][s2.charAt(j)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
-        i = m;
+        /*i = m;
         j = n;
         while (i > 0 && j > 0) {
             if (matrix[i][j] == up[i][j]) {
@@ -724,7 +731,8 @@ public class ProteinAlignment {
                 i = i - 1;
                 j = j - 1;
             }
-        }        
-        return (match_score / max_score)*(length/Math.min(m,n));
+        }      
+        return (match_score / max_score)*(length/Math.min(m,n));*/
+        return matrix[m][n] / max_score;
     }
 }

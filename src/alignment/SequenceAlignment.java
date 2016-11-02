@@ -18,7 +18,7 @@ public class SequenceAlignment {
     public static int MISMATCH_SCORE = -2;
     public static int GAP_OPEN = -2;
     public static int GAP_EXT = -1;
-    public static double THRESHOLD = 0.75;
+    public static double THRESHOLD = 0.9;
     
     /**
      * The constructor of the class
