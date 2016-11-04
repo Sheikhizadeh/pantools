@@ -67,7 +67,8 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
-    public static double LEN_FACTOR = 0.3;
+    public double LEN_FACTOR = 0.3;
+    public double THRESHOLD = 0.8;
 
     /**
      * Implements a comparator for integer arrays of size two
@@ -444,13 +445,18 @@ public class AnnotationLayer {
     /**
      * Groups the highly similar genes together
      */
-    public void group_homologs(String PATH) {
-        int i, j, num_coding_groups=0, num_noncoding_groups=0, total_genes=0, group_size, num_genes,trsc;
+    public void group_homologs(String[] args) {
+        int num_coding_groups=0, num_noncoding_groups=0, total_genes=0, group_size, num_genes,trsc;
         int[] copy_number;
         Node group_node, gene_node, current_gene_node;
         ResourceIterator<Node> genes_iterator;
-        boolean found;
         double max_similarity, similarity;
+        String PATH = args[1];
+        if (args.length > 2){
+            THRESHOLD = Double.parseDouble(args[2]);
+            if (args.length > 3)
+                LEN_FACTOR = Double.parseDouble(args[3]);
+        }
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
                     .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
@@ -459,14 +465,13 @@ public class AnnotationLayer {
             genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
             Queue<Node> gene_nodes = new LinkedList(); 
             Queue<Node> queue = new LinkedList();
-            Iterator<Node> gene_nodes_iterator;
             PriorityQueue<Long> pq = new PriorityQueue();
-            SequenceAlignment seq_aligner = new SequenceAlignment();
-            ProteinAlignment pro_aligner = new ProteinAlignment();
+            SequenceAlignment seq_aligner = new SequenceAlignment(-2.0,-1.0,4.0,-2.0,1000);
+            ProteinAlignment pro_aligner = new ProteinAlignment(-1.0,0.25,1000);
             try (Transaction tx1 = graphDb.beginTx()) {
                 num_genes = (int)graphDb.findNodes(pangenome_label).next().getProperty("num_genes");
                 genes_iterator = graphDb.findNodes(gene_label);
-                System.out.println("Grouping " + num_genes +" genes, THRESHOLD="+pro_aligner.THRESHOLD+" LEN_FACTOR="+LEN_FACTOR);
+                System.out.println("Grouping " + num_genes +" genes, THRESHOLD="+THRESHOLD+" LEN_FACTOR="+LEN_FACTOR);
                 System.out.println("genes\tcoding_groups\tnoncoding_groups");
                 while (genes_iterator.hasNext()) {
                     try (Transaction tx2 = graphDb.beginTx()) {
@@ -629,7 +634,7 @@ public class AnnotationLayer {
                                         if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)*LEN_FACTOR){
                                             similarity = pro_aligner.get_similarity(p1, p2);
                                             gene_node.createRelationshipTo(current_gene_node, RelTypes.resembles).setProperty("score", similarity);
-                                            if ( similarity > pro_aligner.THRESHOLD ) {
+                                            if ( similarity > THRESHOLD ) {
                                                 gene_nodes.add(current_gene_node);
                                                 found = true;
                                                 if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){
@@ -699,7 +704,7 @@ public class AnnotationLayer {
                                     if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)*LEN_FACTOR){
                                         similarity = seq_aligner.get_similarity(RNA_seq1,RNA_seq2);
                                         gene_node.createRelationshipTo(current_gene_node, RelTypes.resembles).setProperty("score", similarity);
-                                        if ( similarity > seq_aligner.THRESHOLD ) {
+                                        if ( similarity > THRESHOLD ) {
                                             gene_nodes.add(current_gene_node);
                                             found = true;
                                             if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){

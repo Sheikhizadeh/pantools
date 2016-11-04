@@ -50,7 +50,6 @@ public class Pantools {
     public static Label coding_RNA_label = DynamicLabel.label("coding_RNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
-    public static Label superfamily_lable = DynamicLabel.label("superfamily");
     public static Label coding_group_lable = DynamicLabel.label("coding_group");
     public static Label noncoding_group_lable = DynamicLabel.label("noncoding_group");
 
@@ -114,7 +113,7 @@ public class Pantools {
                 annLayer.annotate(args[2],args[1]);
                 break;
             case "group":
-                annLayer.group_homologs(args[1]);
+                annLayer.group_homologs(args);
                 break;
             case "compare":
                 seqLayer.compare_pangenomes(args[1], args[2]);

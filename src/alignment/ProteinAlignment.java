@@ -13,15 +13,17 @@ public class ProteinAlignment {
     private double up[][];
     private double left[][];
     public int alignment_length;
-    public static int MAX_LENGTH = 1000;
-    public static double GAP_OPEN = -1;
-    public static double GAP_EXT = -0.25;
-    public static double THRESHOLD = 0.8; 
+    public static int MAX_LENGTH;
+    public static double GAP_OPEN;
+    public static double GAP_EXT;
     
     /**
      * The constructor of the class
      */
-    public ProteinAlignment() {
+    public ProteinAlignment(double gap_open, double gap_ext, int max_length) {
+        MAX_LENGTH = max_length;
+        GAP_OPEN = gap_open;
+        GAP_EXT = gap_ext;
     // initialize matrixes
         matrix = new double[MAX_LENGTH+1][MAX_LENGTH+1];
         up = new double[MAX_LENGTH+1][MAX_LENGTH+1];

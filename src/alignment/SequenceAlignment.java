@@ -13,17 +13,23 @@ public class SequenceAlignment {
     private double up[][];
     private double left[][];
     public int alignment_length;
-    public static int MAX_LENGTH = 1000;
-    public static int MATCH_SCORE = 4;
-    public static int MISMATCH_SCORE = -2;
-    public static int GAP_OPEN = -2;
-    public static int GAP_EXT = -1;
-    public static double THRESHOLD = 0.8;
+
+    public  double GAP_OPEN = -2;
+    public  double GAP_EXT = -1;
+    public  double MATCH_SCORE = 4;
+    public  double MISMATCH_SCORE = -2;
+    
+    public  int MAX_LENGTH = 1000;
     
     /**
      * The constructor of the class
      */
-    public SequenceAlignment() {
+    public SequenceAlignment(double gap_open, double gap_ext, double match_score, double mismatch_score, int max_length) {
+        MAX_LENGTH = max_length;
+        GAP_OPEN = gap_open;
+        GAP_EXT = gap_ext;        
+        MATCH_SCORE = match_score;
+        MISMATCH_SCORE = mismatch_score;
     // initialize matrixes
         matrix = new double[MAX_LENGTH+1][MAX_LENGTH+1];
         up = new double[MAX_LENGTH+1][MAX_LENGTH+1];
