@@ -55,8 +55,8 @@ import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.broken_protein_label;
 import static pantools.Pantools.coding_RNA_label;
 import static pantools.Pantools.coding_gene_label;
-import static pantools.Pantools.family_lable;
-import static pantools.Pantools.group_lable;
+import static pantools.Pantools.coding_group_lable;
+import static pantools.Pantools.noncoding_group_lable;
 import static pantools.Pantools.reverse_complement;
 import static pantools.Pantools.write_fasta;
 
@@ -67,7 +67,7 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
-    public static double LEN_FACTOR = 0.5;
+    public static double LEN_FACTOR = 0.3;
 
     /**
      * Implements a comparator for integer arrays of size two
@@ -265,7 +265,7 @@ public class AnnotationLayer {
                                     log.append(sequence_id).append(" missed in genome ").append(address[0]).append("\n"); // usually organal genes
                                 }
                                 if (i % 500 == 1)
-                                    System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs );
+                                    System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
                             }// for trsc
                             tx2.success();
                         } // tx2
@@ -305,7 +305,7 @@ public class AnnotationLayer {
                     }
                     in.close();
                     out.close();
-                    System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs );
+                    System.out.println("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
                 } // for genomes
                 gff_files.close();
             } catch (IOException ioe) {
@@ -445,7 +445,7 @@ public class AnnotationLayer {
      * Groups the highly similar genes together
      */
     public void group_homologs(String PATH) {
-        int i, j, num_groups=0, total_genes=0, group_size, num_genes,trsc;
+        int i, j, num_coding_groups=0, num_noncoding_groups=0, total_genes=0, group_size, num_genes,trsc;
         int[] copy_number;
         Node group_node, gene_node, current_gene_node;
         ResourceIterator<Node> genes_iterator;
@@ -466,8 +466,8 @@ public class AnnotationLayer {
             try (Transaction tx1 = graphDb.beginTx()) {
                 num_genes = (int)graphDb.findNodes(pangenome_label).next().getProperty("num_genes");
                 genes_iterator = graphDb.findNodes(gene_label);
-                System.out.println("Grouping " + num_genes +" genes...");
-                System.out.println("genes\tgroups");
+                System.out.println("Grouping " + num_genes +" genes, THRESHOLD="+pro_aligner.THRESHOLD+" LEN_FACTOR="+LEN_FACTOR);
+                System.out.println("genes\tcoding_groups\tnoncoding_groups");
                 while (genes_iterator.hasNext()) {
                     try (Transaction tx2 = graphDb.beginTx()) {
                         for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/100; ++trsc) {
@@ -484,8 +484,13 @@ public class AnnotationLayer {
                                         queue.add(gene_node);
                                         continue;
                                     }
-                                    group_node = graphDb.createNode(gene_node.hasLabel(coding_gene_label)?family_lable:group_lable);
-                                    ++num_groups;
+                                    if (gene_node.hasLabel(coding_gene_label)){
+                                        group_node = graphDb.createNode(coding_group_lable);
+                                        ++num_coding_groups;
+                                    } else {
+                                        group_node = graphDb.createNode(noncoding_group_lable);
+                                        ++num_noncoding_groups;
+                                    }
                                     group_node.setProperty("num_members", group_size );
                                     copy_number = new int[genomeDb.num_genomes+1];
                                 }
@@ -503,11 +508,11 @@ public class AnnotationLayer {
                                     copy_number[((int[])current_gene_node.getProperty("address"))[0]] += 1;
                                 }
                                 group_node.setProperty("copy_number_variation", copy_number);
-                                if (num_groups % 10 == 1 )
+                                if (num_coding_groups % 10 == 1 )
                                     break;
                             }
                         }// for
-                        System.out.print("\r" + total_genes + "\t" + num_groups);
+                        System.out.print("\r" + total_genes + "\t" + num_coding_groups + "\t" + num_noncoding_groups);
                         tx2.success();
                     }// transaction 2
                 } // while 
@@ -533,9 +538,14 @@ public class AnnotationLayer {
                                     group_node.setProperty("copy_number_variation", copy_number);
                                     group_node.setProperty("num_members", (int)group_node.getProperty("num_members")+1 );
                                 } else {
-                                    group_node = graphDb.createNode(gene_node.hasLabel(coding_gene_label)?family_lable:group_lable);
+                                    if (gene_node.hasLabel(coding_gene_label)){
+                                        group_node = graphDb.createNode(coding_group_lable);
+                                        ++num_coding_groups;
+                                    } else {
+                                        group_node = graphDb.createNode(noncoding_group_lable);
+                                        ++num_noncoding_groups;
+                                    }
                                     total_genes += 2;
-                                    ++num_groups;
                                     group_node.createRelationshipTo(gene_node, RelTypes.contains);
                                     group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
                                     copy_number = new int[genomeDb.num_genomes+1];
@@ -545,9 +555,14 @@ public class AnnotationLayer {
                                     group_node.setProperty("num_members", 2 );
                                 }
                         } else {
-                            group_node = graphDb.createNode(gene_node.hasLabel(coding_gene_label)?family_lable:group_lable);
+                            if (gene_node.hasLabel(coding_gene_label)){
+                                group_node = graphDb.createNode(coding_group_lable);
+                                ++num_coding_groups;
+                            } else {
+                                group_node = graphDb.createNode(noncoding_group_lable);
+                                ++num_noncoding_groups;
+                            }
                             total_genes += 1;
-                            ++num_groups;
                             group_node.createRelationshipTo(gene_node, RelTypes.contains);
                             copy_number = new int[genomeDb.num_genomes+1];
                             copy_number[((int[])gene_node.getProperty("address"))[0]] += 1;
@@ -557,7 +572,7 @@ public class AnnotationLayer {
                     }
                 }
                 tx1.success();
-                System.out.println("\r" + total_genes + "\t" + num_groups);
+                System.out.println("\r" + total_genes + "\t" + num_coding_groups + "\t" + num_noncoding_groups);
             } // transaction 1
         } else {
             System.out.println("pangenome database not found!");

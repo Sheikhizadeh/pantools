@@ -49,10 +49,10 @@ public class Pantools {
     public static Label RNA_label = DynamicLabel.label("RNA");
     public static Label coding_RNA_label = DynamicLabel.label("coding_RNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
-    public static Label family_lable = DynamicLabel.label("family");
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
     public static Label superfamily_lable = DynamicLabel.label("superfamily");
-    public static Label group_lable = DynamicLabel.label("group");
+    public static Label coding_group_lable = DynamicLabel.label("coding_group");
+    public static Label noncoding_group_lable = DynamicLabel.label("noncoding_group");
 
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,

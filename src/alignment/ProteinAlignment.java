@@ -16,7 +16,7 @@ public class ProteinAlignment {
     public static int MAX_LENGTH = 1000;
     public static double GAP_OPEN = -1;
     public static double GAP_EXT = -0.25;
-    public static double THRESHOLD = 0.9; 
+    public static double THRESHOLD = 0.8; 
     
     /**
      * The constructor of the class
@@ -661,23 +661,23 @@ public class ProteinAlignment {
      */
     public AlignmentBlock get_alignment(String s1, String s2) {
         int i, j;
-        int m = Math.min(s1.length() - 1, MAX_LENGTH), n = Math.min(s2.length() - 1, MAX_LENGTH);
+        int m = Math.min(s1.length(), MAX_LENGTH), n = Math.min(s2.length(), MAX_LENGTH);
         AlignmentBlock alignment = new AlignmentBlock();
         alignment.score = get_similarity(s1, s2);
         i = m;
         j = n;
         while (i > 0 && j > 0) {
             if (matrix[i][j] == up[i][j]) {
-                alignment.one.append( s1.charAt(i) );
+                alignment.one.append( s1.charAt(i-1) );
                 alignment.two.append( '-' );
                 i = i - 1;
             } else if (matrix[i][j] == left[i][j]) {
                 alignment.one.append( '-' );
-                alignment.two.append( s2.charAt(j) );
+                alignment.two.append( s2.charAt(j-1) );
                 j = j - 1;
             } else {
-                alignment.one.append( s1.charAt(i) );
-                alignment.two.append( s2.charAt(j) );
+                alignment.one.append( s1.charAt(i-1) );
+                alignment.two.append( s2.charAt(j-1) );
                 i = i - 1;
                 j = j - 1;
             }
@@ -694,13 +694,13 @@ public class ProteinAlignment {
     public double get_similarity(String s1, String s2) {
         int i, j;
         double match_score = 0, max_score = 0, length = 0;
-        int m = Math.min(s1.length() - 1, MAX_LENGTH), n = Math.min(s2.length() - 1, MAX_LENGTH);
+        int m = Math.min(s1.length(), MAX_LENGTH), n = Math.min(s2.length(), MAX_LENGTH);
         if ( m > n )
-            for (i=0; i<=m; ++i)
-                max_score += match[s1.charAt(i)][s1.charAt(i)];
+            for (i=1; i<=m; ++i)
+                max_score += match[s1.charAt(i-1)][s1.charAt(i-1)];
         else
-            for (j=0; j<=n; ++j)
-                max_score += match[s2.charAt(j)][s2.charAt(j)];
+            for (j=1; j<=n; ++j)
+                max_score += match[s2.charAt(j-1)][s2.charAt(j-1)];
             
         for (i = 1; i <= m; i++) {
             left[i][0] = -1000;
@@ -714,7 +714,7 @@ public class ProteinAlignment {
             for (j = 1; j <= n; j++) {
                 up[i][j] = Math.max( up[i-1][j] + GAP_EXT , matrix[i-1][j]+GAP_OPEN + GAP_EXT);
                 left[i][j] = Math.max( left[i][j-1] + GAP_EXT , matrix[i][j-1]+GAP_OPEN + GAP_EXT);
-                matrix[i][j] = Math.max( match[s1.charAt(i)][s2.charAt(j)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
+                matrix[i][j] = Math.max( match[s1.charAt(i-1)][s2.charAt(j-1)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
         /*i = m;
