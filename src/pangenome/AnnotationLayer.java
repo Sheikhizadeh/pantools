@@ -70,7 +70,7 @@ import static pantools.Pantools.write_fasta;
  */
 public class AnnotationLayer {
     public double LEN_FACTOR = 0.3;
-    public double THRESHOLD = 0.8;
+    public double THRESHOLD = 0.9;
 
     /**
      * Implements a comparator for integer arrays of size two
@@ -451,7 +451,6 @@ public class AnnotationLayer {
         int num_coding_groups=0, num_noncoding_groups=0, total_genes=0, group_size, num_genes,trsc;
         Node group_node, gene_node, current_gene_node = null;
         ResourceIterator<Node> genes_iterator;
-        double max_similarity, similarity;
         String PATH = args[1];
         if (args.length > 2){
             THRESHOLD = Double.parseDouble(args[2]);
@@ -465,7 +464,7 @@ public class AnnotationLayer {
             startTime = System.currentTimeMillis();
             genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
             Queue<Node> gene_nodes = new LinkedList(); 
-            Queue<Node> queue = new LinkedList();
+            //Queue<Node> queue = new LinkedList();
             PriorityQueue<Long> pq = new PriorityQueue();
             SequenceAlignment seq_aligner = new SequenceAlignment(-2.0,-1.0,4.0,-2.0,1000);
             ProteinAlignment pro_aligner = new ProteinAlignment(-1.0,0.25,1000);
@@ -488,7 +487,15 @@ public class AnnotationLayer {
                                 group_size = gene_nodes.size()+1;
                                 if (group_node == null){
                                     if (group_size == 1){
-                                        queue.add(gene_node);
+                                        if (gene_node.hasLabel(coding_gene_label)){
+                                            group_node = graphDb.createNode(coding_group_lable);
+                                            ++num_coding_groups;
+                                        } else {
+                                            group_node = graphDb.createNode(noncoding_group_lable);
+                                            ++num_noncoding_groups;
+                                        }
+                                        total_genes += 1;
+                                        group_node.createRelationshipTo(gene_node, RelTypes.contains);
                                         continue;
                                     }
                                     if (gene_node.hasLabel(coding_gene_label)){
@@ -514,50 +521,10 @@ public class AnnotationLayer {
                         tx2.success();
                     }// transaction 2
                 } // while 
-                while (!queue.isEmpty()){
-                    gene_node = queue.remove();
-                    if (!gene_node.hasRelationship(Direction.INCOMING, RelTypes.contains)){
-                        max_similarity = 0;
-                        for (Relationship r: gene_node.getRelationships(RelTypes.resembles)){
-                            similarity = (double)r.getProperty("score");
-                            if(similarity > max_similarity){
-                                max_similarity = similarity;
-                                current_gene_node = r.getOtherNode(gene_node);
-                            }
-                        }
-                        if (max_similarity > 0.7){
-                                if (current_gene_node.hasRelationship(Direction.INCOMING, RelTypes.contains)){
-                                    group_node = current_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
-                                    total_genes += 1;
-                                    group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                                } else {
-                                    if (gene_node.hasLabel(coding_gene_label)){
-                                        group_node = graphDb.createNode(coding_group_lable);
-                                        ++num_coding_groups;
-                                    } else {
-                                        group_node = graphDb.createNode(noncoding_group_lable);
-                                        ++num_noncoding_groups;
-                                    }
-                                    total_genes += 2;
-                                    group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                                    group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
-                                }
-                        } else {
-                            if (gene_node.hasLabel(coding_gene_label)){
-                                group_node = graphDb.createNode(coding_group_lable);
-                                ++num_coding_groups;
-                            } else {
-                                group_node = graphDb.createNode(noncoding_group_lable);
-                                ++num_noncoding_groups;
-                            }
-                            total_genes += 1;
-                            group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                        }
-                    }
-                }
                 tx1.success();
                 System.out.println("\r" + total_genes + "\t\t" + num_coding_groups + "\t\t" + num_noncoding_groups);
                 set_group_properties();
+                drop_edges(RelTypes.resembles);
             } // transaction 1
         } else {
             System.out.println("pangenome database not found!");
@@ -734,7 +701,7 @@ public class AnnotationLayer {
     /**
      * Remove the occurrence arrays of the edges.
      */    
-    void drop_edges(RelationshipType type, double min_threshold) {
+    void drop_edges(RelationshipType type) {
         int i;
         ResourceIterator<Relationship> rels;
         Relationship r;
@@ -746,7 +713,7 @@ public class AnnotationLayer {
             try (Transaction tx = graphDb.beginTx()) {
                 for (i = 0; i < MAX_TRANSACTION_SIZE && rels.hasNext(); ++i) {
                     r = rels.next();
-                    if (r.isType(type) && (double)r.getProperty("score") < min_threshold)
+                    if (r.isType(type))
                         r.delete();
                 }
                 tx.success();
@@ -758,7 +725,7 @@ public class AnnotationLayer {
     /**
      */    
     void set_group_properties() {
-        int i, num_members, num_super_groups = 0;
+        int i, num_members, num_groups, num_super_groups = 0;
         int[] copy_number = new int[genomeDb.num_genomes+1];
         long group_id, current_group_id;
         double similarity;
@@ -779,15 +746,16 @@ public class AnnotationLayer {
                             ++num_members;
                             gene_node = rel.getEndNode();
                             ++copy_number[((int[])gene_node.getProperty("address"))[0]];
-                            for (Relationship resemble: gene_node.getRelationships(RelTypes.resembles)){
-                                similarity = (double)resemble.getProperty("score");
-                                if (similarity > 0.7){
-                                    mate_gene_node = resemble.getOtherNode(gene_node);
-                                    mate_group_node = mate_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
-                                    if (!mate_group_node.equals(group_node) && !mate_group_node.hasRelationship(RelTypes.contains, Direction.INCOMING))
-                                        pq.add(mate_group_node.getId());
+                            if (!group_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) {
+                                for (Relationship resemble: gene_node.getRelationships(RelTypes.resembles)){
+                                    similarity = (double)resemble.getProperty("score");
+                                    if (similarity > 0.7){
+                                        mate_gene_node = resemble.getOtherNode(gene_node);
+                                        mate_group_node = mate_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
+                                        if (!mate_group_node.equals(group_node) && !mate_group_node.hasRelationship(RelTypes.contains, Direction.INCOMING))
+                                            pq.add(mate_group_node.getId());
+                                    }
                                 }
-                                resemble.delete();
                             }
                         }
                         if (!pq.isEmpty()) {
@@ -795,12 +763,16 @@ public class AnnotationLayer {
                             super_node = graphDb.createNode(super_group_lable);
                             super_node.createRelationshipTo(group_node, RelTypes.contains);
                             group_id = -1l;
+                            num_groups = 1;
                             while (!pq.isEmpty()) {
                                 current_group_id = pq.remove();
-                                if (group_id != current_group_id)
+                                if (group_id != current_group_id){
                                     super_node.createRelationshipTo(graphDb.getNodeById(current_group_id), RelTypes.contains);
+                                    ++num_groups;
+                                }
                                 group_id = current_group_id;
                             }
+                            super_node.setProperty("num_groups", num_groups);
                         }                        
                         group_node.setProperty("copy_number_variation", copy_number);
                         group_node.setProperty("num_members", num_members);
