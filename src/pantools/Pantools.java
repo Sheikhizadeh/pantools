@@ -52,6 +52,7 @@ public class Pantools {
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
     public static Label coding_group_lable = DynamicLabel.label("coding_group");
     public static Label noncoding_group_lable = DynamicLabel.label("noncoding_group");
+    public static Label super_group_lable = DynamicLabel.label("super_group");
 
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
