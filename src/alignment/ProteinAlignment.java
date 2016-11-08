@@ -13,12 +13,15 @@ public class ProteinAlignment {
     private double up[][];
     private double left[][];
     public int alignment_length;
-    public static int MAX_LENGTH;
-    public static double GAP_OPEN;
-    public static double GAP_EXT;
+    public int MAX_LENGTH;
+    public double GAP_OPEN;
+    public double GAP_EXT;
     
     /**
      * The constructor of the class
+     * @param gap_open
+     * @param gap_ext
+     * @param max_length
      */
     public ProteinAlignment(double gap_open, double gap_ext, int max_length) {
         MAX_LENGTH = max_length;

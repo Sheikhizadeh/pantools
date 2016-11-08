@@ -14,15 +14,20 @@ public class SequenceAlignment {
     private double left[][];
     public int alignment_length;
 
-    public  double GAP_OPEN = -2;
-    public  double GAP_EXT = -1;
-    public  double MATCH_SCORE = 4;
-    public  double MISMATCH_SCORE = -2;
+    public double GAP_OPEN;
+    public double GAP_EXT;
+    public double MATCH_SCORE;
+    public double MISMATCH_SCORE;
     
-    public  int MAX_LENGTH = 1000;
+    public int MAX_LENGTH;
     
     /**
      * The constructor of the class
+     * @param gap_open
+     * @param gap_ext
+     * @param match_score
+     * @param max_length
+     * @param mismatch_score
      */
     public SequenceAlignment(double gap_open, double gap_ext, double match_score, double mismatch_score, int max_length) {
         MAX_LENGTH = max_length;
