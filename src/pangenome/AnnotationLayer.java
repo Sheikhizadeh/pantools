@@ -69,7 +69,7 @@ import static pantools.Pantools.write_fasta;
  */
 public class AnnotationLayer {
     public double LEN_FACTOR = 0.3;
-    public double THRESHOLD = 0.8;
+    public double THRESHOLD = 0.9;
 
     /**
      * Implements a comparator for integer arrays of size two
