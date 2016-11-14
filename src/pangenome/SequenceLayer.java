@@ -264,7 +264,7 @@ public class SequenceLayer {
             String record;
             String line;
             boolean strand;
-            int i, j, num_genes;
+            int i, j, num_genes, begin,end;
             int[] address;
             String[] fields;
             StringBuilder gene_seq;
@@ -278,7 +278,6 @@ public class SequenceLayer {
                 tx.success();
             }
             num_genes = 0;
-            address = new int[4];
             gene_seq = new StringBuilder();
             try {
                 in = new BufferedReader(new FileReader(annotation_records_file));
@@ -304,7 +303,7 @@ public class SequenceLayer {
                         if (line.equals("")) {
                             continue;
                         }
-                        fields = line.split("\\t");
+                        fields = line.trim().split("\\t");
                         records[i] = fields[fields.length - 1]; // attribute field
                         ++i;
                     }
@@ -319,7 +318,7 @@ public class SequenceLayer {
                     // for all the genes in the database    
                     for (i = j = 0, gene_nodes = graphDb.findNodes(gene_label); gene_nodes.hasNext();) {
                         gene = gene_nodes.next();
-                        record = (String) gene.getProperty("attribute");
+                        record = ((String[]) gene.getProperty("fields"))[8];
                         if (record != null && Arrays.binarySearch(records, record) >= 0) // gene is in the records
                         {
                             ++i;
@@ -327,12 +326,14 @@ public class SequenceLayer {
                             start = graphDb.getNodeById((long)gene.getProperty("start_node_id"));
                             rstart = graphDb.getRelationshipById((long)gene.getProperty("start_edge_id"));
                             address = (int[]) gene.getProperty("address");
+                            begin = address[2];
+                            end = address[3];
                             strand = gene.getProperty("strand").toString().equals("+");
                             extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("starts_at"), -1l), address);//
                             //genomeDb=new sequence_database(PATH+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
-                            if (gene_seq.length() == address[3] - address[2] + 1) {
+                            if (gene_seq.length() == end - begin + 1) {
                                 ++j;
                                 out.write(">" + record + "\n");
                                 if (strand) {
@@ -346,7 +347,7 @@ public class SequenceLayer {
                             gene_seq.setLength(0);
                         }
                         if (i % (num_genes / 100 + 1) == 0) {
-                            System.out.print((long) i * 100 / num_genes + 1 + "%r");
+                            System.out.print((long) i * 100 / num_genes + 1 + "%\r");
                         }
                     }//for i
                     System.out.println(j + " out of " + i + " found genes retrieved successfully.");
@@ -418,8 +419,7 @@ public class SequenceLayer {
                         address[2] = Integer.parseInt(fields[2]);
                         address[3] = Integer.parseInt(fields[3]);
                         start_ptr = locate(address);
-                        start_node = graphDb.getNodeById(start_ptr.node_id);
-                        extract_sequence(seq, new IndexPointer(start_node.getId(), start_ptr.canonical, start_ptr.position, -1l), address);
+                        extract_sequence(seq, start_ptr, address);
                         out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
                         write_fasta(out, seq.toString(), 70);
                         seq.setLength(0);
@@ -637,7 +637,6 @@ public class SequenceLayer {
         int begin = address[2] - 1, end = address[3] - 1;
         int loc, node_len, neighbor_len, seq_len, position;
         String rel_name;
-        
         seq_len = end - begin + 1;
         seq.setLength(0);
         loc = begin;
@@ -676,7 +675,6 @@ public class SequenceLayer {
                 else 
                     loc += append_rev(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
             node = neighbor;
-            node_len = (int) node.getProperty("length");
         } // while
     }
   
@@ -690,10 +688,11 @@ public class SequenceLayer {
     public static Relationship get_outgoing_edge(Node current_node, int[] address) {
         String origin;
         int[] occurrence;
-        origin = address[0] + "_" + address[1];
+        int genome = address[0], sequence = address[1];
+        origin = genome + "_" + sequence;
         for (Relationship r_out : current_node.getRelationships(Direction.OUTGOING)) {
             occurrence = (int[])r_out.getProperty(origin, null);
-            if (occurrence!=null) {
+            if (occurrence != null) {
                 if (Arrays.binarySearch(occurrence, address[2])>=0)
                     return r_out;
             }
@@ -733,14 +732,16 @@ public class SequenceLayer {
      * @param address An integer array lile {genome_number, sequence_number, begin_position, end_position}
      * @return A pointer to the genomic position in the pangenome
      */
-    public static IndexPointer locate(int[] address) {
-        int loc, low, high, mid , node_len, position = address[2] - 1;
+    public static IndexPointer locate(int[] addr) {
+        int loc, low, high, mid , node_len, position;
         boolean forward;
         Node node, neighbor, seq_node;
         Relationship rel;
         String anchor_sides;
         long[] anchor_nodes;
         int[] anchor_positions;
+        int[] address = Arrays.copyOf(addr,addr.length);
+        position = address[2] - 1;
         seq_node = graphDb.findNode(sequence_label, "number", address[0]+"_"+address[1]);
         anchor_nodes = (long[]) seq_node.getProperty("anchor_nodes");
         anchor_positions = (int[]) seq_node.getProperty("anchor_positions");

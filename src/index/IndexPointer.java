@@ -45,11 +45,15 @@ public class IndexPointer {
     /**
      * Clears the content of the pointer.
      */
-    void reset() {
+    public void reset() {
         node_id = -1L;
         canonical = false;
         position = -1;
         next_index = -1L;
+    }
+    
+    public String ToString(){
+        return Long.toString(node_id)+Boolean.toString(canonical)+Integer.toString(position);
     }
 
 }
