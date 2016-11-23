@@ -68,8 +68,8 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
-    public double LEN_FACTOR = 0.3;
-    public double THRESHOLD = 0.9;
+    public double LEN_FACTOR = 0.5;
+    public double THRESHOLD = 0.75;
 
     /**
      * Implements a comparator for integer arrays of size two
@@ -530,6 +530,84 @@ public class AnnotationLayer {
             System.exit(0);
         }
     }
+
+    public void cnv_report(String PATH, String keyword) {
+        /*int num_coding_groups=0, num_noncoding_groups=0, total_genes=0, group_size, num_genes,trsc;
+        Node group_node, current_gene_node = null;
+        ResourceIterator<Node> groups_iterator;
+        if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
+            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
+                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+            registerShutdownHook(graphDb);
+            startTime = System.currentTimeMillis();
+            genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
+            Queue<Node> gene_nodes = new LinkedList(); 
+            PriorityQueue<Long> pq = new PriorityQueue();
+            SequenceAlignment seq_aligner = new SequenceAlignment(-2.0,-1.0,4.0,-2.0,1000);
+            ProteinAlignment pro_aligner = new ProteinAlignment(-1.0,0.25,1000);
+            try (Transaction tx1 = graphDb.beginTx()) {
+                groups_iterator = graphDb.findNodes(coding_group_lable);
+                System.out.println("THRESHOLD="+THRESHOLD+"\tLEN_FACTOR="+LEN_FACTOR);
+                System.out.println("Grouping " + num_genes +" genes...");
+                System.out.println("genes\t\tcoding_groups\t\tnoncoding_groups");
+                while (groups_iterator.hasNext()) {
+                    try (Transaction tx2 = graphDb.beginTx()) {
+                        for (trsc = 0; groups_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/10; ++trsc) {
+                            group_node=groups_iterator.next();
+                        // To avoid having one gene in different groups    
+                            if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { 
+                                if (gene_node.hasLabel(coding_gene_label) )
+                                    group_node = get_homologs(gene_nodes, pq, gene_node, pro_aligner);
+                                else 
+                                    group_node = get_gene_family(gene_nodes, pq, gene_node, seq_aligner);
+                                group_size = gene_nodes.size()+1;
+                                if (group_node == null){
+                                    if (group_size == 1){
+                                        if (gene_node.hasLabel(coding_gene_label)){
+                                            group_node = graphDb.createNode(coding_group_lable);
+                                            ++num_coding_groups;
+                                        } else {
+                                            group_node = graphDb.createNode(noncoding_group_lable);
+                                            ++num_noncoding_groups;
+                                        }
+                                        total_genes += 1;
+                                        group_node.createRelationshipTo(gene_node, RelTypes.contains);
+                                        continue;
+                                    }
+                                    if (gene_node.hasLabel(coding_gene_label)){
+                                        group_node = graphDb.createNode(coding_group_lable);
+                                        ++num_coding_groups;
+                                    } else {
+                                        group_node = graphDb.createNode(noncoding_group_lable);
+                                        ++num_noncoding_groups;
+                                    }
+                                }
+                                total_genes += group_size;
+                            // Because the gene has not been added to the group itself    
+                                group_node.createRelationshipTo(gene_node, RelTypes.contains);
+                                while (!gene_nodes.isEmpty()) {
+                                    current_gene_node = gene_nodes.remove();
+                                    group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
+                                }
+                                if (num_coding_groups % 10 == 1 )
+                                    break;
+                            }
+                        }// for
+                        System.out.print("\r" + total_genes + "\t\t" + num_coding_groups + "\t\t" + num_noncoding_groups);
+                        tx2.success();
+                    }// transaction 2
+                } // while 
+                tx1.success();
+                System.out.println("\r" + total_genes + "\t\t" + num_coding_groups + "\t\t" + num_noncoding_groups);
+                finalize_groups();
+                drop_edges_of_type(RelTypes.resembles);
+            } // transaction 1
+        } else {
+            System.out.println("pangenome database not found!");
+            System.exit(0);
+        }*/
+    }
+    
 
     /**
      * 

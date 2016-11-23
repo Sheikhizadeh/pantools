@@ -115,6 +115,9 @@ public class Pantools {
             case "group":
                 annLayer.group_homologs(args);
                 break;
+            case "cnv":
+                annLayer.cnv_report(args[1], args[2]);
+                break;
             case "compare":
                 seqLayer.compare_pangenomes(args[1], args[2]);
                 break;
