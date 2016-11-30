@@ -475,7 +475,7 @@ public class AnnotationLayer {
                 System.out.println("genes\t\tcoding_groups\t\tnoncoding_groups");
                 while (genes_iterator.hasNext()) {
                     try (Transaction tx2 = graphDb.beginTx()) {
-                        for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/10; ++trsc) {
+                        for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
                             gene_node=genes_iterator.next();
                         // To avoid having one gene in different groups    
                             if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { 
@@ -552,7 +552,7 @@ public class AnnotationLayer {
                 System.out.println("genes\t\tcoding_groups\t\tnoncoding_groups");
                 while (groups_iterator.hasNext()) {
                     try (Transaction tx2 = graphDb.beginTx()) {
-                        for (trsc = 0; groups_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE/10; ++trsc) {
+                        for (trsc = 0; groups_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
                             group_node=groups_iterator.next();
                         // To avoid having one gene in different groups    
                             if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { 

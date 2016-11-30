@@ -1206,6 +1206,7 @@ public class SequenceLayer {
                 k_mer = fwd_kmer.canonical ? fwd_kmer : rev_kmer;
             } else if (position == seq_len - 1) {
                 finish = true;
+                ++position; // to acheive the right length for the degenerate node
             }
         } while (fwd_code > 3 && position < seq_len - 1);
     }
@@ -1217,7 +1218,7 @@ public class SequenceLayer {
     private void create_degenerate(int[] address) {
         ++num_degenerates;
         degenerate_node = graphDb.createNode(degenerate_label);
-        //System.out.println("create_degenerate "+degenerate_node.getId()+" position "+position);
+        //System.out.println("create_degenerate:"+degenerate_node.getId()+" position:"+position+" begin:"+address[2]);
         degenerate_node.setProperty("address", address);
         degenerate_node.setProperty("length", position - address[2]);
         num_bases += (position - address[2]);
@@ -1347,7 +1348,7 @@ public class SequenceLayer {
     void annotate_nodes() {
         int trsc, i, len, m, neighbor_length = 0, count;
         char node_side, neighbor_side = 'F';
-        long seq_len;
+        long length;
         long[] anchor_nodes;
         int[] anchor_positions;
         int[] initial_coordinate = new int[1];
@@ -1360,44 +1361,41 @@ public class SequenceLayer {
         int[] positions;
         int[] new_positions;
         int[] address = new int[3], addr = null;
-        boolean is_node = false, is_degenerate = false;
+        boolean is_node = false, is_degenerate = false, found = true;
         System.out.println("Localizing nodes... ");
         for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                 System.out.print("\rsequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
                 origin = address[0] + "_" + address[1];
-                seq_len = genomeDb.sequence_length[address[0]][address[1]] - 1;
+                length = genomeDb.sequence_length[address[0]][address[1]] - 1;
                 try (Transaction tx = graphDb.beginTx()) {
                     node = seq_node = graphDb.findNode(sequence_label, "number", origin);
                     tx.success();
                 }
                 node_side = 'F';
                 count = 0;
-                for (address[2] = 0; address[2] + K - 1 <= seq_len ;) // K-1 bases of the last node not added
+                for (address[2] = 0; address[2] + K - 1 <= length && found;) // K-1 bases of the last node not added
                 {
                     try (Transaction tx = graphDb.beginTx()) {
-                        for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && address[2] + K - 1 <= seq_len; ++trsc) {
+                        //System.out.println((address[2] + K - 1)+" ? " + length);
+                        for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && address[2] + K - 1 <= length && found; ++trsc) {
+                            found = false;
                             for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
                                 rel_name = r.getType().name();
-                                if (rel_name.charAt(0) != node_side) {
+                                if (rel_name.charAt(0) != node_side)
                                     continue;
-                                }
                                 neighbor = r.getEndNode();
                                 neighbor_side = rel_name.charAt(1);
-                                is_node = is_degenerate = false;
-                                if (neighbor.hasLabel(node_label)) {
-                                    is_node = true;
-                                    neighbor_length = (int) neighbor.getProperty("length");
-                                } else if (neighbor.hasLabel(degenerate_label)) {
-                                    is_degenerate = true;
-                                    neighbor_length = (int) neighbor.getProperty("length");
-                                }
-                                if (is_node || is_degenerate) {
+                                is_node = neighbor.hasLabel(node_label);
+                                is_degenerate = neighbor.hasLabel(degenerate_label);
+                                if (is_node || is_degenerate){
                                     addr = (int[]) neighbor.getProperty("address");
+                                    neighbor_length = (int) neighbor.getProperty("length");
                                 }
                                 if ((is_node && genomeDb.compare(genomeDb, address, addr, K - 1, neighbor_side == 'F' ? K - 1 : neighbor_length - K, 1, neighbor_side == 'F'))
                                         || (is_degenerate && Arrays.equals(addr, address))) {
-                                    //System.out.println("found "+address[2]+" "+seq_len+" "+neighbor.getId());
+                                    //System.out.println("found "+address[2]+" "+neighbor.getId());
+                                    found = true;
                                     positions = (int[]) r.getProperty(origin, null);
                                     if (positions != null) {
                                         len = positions.length;
@@ -1427,8 +1425,8 @@ public class SequenceLayer {
                         tx.success();
                     }
                 }
-                if (address[2] + K - 1 < seq_len) {
-                    System.out.println("not found " + neighbor.getId() + " " + address[2]);
+                if (!found) {
+                    System.out.println("Could not locate position " + address[2] + " from node ID=" + neighbor.getId());
                     System.exit(1);
                 }
                 m = sds.length();

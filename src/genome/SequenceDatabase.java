@@ -5,6 +5,7 @@
  */
 package genome;
 
+//import java.util.regex.*;
 import java.util.*;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -330,7 +331,7 @@ public class SequenceDatabase {
                 havecarry = false;
                 s = 0;
                 while (in.ready()) {
-                    line = in.readLine();
+                    line = in.readLine().toUpperCase();
                     if (line.equals("")) {
                         continue;
                     }
@@ -346,7 +347,6 @@ public class SequenceDatabase {
                         ++s;
                         System.out.print("Sequence " + s + "/" + num_sequences[g] + " of genome " + g + "                 \r");
                     } else {
-                        line = line.toUpperCase();
                         len = line.length();
                         havecarry = (len % 2 == 1);
                         if (havecarry) {
@@ -354,7 +354,7 @@ public class SequenceDatabase {
                             --len;
                         }
                         for (j = 0; j < len; j += 2, ++byte_number) {
-                            genomes_buff[(int) (byte_number / parts_size[0])].put((byte) ((binary[line.charAt(j)] << 4) | binary[line.charAt(j + 1)]));
+                            genomes_buff[(int) (byte_number / parts_size[0])].put((byte)((binary[line.charAt(j)] << 4) | binary[line.charAt(j + 1)]));
                         }
                     }
                 }

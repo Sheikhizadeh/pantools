@@ -37,7 +37,7 @@ public class Pantools {
     public static IndexDatabase indexDb;
     public static SequenceDatabase genomeDb;
     public static SequenceDatabase sequenceDb;
-    public static int MAX_TRANSACTION_SIZE = 1000;    //   The number of transactions to be committed in batch
+    public static int MAX_TRANSACTION_SIZE = 200;    //   The number of transactions to be committed in batch
 
     public static Label pangenome_label = DynamicLabel.label("pangenome");
     public static Label genome_label = DynamicLabel.label("genome");
@@ -89,44 +89,74 @@ public class Pantools {
         System.out.println("------------------------------- PanTools -------------------------------");
         switch (args[0]) {
             case "reconstruct":
+                if (args.length < 3) {
+                    print_help_comment();
+                    System.exit(1);
+                }
                 seqLayer.reconstruct_genomes(args[1],args[2]);
                 break;
             case "build":
                 try{
+                    if (args.length < 4) {
+                        print_help_comment();
+                        System.exit(1);
+                    }
                     K = Integer.parseInt(args[1]);
                     if (K < 6 || K > 256) {
                         System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
                         System.exit(1);
                     }
                     seqLayer.build(args[3],args[2]);
-                    }
-                catch(NumberFormatException nfe)
-                {
+                } catch(NumberFormatException nfe) {
                     print_help_comment();
                     System.exit(1);
                 }
                 break;
             case "add":
+                if (args.length < 3) {
+                    print_help_comment();
+                    System.exit(1);
+                }
                 seqLayer.add(args[2],args[1]);
                 break;
             case "annotate":
+                if (args.length < 3) {
+                    print_help_comment();
+                    System.exit(1);
+                }
                 annLayer.annotate(args[2],args[1]);
                 break;
             case "group":
+                if (args.length < 2) {
+                    print_help_comment();
+                    System.exit(1);
+                }
                 annLayer.group_homologs(args);
                 break;
             case "cnv":
+                if (args.length < 3) {
+                    print_help_comment();
+                    System.exit(1);
+                }
                 annLayer.cnv_report(args[1], args[2]);
                 break;
             case "compare":
+                if (args.length < 3) {
+                    print_help_comment();
+                    System.exit(1);
+                }
                 seqLayer.compare_pangenomes(args[1], args[2]);
                 break;
             case "retrieve":
-                if (args[1].equals("genes")) {
+                if (args.length < 4) {
+                    print_help_comment();
+                    System.exit(1);
+                }
+                if (args[1].equals("genes"))
                     seqLayer.retrieve_genes(args[3],args[2]);
-                } else if (args[1].equals("regions")) {
+                else if (args[1].equals("regions"))
                     seqLayer.retrieve_regions(args[3],args[2]);
-                } else {
+                else {
                     print_help_comment();
                     System.exit(1);
                 }
