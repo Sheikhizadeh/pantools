@@ -6,10 +6,8 @@
 package index;
 
 import genome.SequenceDatabase;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
@@ -21,8 +19,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.TimeUnit;
-import org.neo4j.io.fs.FileUtils;
 import static pantools.Pantools.executeCommand;
 
 /**

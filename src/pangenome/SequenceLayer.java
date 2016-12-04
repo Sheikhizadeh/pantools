@@ -27,6 +27,7 @@ import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.io.fs.FileUtils;
 import org.neo4j.graphdb.Direction;
+import static org.neo4j.graphdb.factory.GraphDatabaseSettings.keep_logical_logs;
 import static pantools.Pantools.GENOME_DATABASE_PATH;
 import static pantools.Pantools.GRAPH_DATABASE_PATH;
 import static pantools.Pantools.INDEX_DATABASE_PATH;
@@ -106,7 +107,8 @@ public class SequenceLayer {
             }
         }
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                .setConfig("keep_logical_logs", "100M size").newGraphDatabase(); // Limits the size of transaction log files.
+                .setConfig(keep_logical_logs, "4 files").newGraphDatabase();  
+               // .setConfig("keep_logical_logs", "4 files").newGraphDatabase(); // Limits the size of transaction log files.
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
         num_nodes = 0;
@@ -161,7 +163,7 @@ public class SequenceLayer {
         Node start, seq_node;
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             try (Transaction tx = graphDb.beginTx()) {
@@ -270,7 +272,7 @@ public class SequenceLayer {
             StringBuilder gene_seq;
 
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             try (Transaction tx = graphDb.beginTx()) {
@@ -382,7 +384,7 @@ public class SequenceLayer {
             int c, num_regions;
             int[] address = new int[4];
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             try (Transaction tx = graphDb.beginTx()) {
                 K = (int) graphDb.findNodes(pangenome_label).next().getProperty("k_mer_size");
@@ -457,7 +459,7 @@ public class SequenceLayer {
             int[] address;
             StringBuilder seq;
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, graphDb);
@@ -1362,10 +1364,9 @@ public class SequenceLayer {
         int[] new_positions;
         int[] address = new int[3], addr = null;
         boolean is_node = false, is_degenerate = false, found = true;
-        System.out.println("Localizing nodes... ");
         for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                System.out.print("\rsequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
+                System.out.println("\rLocalizing "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
                 origin = address[0] + "_" + address[1];
                 length = genomeDb.sequence_length[address[0]][address[1]] - 1;
                 try (Transaction tx = graphDb.beginTx()) {
@@ -1422,6 +1423,7 @@ public class SequenceLayer {
                                 }
                             }
                         }
+                        System.out.print("%" + address[2]*100/length + "\t\r");
                         tx.success();
                     }
                 }

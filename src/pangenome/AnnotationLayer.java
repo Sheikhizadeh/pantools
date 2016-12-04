@@ -33,6 +33,7 @@ import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
+import static org.neo4j.graphdb.factory.GraphDatabaseSettings.keep_logical_logs;
 import static pangenome.SequenceLayer.append_fwd;
 import static pangenome.SequenceLayer.append_rev;
 
@@ -116,7 +117,7 @@ public class AnnotationLayer {
         PriorityQueue<int[]> pq = new PriorityQueue(comp);
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             try (Transaction tx1 = graphDb.beginTx()) {
                 db_node = graphDb.findNodes(pangenome_label).next();
@@ -156,6 +157,7 @@ public class AnnotationLayer {
                         try (Transaction tx2 = graphDb.beginTx()) {
                             for (i = 0; i < MAX_TRANSACTION_SIZE/100 && in.ready(); ++i) {
                                 line = in.readLine();
+                                System.out.print(line);
                                 if (line.equals("") || line.charAt(0) == '#') // if line is empty or a comment skip it
                                 {
                                     continue;
@@ -266,8 +268,8 @@ public class AnnotationLayer {
                                 {
                                     log.append(sequence_id).append(" missed in genome ").append(address[0]).append("\n"); // usually organal genes
                                 }
-                                if (i % 500 == 1)
-                                    System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
+                                //if (i % 500 == 1)
+                                    //System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
                             }// for trsc
                             tx2.success();
                         } // tx2
@@ -458,7 +460,7 @@ public class AnnotationLayer {
         }
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
@@ -537,7 +539,7 @@ public class AnnotationLayer {
         ResourceIterator<Node> groups_iterator;
         if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig("keep_logical_logs", "100M size").newGraphDatabase();
+                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);

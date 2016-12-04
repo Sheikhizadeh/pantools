@@ -345,7 +345,7 @@ public class SequenceDatabase {
                         }
                         havecarry = false;
                         ++s;
-                        System.out.print("Sequence " + s + "/" + num_sequences[g] + " of genome " + g + "                 \r");
+                        System.out.print("Sequence " + s + "/" + num_sequences[g] + " of genome " + g + " : " + genome_names[g]+"\t\t\t\t\t\r");
                     } else {
                         len = line.length();
                         havecarry = (len % 2 == 1);
