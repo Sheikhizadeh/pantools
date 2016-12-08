@@ -215,7 +215,7 @@ public class SequenceLayer {
             }
         // the sequences should be dropped out as they will change and add_sequence_properties() function will rebuild them.    
             drop_nodes_property("sequence");
-        // the edge colors should be dropped out as they will change and annotate_nodes() function will rebuild them again.    
+        // the edge colors should be dropped out as they will change and localize_nodes() function will rebuild them again.    
             drop_edges_colors();
             construct_pangenome(previous_num_genomes);
             System.out.println("Number of kmers:   " + indexDb.length());
@@ -1340,14 +1340,14 @@ public class SequenceLayer {
             System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");
         }//genomes
         add_sequence_properties();
-        annotate_nodes();
+        localize_nodes();
     }
     
     /**
      * To add list of anchor nodes, anchor sides and anchor positions to each sequence_node.
      * These are used for locating genomic regions very quickly. 
      */
-    void annotate_nodes() {
+    void localize_nodes() {
         int trsc, i, len, m, neighbor_length = 0, count;
         char node_side, neighbor_side = 'F';
         long length;
@@ -1366,7 +1366,7 @@ public class SequenceLayer {
         boolean is_node = false, is_degenerate = false, found = true;
         for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                System.out.println("\rLocalizing "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
+                System.out.println("\rLocalizing sequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
                 origin = address[0] + "_" + address[1];
                 length = genomeDb.sequence_length[address[0]][address[1]] - 1;
                 try (Transaction tx = graphDb.beginTx()) {
@@ -1423,7 +1423,7 @@ public class SequenceLayer {
                                 }
                             }
                         }
-                        System.out.print("%" + address[2]*100/length + "\t\r");
+                        System.out.print("%" + address[2]/length*100 + "\t\r");
                         tx.success();
                     }
                 }

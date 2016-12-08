@@ -165,6 +165,6 @@ public class SequenceAlignment {
                 matrix[i][j] = Math.max( match[s1.charAt(i)][s2.charAt(j)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
-        return matrix[m][n] / (Math.max(m, n) * MATCH_SCORE);
+        return matrix[m][n] / (Math.min(m, n) * MATCH_SCORE);
     }
 }
