@@ -209,7 +209,7 @@ public class Pantools {
 "   java  -Xmx4g  -jar  /home/pantools/dist/pantools.jar build  31  /home/two_hiv_pangenome_database  /home/pantools/example/sample_genomes_path.txt\n" +
 "             \n" +
 "2. annotate:\n" +
-"   To add annotations to a pan-genome. This function also produce a FASTA file containing all the protein sequences in the same order as they have been annotated in the GFF file.\n" +
+"   To add annotations to a pan-genome. This function also produce a FASTA file containing all the protein sequences in PATH_TO_THE_PANGENOME_DATABASE.\n" +
 "\n" +
 "   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  annotate  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_PATH_FILE\n" +
 "\n" +
@@ -265,16 +265,13 @@ public class Pantools {
 "   java  -jar  /home/pantools/dist/pantools.jar  reconstruct  all  /home/two_hiv_pangenome_database\n" +
 "\n" +
 "7. group:\n" +
-"   To group genes by adding group nodes pointing to them, either de novo (based on thier similarity) or using a group file.\n" +
+"   To group homologous genes by adding group nodes pointing to them.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  denovo [or PATH_TO_THE_GROUP_FILE] PATH_TO_THE_PANGENOME_DATABASE \n" +
-"\n" +
-"   PATH_TO_THE_GROUP_FILE : a text file each line stars with name of the group follewed by space-seperated name of the group members (proteins) in each line.\n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE \n" +
 "\n" +
 "   Example: \n" +
 "\n" +
-"   java  -jar  /home/pantools/dist/pantools.jar  group  /home/two_hiv_pangenome_database  /home/pantools/example/sample_orthologous_groups.txt\n" +
-"\n" +
+"   java  -jar  /home/pantools/dist/pantools.jar  group  /home/two_hiv_pangenome_database\n" +
 "\n" +
 "8. compare:\n" +
 "   To compare topology of two pan-genomes.\n" +
