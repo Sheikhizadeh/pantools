@@ -192,7 +192,7 @@ public class AnnotationLayer {
                                     gene_node.setProperty("ID", get_property(attribute,"ID"));
                                     gene_node.setProperty("fields", fields);
                                     gene_node.setProperty("type", fields[2]);
-                                    gene_node.setProperty("Name", get_property(attribute,"Name")+get_property(attribute,"gene") );
+                                    gene_node.setProperty("Name", get_property(attribute,"Name"));
                                     
                                     gene_nodes.addFirst(gene_node);
                                 // adding gene_node id to the sequence node
