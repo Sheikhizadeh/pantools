@@ -523,28 +523,30 @@ public class AnnotationLayer {
                 genes_iterator = graphDb.findNodes(gene_label);
                 System.out.println("THRESHOLD = "+THRESHOLD+"\nLEN_FACTOR = "+LEN_FACTOR);
                 System.out.println("Grouping " + num_genes +" genes...");
-                System.out.println("genes\tC_group\tNC_group");
+                System.out.println("genes\tHomology groups");
                 while (genes_iterator.hasNext()) {
                     try (Transaction tx2 = graphDb.beginTx()) {
                         for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc, ++total_genes) {
                             gene_node=genes_iterator.next();
                         // To avoid having one gene in different groups    
                             if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { 
-                                num = group_similar_genes(similar_groups, pq, gene_node);
-                                if (gene_node.hasLabel(coding_gene_label))
+                                //num = group_similar_genes(similar_groups, pq, gene_node);
+                                if (gene_node.hasLabel(coding_gene_label)){
+                                    num = group_similar_genes(similar_groups, pq, gene_node);
                                     num_coding_groups += num;
-                                else 
-                                    num_noncoding_groups += num;
+                                }
+                                //else 
+                                  //  num_noncoding_groups += num;
                                 if (trsc % 11 == 1 )
-                                    System.out.print("\r" + total_genes + "\t" + num_coding_groups + "\t" + num_noncoding_groups);
+                                    System.out.print("\r" + total_genes + "\t" + num_coding_groups);
                             }
                         }// for
-                        System.out.print("\r" + total_genes + "\t" + num_coding_groups + "\t" + num_noncoding_groups);
+                        System.out.print("\r" + total_genes + "\t" + num_coding_groups);
                         tx2.success();
                     }// transaction 2
                 } // while 
                 tx1.success();
-                System.out.println("\r" + total_genes + "\t" + num_coding_groups + "\t" + num_noncoding_groups);
+                System.out.println("\r" + total_genes + "\t" + num_coding_groups);
                 split_groups();
                 set_groups_properties();
                 //drop_edges_of_type(RelTypes.resembles);
@@ -579,10 +581,10 @@ public class AnnotationLayer {
                     crossing_genes.offer(current_gene_node.getId());
             }
         }
-        if (query_gene.hasLabel(coding_gene_label))
+       // if (query_gene.hasLabel(coding_gene_label))
             main_group_node = graphDb.createNode(coding_group_lable);
-        else
-            main_group_node = graphDb.createNode(noncoding_group_lable);
+        //else
+          //  main_group_node = graphDb.createNode(noncoding_group_lable);
         main_group_node.createRelationshipTo(query_gene, RelTypes.contains);
         main_group_node.setProperty("representative", query_gene.getId());
         if (!crossing_genes.isEmpty())
@@ -594,7 +596,8 @@ public class AnnotationLayer {
             // to skip the repetetive candidate mate genes    
                 if(gene_id != current_gene_id){ 
                     current_gene_node = graphDb.getNodeById(current_gene_id);
-                    similarity = query_gene.hasLabel(coding_gene_label)?get_coding_genes_similarity(query_gene, current_gene_node):get_noncoding_genes_similarity(query_gene, current_gene_node);
+                    //similarity = query_gene.hasLabel(coding_gene_label)?get_coding_genes_similarity(query_gene, current_gene_node):get_noncoding_genes_similarity(query_gene, current_gene_node);
+                    similarity = get_coding_genes_similarity(query_gene, current_gene_node);
                    if ( similarity > THRESHOLD ) {
                         if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){
                             group_node = current_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
