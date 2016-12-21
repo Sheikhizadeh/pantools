@@ -131,7 +131,7 @@ public class Pantools {
                     print_help_comment();
                     System.exit(1);
                 }
-                annLayer.group_similar_genes(args);
+                annLayer.group_homologs(args);
                 break;
             case "cnv":
                 if (args.length < 3) {

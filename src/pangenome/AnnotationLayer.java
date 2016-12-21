@@ -30,6 +30,7 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
@@ -497,9 +498,9 @@ public class AnnotationLayer {
     /**
      * Groups the highly similar genes together
      */
-    public void group_similar_genes(String[] args) {
-        int num_coding_groups=0, num_noncoding_groups=0, total_genes=0, group_size, num_genes,trsc;
-        Node group_node, gene_node, current_gene_node = null;
+    public void group_homologs(String[] args) {
+        int num, num_coding_groups=0, num_noncoding_groups=0, total_genes=0, num_genes,trsc;
+        Node gene_node;
         ResourceIterator<Node> genes_iterator;
         String PATH = args[1];
         if (args.length > 2){
@@ -513,8 +514,7 @@ public class AnnotationLayer {
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
-            Queue<Node> similar_genes = new LinkedList(); 
-            //Queue<Node> queue = new LinkedList();
+            LinkedList<Node> similar_groups = new LinkedList(); 
             PriorityQueue<Long> pq = new PriorityQueue();
             seq_aligner = new SequenceAlignment(-5,-0.1,4.0,-2.0,MAX_LENGTH);
             pro_aligner = new ProteinAlignment(-10,-0.2,MAX_LENGTH);
@@ -523,51 +523,31 @@ public class AnnotationLayer {
                 genes_iterator = graphDb.findNodes(gene_label);
                 System.out.println("THRESHOLD = "+THRESHOLD+"\nLEN_FACTOR = "+LEN_FACTOR);
                 System.out.println("Grouping " + num_genes +" genes...");
-                System.out.println("genes\t\tcoding_groups\t\tnoncoding_groups");
+                System.out.println("genes\tC_group\tNC_group");
                 while (genes_iterator.hasNext()) {
                     try (Transaction tx2 = graphDb.beginTx()) {
-                        for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
+                        for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc, ++total_genes) {
                             gene_node=genes_iterator.next();
                         // To avoid having one gene in different groups    
                             if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { 
-                                if (gene_node.hasLabel(coding_gene_label) )
-                                    group_node = get_similar_coding_genes(similar_genes, pq, gene_node);
+                                num = group_similar_genes(similar_groups, pq, gene_node);
+                                if (gene_node.hasLabel(coding_gene_label))
+                                    num_coding_groups += num;
                                 else 
-                                    group_node = get_similar_noncoding_genes(similar_genes, pq, gene_node);
-                                group_size = similar_genes.size()+1;
-                                if (group_node == null){ // if none of the similar genes belong to a group
-                                    if (gene_node.hasLabel(coding_gene_label)){
-                                        group_node = graphDb.createNode(coding_group_lable);
-                                        ++num_coding_groups;
-                                    } else {
-                                        group_node = graphDb.createNode(noncoding_group_lable);
-                                        ++num_noncoding_groups;
-                                    }
-                                    if (group_size == 1){ // if there is just one gene in the group i.e. the gene itself
-                                        total_genes += 1;
-                                        group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                                        continue;
-                                    }
-                                }
-                                total_genes += group_size;
-                            // Because the gene has not been added to the group itself    
-                                group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                                while (!similar_genes.isEmpty()) {
-                                    current_gene_node = similar_genes.remove();
-                                    group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
-                                }
-                                if (num_coding_groups % 11 == 1 )
-                                    System.out.print("\r" + total_genes + "\t\t" + num_coding_groups + "\t\t" + num_noncoding_groups);
+                                    num_noncoding_groups += num;
+                                if (trsc % 11 == 1 )
+                                    System.out.print("\r" + total_genes + "\t" + num_coding_groups + "\t" + num_noncoding_groups);
                             }
                         }// for
-                        System.out.print("\r" + total_genes + "\t\t" + num_coding_groups + "\t\t" + num_noncoding_groups);
+                        System.out.print("\r" + total_genes + "\t" + num_coding_groups + "\t" + num_noncoding_groups);
                         tx2.success();
                     }// transaction 2
                 } // while 
                 tx1.success();
-                System.out.println("\r" + total_genes + "\t\t" + num_coding_groups + "\t\t" + num_noncoding_groups);
-                finalize_groups();
-                drop_edges_of_type(RelTypes.resembles);
+                System.out.println("\r" + total_genes + "\t" + num_coding_groups + "\t" + num_noncoding_groups);
+                split_groups();
+                set_groups_properties();
+                //drop_edges_of_type(RelTypes.resembles);
             } // transaction 1
         } else {
             System.out.println("pangenome database not found!");
@@ -575,6 +555,290 @@ public class AnnotationLayer {
         }
     }
 
+    /**
+     * Finds and puts all the similar coding genes in the gene_bag
+     * @param gene_bag The output of the function, containing the genes similar to gene
+     * @param crossing_genes An empty priority queue to be filled with the genes crossing the query_gene 
+     * @param query_gene The gene to which similar one should be found
+     * @param pro_aligner The protein aligner object
+     * @return If exists, the group node of the similar genes; otherwise null
+     */
+    private int group_similar_genes(LinkedList<Node> similar_groups, PriorityQueue<Long> crossing_genes, Node query_gene){
+        double similarity;
+        Node current_gene_node,node, group_node, main_group_node;
+        Relationship r = null;
+        long gene_id, current_gene_id;
+        crossing_genes.clear();
+        similar_groups.clear();
+        for (Relationship r1: query_gene.getRelationships(Direction.OUTGOING,RelTypes.visits)) {
+            node = r1.getEndNode();
+            for (Relationship r2: node.getRelationships(Direction.INCOMING,RelTypes.visits)) {
+                current_gene_node = r2.getStartNode();
+            // avoid comparisons to the gene itself  
+                if(!current_gene_node.equals(query_gene))  
+                    crossing_genes.offer(current_gene_node.getId());
+            }
+        }
+        if (query_gene.hasLabel(coding_gene_label))
+            main_group_node = graphDb.createNode(coding_group_lable);
+        else
+            main_group_node = graphDb.createNode(noncoding_group_lable);
+        main_group_node.createRelationshipTo(query_gene, RelTypes.contains);
+        main_group_node.setProperty("representative", query_gene.getId());
+        if (!crossing_genes.isEmpty())
+        {
+            gene_id = -1l;
+        // for all the candidates with some shared node with the gene    
+            while (!crossing_genes.isEmpty()) { 
+                current_gene_id = crossing_genes.remove();
+            // to skip the repetetive candidate mate genes    
+                if(gene_id != current_gene_id){ 
+                    current_gene_node = graphDb.getNodeById(current_gene_id);
+                    similarity = query_gene.hasLabel(coding_gene_label)?get_coding_genes_similarity(query_gene, current_gene_node):get_noncoding_genes_similarity(query_gene, current_gene_node);
+                   if ( similarity > THRESHOLD ) {
+                        if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){
+                            group_node = current_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
+                            if (!similar_groups.contains(group_node))
+                                similar_groups.add(group_node);
+                        }
+                        //else // will be done in merge_groups
+                            query_gene.createRelationshipTo(current_gene_node, RelTypes.resembles).setProperty("score", similarity);
+                    }
+                    gene_id = current_gene_id;
+                }
+            }// while
+            if (similar_groups.size() > 0){
+                merge_groups(similar_groups, main_group_node);
+                return 1 - similar_groups.size(); // One group created but some others merged into it
+            }
+        }
+        return 1; // One group created
+    }
+    
+    private void merge_groups(LinkedList<Node> groups, Node main_group){
+        ListIterator<Node> itr = groups.listIterator();
+        Node group, representative, node;
+        while (itr.hasNext()){
+            group = itr.next();
+            for (Relationship rel: group.getRelationships(Direction.OUTGOING)){
+                node = rel.getEndNode();
+                main_group.createRelationshipTo(node, RelTypes.contains);
+                //representative = graphDb.getNodeById((long)main_group.getProperty("representative"));
+                //representative.createRelationshipTo(node, RelTypes.resembles).setProperty("score", get_coding_genes_similarity(node, representative));
+                rel.delete();
+            }
+            group.delete();
+        }
+    }
+    
+    private double get_coding_genes_similarity(Node gene1 , Node gene2){
+        Node mRNA_node1, mRNA_node2;
+        String p1, p2;
+        int mRNA_len1, mRNA_len2;
+        double similarity, best_similarity = 0;
+        for (Relationship r1: gene1.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+            mRNA_node1 = r1.getEndNode();
+            if ( mRNA_node1.hasRelationship(RelTypes.contributes_to, Direction.INCOMING) && !mRNA_node1.hasLabel(broken_protein_label) ){
+                p1 = (String)mRNA_node1.getProperty("protein");
+                mRNA_len1 = p1.length();
+                for (Relationship r2: gene2.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+                    mRNA_node2 = r2.getEndNode();
+                    if ( mRNA_node2.hasRelationship(RelTypes.contributes_to, Direction.INCOMING) && !mRNA_node2.hasLabel(broken_protein_label)){ // some genes might code different types of RNAs like a mRNA and a lncRNA
+                        p2 = (String)mRNA_node2.getProperty("protein");
+                        mRNA_len2 = p2.length();
+                        if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)*LEN_FACTOR){
+                            similarity = protein_similarity(p1, p2);
+                            if ( similarity > best_similarity ) 
+                                best_similarity = similarity;
+                        }
+                    }
+                } // for
+            } // if
+        } // for
+        return best_similarity;
+    }
+    
+    private double get_noncoding_genes_similarity(Node gene1 , Node gene2){
+        Node RNA_node1, RNA_node2;
+        String RNA_seq1, RNA_seq2, RNA_node1_type,RNA_node2_type;
+        int RNA_len1, RNA_len2;
+        double similarity, best_similarity = 0;
+        for (Relationship r1: gene1.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+            RNA_node1 = r1.getEndNode();
+            RNA_node1_type = (String)RNA_node1.getProperty("type");
+            for (Relationship r2: gene2.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
+                RNA_node2 = r2.getEndNode();
+                RNA_node2_type = (String)RNA_node2.getProperty("type");
+                if ( RNA_node1_type.equals(RNA_node2_type) && (RNA_node1_type.equals("tRNA") || RNA_node1_type.equals("rRNA"))){
+                    RNA_seq1 = (String)RNA_node1.getProperty("sequence");
+                    RNA_seq2 = (String)RNA_node2.getProperty("sequence");
+                    RNA_len1 = RNA_seq1.length();
+                    RNA_len2 = RNA_seq2.length();
+                    if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)*LEN_FACTOR){
+                            similarity = sequence_similarity(RNA_seq1,RNA_seq2);
+                            if ( similarity > best_similarity ) 
+                                best_similarity = similarity;
+                    }
+                }
+            }
+        }
+        return best_similarity;
+    }
+    
+    double protein_similarity(String p1, String p2){
+        int m = p1.length(), n = p2.length(), max_len = max(m,n);
+        int i, parts_num = 1, part_len1, part_len2;
+        double score = 0;
+        if (max_len > MAX_LENGTH){
+            parts_num = (max_len / MAX_LENGTH) + (max_len % MAX_LENGTH == 0 ? 0 : 1);
+        }
+        part_len1 = m / parts_num;
+        part_len2 = n / parts_num;
+        for (i = 0; i < parts_num; ++i)
+            score += pro_aligner.get_similarity(p1.substring(i * part_len1, min(m, (i + 1) * part_len1)),
+                                                p2.substring(i * part_len2, min(n, (i + 1) * part_len2)) );
+        return score / parts_num;
+    }
+
+    double sequence_similarity(String s1, String s2){
+        int m = s1.length(), n = s2.length(), max_len = max(m,n);
+        int i, parts_num = 1, part_len1, part_len2;
+        double score = 0;
+        if (max_len > MAX_LENGTH){
+            parts_num = (max_len / MAX_LENGTH) + (max_len % MAX_LENGTH == 0 ? 0 : 1);
+        }
+        part_len1 = m / parts_num;
+        part_len2 = n / parts_num;
+        for (i = 0; i < parts_num; ++i)
+            score += seq_aligner.get_similarity(s1.substring(i * part_len1, min(m, (i + 1) * part_len1)),
+                                                s2.substring(i * part_len2, min(n, (i + 1) * part_len2)) );
+        return score / parts_num;
+    }
+    
+    /**
+     * Creates super groups and sets copy_number_variation and num_members of the groups
+     */    
+    void split_groups() {
+        int i, num_super_groups = 0;
+        double score, max_score;
+        boolean has_paralogs;
+        ResourceIterator<Node> nodes;
+        Node group_node, paralogs_group_node, representative, node, super_group_node;
+        try (Transaction tx = graphDb.beginTx()) {
+            nodes = graphDb.getAllNodes().iterator();
+            tx.success();
+        }
+        while (nodes.hasNext()) {
+            try (Transaction tx = graphDb.beginTx()) {
+                for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
+                    group_node = nodes.next();
+                    if (group_node.hasLabel(coding_group_lable) && group_node.getDegree() > 2){
+                        has_paralogs = false;
+                        paralogs_group_node = graphDb.createNode(coding_group_lable);
+                        representative = graphDb.getNodeById((long)group_node.getProperty("representative"));
+                        max_score = 0;
+                        for (Relationship rel: representative.getRelationships(RelTypes.resembles,Direction.OUTGOING)){
+                            score = (double)rel.getProperty("score");
+                            if (score > max_score)
+                                max_score = score;
+                        }
+                        for (Relationship rel: representative.getRelationships(RelTypes.resembles,Direction.OUTGOING)){
+                            if (max_score - (double)rel.getProperty("score") > 0.1){
+                                node = rel.getEndNode();
+                                node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).delete();
+                                paralogs_group_node.createRelationshipTo(node, RelTypes.contains);
+                                has_paralogs = true;
+                            }
+                        }
+                        if (!has_paralogs)
+                            paralogs_group_node.delete();
+                        else {
+                            ++num_super_groups;
+                            super_group_node = graphDb.createNode(super_group_lable);
+                            super_group_node.createRelationshipTo(group_node, RelTypes.contains);
+                            super_group_node.createRelationshipTo(paralogs_group_node, RelTypes.contains);
+                        }
+                    }
+                }
+                tx.success();
+            }
+        }
+        nodes.close();
+        System.out.println("Number of super groups:" + num_super_groups);
+    }    
+    
+    private void compute_pairwise_distances(Node group_node, int num_members){
+        LinkedList<Node> nodes = new LinkedList();
+        Iterator<Node> itr1, itr2;
+        Node gene1, gene2;
+        double similarity;
+        int i;
+        for (i = 0, itr1 = nodes.iterator(); itr1.hasNext(); ++i){
+            gene1 = itr1.next();
+            for (itr2 = nodes.listIterator(i+1); itr2.hasNext(); ){
+                gene2 = itr2.next();
+                similarity = get_coding_genes_similarity(gene1, gene2);
+                gene1.createRelationshipTo(gene2, RelTypes.resembles).setProperty("score", similarity);
+            } 
+        }
+    }
+    
+    /**
+     * Remove the occurrence arrays of the edges.
+     */    
+    void drop_edges_of_type(RelationshipType type) {
+        int i;
+        ResourceIterator<Relationship> rels;
+        Relationship r;
+        try (Transaction tx = graphDb.beginTx()) {
+            rels = graphDb.getAllRelationships().iterator();
+            tx.success();
+        }
+        while (rels.hasNext()) {
+            try (Transaction tx = graphDb.beginTx()) {
+                for (i = 0; i < MAX_TRANSACTION_SIZE && rels.hasNext(); ++i) {
+                    r = rels.next();
+                    if (r.isType(type))
+                        r.delete();
+                }
+                tx.success();
+            }
+        }
+        rels.close();
+    }   
+    
+    void set_groups_properties() {
+        int i, num_members;
+        int[] copy_number = new int[genomeDb.num_genomes+1];
+        ResourceIterator<Node> nodes;
+        Node group_node, gene_node;
+        try (Transaction tx = graphDb.beginTx()) {
+            nodes = graphDb.getAllNodes().iterator();
+            tx.success();
+        }
+        while (nodes.hasNext()) {
+            try (Transaction tx = graphDb.beginTx()) {
+                for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
+                    group_node = nodes.next();
+                    if (group_node.hasLabel(coding_group_lable) || group_node.hasLabel(noncoding_group_lable)){    
+                        num_members = 0;
+                        for (Relationship rel: group_node.getRelationships(Direction.OUTGOING)){
+                            ++num_members;
+                            gene_node = rel.getEndNode();
+                            ++copy_number[((int[])gene_node.getProperty("address"))[0]];
+                        }
+                        group_node.setProperty("copy_number_variation", copy_number);
+                        group_node.setProperty("num_members", num_members);
+                        for (i=0; i<copy_number.length; ++i)
+                            copy_number[i] = 0;
+                    }
+                }
+                tx.success();
+            }
+        }
+        nodes.close();
+    }    
+    
     public void cnv_report(String PATH, String keyword) {
         /*int num_coding_groups=0, num_noncoding_groups=0, total_genes=0, group_size, num_genes,trsc;
         Node group_node, current_gene_node = null;
@@ -652,291 +916,6 @@ public class AnnotationLayer {
         }*/
     }
 
-    /**
-     * Finds and puts all the similar coding genes in the gene_bag
-     * @param gene_bag The output of the function, containing the genes similar to gene
-     * @param crossing_genes An empty priority queue to be filled with the genes crossing the query_gene 
-     * @param query_gene The gene to which similar one should be found
-     * @param pro_aligner The protein aligner object
-     * @return If exists, the group node of the similar genes; otherwise null
-     */
-    private Node get_similar_coding_genes(Queue<Node> gene_bag, PriorityQueue<Long> crossing_genes, Node query_gene){
-        int mRNA_len1, mRNA_len2;
-        double similarity;
-        Node mRNA_node1, mRNA_node2, current_gene_node,node;
-        Relationship r = null;
-        long gene_id, current_gene_id;
-        boolean found, are_connected;
-        String p1, p2;
-        crossing_genes.clear();
-        for (Relationship r1: query_gene.getRelationships(Direction.OUTGOING,RelTypes.visits)) {
-            node = r1.getEndNode();
-            for (Relationship r2: node.getRelationships(Direction.INCOMING,RelTypes.visits)) {
-                current_gene_node = r2.getStartNode();
-            // avoid comparisons to the gene itself  
-                if(!current_gene_node.equals(query_gene))  
-                    crossing_genes.offer(current_gene_node.getId());
-            }
-        }
-        if (!crossing_genes.isEmpty())
-        {
-            gene_id = -1l;
-        // for all the candidates with some shared node with the gene    
-            while (!crossing_genes.isEmpty()) { 
-                current_gene_id = crossing_genes.remove();
-            // to skip the repetetive candidate mate genes    
-                if(gene_id != current_gene_id){ 
-                    current_gene_node = graphDb.getNodeById(current_gene_id);
-                    found = false;
-                    for (Relationship r1: query_gene.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                        mRNA_node1 = r1.getEndNode();
-                        if ( mRNA_node1.hasRelationship(RelTypes.contributes_to, Direction.INCOMING) && !mRNA_node1.hasLabel(broken_protein_label) ){
-                            p1 = (String)mRNA_node1.getProperty("protein");
-                            mRNA_len1 = p1.length();
-                            for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                                mRNA_node2 = r2.getEndNode();
-                                if ( mRNA_node2.hasRelationship(RelTypes.contributes_to, Direction.INCOMING) && !mRNA_node2.hasLabel(broken_protein_label)){ // some genes might code different types of RNAs like a mRNA and a lncRNA
-                                    p2 = (String)mRNA_node2.getProperty("protein");
-                                    mRNA_len2 = p2.length();
-                                    if ( Math.abs(mRNA_len1 - mRNA_len2) <= Math.max(mRNA_len1, mRNA_len2)*LEN_FACTOR){
-                                        are_connected = false;
-                                        for (Relationship rel:query_gene.getRelationships(RelTypes.resembles))
-                                            if(rel.getOtherNode(query_gene).equals(current_gene_node)){
-                                                are_connected = true;
-                                                r = rel;
-                                                break;
-                                            }
-                                        if (!are_connected){
-                                            similarity = protein_similarity(p1, p2);
-                                            query_gene.createRelationshipTo(current_gene_node, RelTypes.resembles).setProperty("score", similarity);
-                                        }
-                                        else
-                                            similarity = (double)r.getProperty("score");
-                                        if ( similarity > THRESHOLD ) {
-                                            gene_bag.add(current_gene_node);
-                                            found = true;
-                                            if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){
-                                                gene_bag.clear();
-                                                return current_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
-                                            }
-                                            break;
-                                        }
-                                    }
-                                }
-                            } // for
-                            if (found)
-                                break;
-                        } // if
-                    } // for
-                    gene_id = current_gene_id;
-                }
-            }// while
-        }
-        return null;
-    }
-    
-    /**
-     * Finds and puts all the similar non-coding genes in the gene_bag
-     * @param gene_bag The output of the function, containing the genes similar to gene
-     * @param crossing_genes An empty priority queue to be filled with the genes crossing the query_gene 
-     * @param query_gene The gene to which similar one should be found
-     * @param seq_aligner The sequence aligner object
-     * @return If exists, the group node of the similar genes; otherwise null
-     */
-    private Node get_similar_noncoding_genes(Queue<Node> gene_bag, PriorityQueue<Long> crossing_genes, Node query_gene){
-        int RNA_len1,RNA_len2;
-        double similarity;
-        Node RNA_node1, RNA_node2, current_gene_node, node;
-        Relationship r = null;
-        String RNA_seq1, RNA_seq2, RNA_node1_type,RNA_node2_type, s1, s2;
-        long gene_id, current_gene_id;
-        boolean found, are_connected;
-        crossing_genes.clear();
-        for (Relationship r1: query_gene.getRelationships(Direction.OUTGOING,RelTypes.visits)) {
-            node = r1.getEndNode();
-            for (Relationship r2: node.getRelationships(Direction.INCOMING,RelTypes.visits)) {
-                current_gene_node = r2.getStartNode();
-            // avoid comparisons to the gene itself  
-                if(!current_gene_node.equals(query_gene))  
-                    crossing_genes.offer(current_gene_node.getId());
-            }
-        }
-        if (!crossing_genes.isEmpty()) {
-            gene_id = -1l;
-        // for all the candidates with some shared node with the gene    
-            while (!crossing_genes.isEmpty()) { 
-                current_gene_id = crossing_genes.remove();
-                if(gene_id != current_gene_id){
-                    current_gene_node = graphDb.getNodeById(current_gene_id);
-                    found = false;
-                    for (Relationship r1: query_gene.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                        RNA_node1 = r1.getEndNode();
-                        RNA_node1_type = (String)RNA_node1.getProperty("type");
-                        for (Relationship r2: current_gene_node.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                            RNA_node2 = r2.getEndNode();
-                            RNA_node2_type = (String)RNA_node2.getProperty("type");
-                            if ( RNA_node1_type.equals(RNA_node2_type) && (RNA_node1_type.equals("tRNA") || RNA_node1_type.equals("rRNA"))){
-                                RNA_seq1 = (String)RNA_node1.getProperty("sequence");
-                                RNA_seq2 = (String)RNA_node2.getProperty("sequence");
-                                RNA_len1 = RNA_seq1.length();
-                                RNA_len2 = RNA_seq2.length();
-                                if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)*LEN_FACTOR){
-                                    are_connected = false;
-                                    for (Relationship rel:query_gene.getRelationships(RelTypes.resembles))
-                                        if(rel.getOtherNode(query_gene).equals(current_gene_node)){
-                                            are_connected = true;
-                                            r = rel;
-                                            break;
-                                        }
-                                    if (!are_connected){
-                                        similarity = sequence_similarity(RNA_seq1,RNA_seq2);
-                                        query_gene.createRelationshipTo(current_gene_node, RelTypes.resembles).setProperty("score", similarity);
-                                    }
-                                    else
-                                        similarity = (double)r.getProperty("score");
-                                    query_gene.createRelationshipTo(current_gene_node, RelTypes.resembles).setProperty("score", similarity);
-                                    if ( similarity > THRESHOLD ) {
-                                        gene_bag.add(current_gene_node);
-                                        found = true;
-                                        if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){
-                                            gene_bag.clear();
-                                            return current_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        if (found)
-                            break;
-                    }
-                    gene_id = current_gene_id;
-                }
-            }// while
-        }
-        return null;
-    }    
-
-    double protein_similarity(String p1, String p2){
-        int m = p1.length(), n = p2.length(), max_len = max(m,n);
-        int i, parts_num = 1, part_len1, part_len2;
-        double score = 0;
-        if (max_len > MAX_LENGTH){
-            parts_num = (max_len / MAX_LENGTH) + (max_len % MAX_LENGTH == 0 ? 0 : 1);
-        }
-        part_len1 = m / parts_num;
-        part_len2 = n / parts_num;
-        for (i = 0; i < parts_num; ++i)
-            score += pro_aligner.get_similarity(p1.substring(i * part_len1, min(m, (i + 1) * part_len1)),
-                                                p2.substring(i * part_len2, min(n, (i + 1) * part_len2)) );
-        return score / parts_num;
-    }
-
-    double sequence_similarity(String s1, String s2){
-        int m = s1.length(), n = s2.length(), max_len = max(m,n);
-        int i, parts_num = 1, part_len1, part_len2;
-        double score = 0;
-        if (max_len > MAX_LENGTH){
-            parts_num = (max_len / MAX_LENGTH) + (max_len % MAX_LENGTH == 0 ? 0 : 1);
-        }
-        part_len1 = m / parts_num;
-        part_len2 = n / parts_num;
-        for (i = 0; i < parts_num; ++i)
-            score += seq_aligner.get_similarity(s1.substring(i * part_len1, min(m, (i + 1) * part_len1)),
-                                                s2.substring(i * part_len2, min(n, (i + 1) * part_len2)) );
-        return score / parts_num;
-    }
-    
-    /**
-     * Remove the occurrence arrays of the edges.
-     */    
-    void drop_edges_of_type(RelationshipType type) {
-        int i;
-        ResourceIterator<Relationship> rels;
-        Relationship r;
-        try (Transaction tx = graphDb.beginTx()) {
-            rels = graphDb.getAllRelationships().iterator();
-            tx.success();
-        }
-        while (rels.hasNext()) {
-            try (Transaction tx = graphDb.beginTx()) {
-                for (i = 0; i < MAX_TRANSACTION_SIZE && rels.hasNext(); ++i) {
-                    r = rels.next();
-                    if (r.isType(type))
-                        r.delete();
-                }
-                tx.success();
-            }
-        }
-        rels.close();
-    }    
-    
-    /**
-     * Creates super groups and sets copy_number_variation and num_members of the groups
-     */    
-    void finalize_groups() {
-        int i, num_members, num_groups, num_super_groups = 0;
-        int[] copy_number = new int[genomeDb.num_genomes+1];
-        long group_id, current_group_id;
-        double similarity;
-        PriorityQueue<Long> pq = new PriorityQueue();
-        ResourceIterator<Node> nodes;
-        Node group_node, mate_group_node, gene_node, mate_gene_node, super_node;
-        try (Transaction tx = graphDb.beginTx()) {
-            nodes = graphDb.getAllNodes().iterator();
-            tx.success();
-        }
-        while (nodes.hasNext()) {
-            try (Transaction tx = graphDb.beginTx()) {
-                for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
-                    group_node = nodes.next();
-                    if (group_node.hasLabel(coding_group_lable) || group_node.hasLabel(noncoding_group_lable)){
-                        num_members = 0;
-                        for (Relationship rel: group_node.getRelationships(Direction.OUTGOING)){
-                            ++num_members;
-                            gene_node = rel.getEndNode();
-                            ++copy_number[((int[])gene_node.getProperty("address"))[0]];
-                            if (!group_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) {
-                                for (Relationship resemble: gene_node.getRelationships(RelTypes.resembles)){
-                                    similarity = (double)resemble.getProperty("score");
-                                    if (similarity > (1 - LEN_FACTOR) * THRESHOLD){
-                                        mate_gene_node = resemble.getOtherNode(gene_node);
-                                        mate_group_node = mate_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
-                                        if (!mate_group_node.equals(group_node) && !mate_group_node.hasRelationship(RelTypes.contains, Direction.INCOMING))
-                                            pq.add(mate_group_node.getId());
-                                    }
-                                }
-                            }
-                        }
-                        if (!pq.isEmpty()) {
-                            ++num_super_groups;
-                            super_node = graphDb.createNode(super_group_lable);
-                            super_node.createRelationshipTo(group_node, RelTypes.contains);
-                            group_id = -1l;
-                            num_groups = 1;
-                            while (!pq.isEmpty()) {
-                                current_group_id = pq.remove();
-                                if (group_id != current_group_id){
-                                    super_node.createRelationshipTo(graphDb.getNodeById(current_group_id), RelTypes.contains);
-                                    ++num_groups;
-                                }
-                                group_id = current_group_id;
-                            }
-                            super_node.setProperty("num_groups", num_groups);
-                        }                        
-                        group_node.setProperty("copy_number_variation", copy_number);
-                        group_node.setProperty("num_members", num_members);
-                        for (i=0; i<copy_number.length; ++i)
-                            copy_number[i] = 0;
-                    }
-                }
-                tx.success();
-            }
-        }
-        nodes.close();
-        System.out.println("Number of super groups:" + num_super_groups);
-    }    
-    
     /**
      * Shuts down the graph database if the program halts unexpectedly.
      * 
