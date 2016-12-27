@@ -49,9 +49,12 @@ public class Pantools {
     public static Label RNA_label = DynamicLabel.label("RNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
-    public static Label coding_group_lable = DynamicLabel.label("coding_group");
+    public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
     public static Label noncoding_group_lable = DynamicLabel.label("noncoding_group");
-    public static Label super_group_lable = DynamicLabel.label("super_group");
+    public static Label gene_tree_lable = DynamicLabel.label("gene_tree");
+    public static Label tree_node_lable = DynamicLabel.label("tree_node");
+    public static Label tree_root_lable = DynamicLabel.label("tree_root");
+    public static Label outgroup_gene_lable = DynamicLabel.label("outgroup_gene");
 
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
@@ -61,7 +64,8 @@ public class Pantools {
         codes_for,// for connecting genes to mRNAs
         contributes_to,// for connecting CDSs and LTRs to mRNA
         covers, //to connect CDSs to the nodes
-        resembles //to connect similar proteins (coding_mRNA) nodes
+        resembles, //to connect similar proteins (coding_mRNA) nodes
+        branches //to connect tree nodes
     }
 
     public static long startTime;
