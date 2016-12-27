@@ -717,26 +717,13 @@ public class AnnotationLayer {
      * Creates super groups and sets copy_number_variation and num_members of the groups
      */    
     void build_phylogeny_trees() {
-        int i, num = 0, num_members;
-        double distance, separation1, separation2;
-        long root_id = 0;
+        int i, num = 0, num_members, c1, c2;
+        double distance;
         ResourceIterator<Node> nodes;
-        Node tree_node, main_tree_node, gene, root_node;//, outgroup_gene, outgroup_rna;
-        Node[] gene_pair = new Node[2];
+        Node tree_node, main_tree_node, gene;
+        Node[] node_pair = new Node[2];
         System.out.println("Making gene trees...");
         try (Transaction tx1 = graphDb.beginTx()) {
-            /*outgroup_rna = graphDb.createNode(RNA_label);
-            outgroup_rna.setProperty("protein", "MVALRGPMFIGYCGFGSEESYEAKGVTEKIEKNLGKGMINAVKMELGRALSMLKIEGGMIV"
-                                              + "LYTMSDSALNEDKPPWQAGFLSDSPKLLQDKCNTNGGEFPAEGFSRNVTKFLVRDLPSLGN"
-                                              + "LEEDKTFSFPGEFVTLSEGGPALLTAPNVRLRMKPLNIAIHCFGGTHSNGQIPDVLALTPI"
-                                              + "WAALLRKVQRKVITDVGSISFNNTHNAVKLELYDVPILDYTKHRLFTIEAFLAAWIDVVVP"
-                                              + "YVERDAAVQKLSPAMNNQCKATQTNIVFQDTYRLIILREANIRRPVSTQIDCGSDSTQVDR"
-                                              + "VWEELARYQEQMPRLITWQHLERLEVSSYIIQWDAVPLGGRRCLHMNHRVHISTGRVKRPK"
-                                              + "EIGGTAPGPSITRSALSESPEVADASYPQHGKSKQNSAIEKLGMKKAVFATESADCELDAS"
-                                              + "DYFGLYFRALPGYIDHKKTLAVDQTALGIIEAAQDKRSGQKQYVFALYFREEVTLLNDSA*");        
-            outgroup_gene = graphDb.createNode(coding_gene_label, outgroup_gene_lable);
-            outgroup_gene.setProperty("name", "outgroup");
-            outgroup_gene.createRelationshipTo(outgroup_rna, RelTypes.codes_for);*/
             nodes = graphDb.getAllNodes().iterator();
             while (nodes.hasNext()) {
                 try (Transaction tx2 = graphDb.beginTx()) {
@@ -745,28 +732,24 @@ public class AnnotationLayer {
                         num_members = main_tree_node.getDegree(); 
                         if (main_tree_node.hasLabel(orthology_group_lable) && num_members > 2){
                             ++num;
-                            //main_tree_node.createRelationshipTo(outgroup_gene, RelTypes.contains);
-                            //++num_members; // for the outgroup gene
                             compute_pairwise_distances(main_tree_node);
                         // while tree is not completed    
                             for(; num_members > 1; --num_members){
-                                //calculate_seperations(main_tree_node, num_members);
-                                remove_best_pair(main_tree_node, gene_pair);
-                                separation1 = 0;//(double)gene_pair[0].getProperty("separation");
-                                separation2 = 0;//(double)gene_pair[1].getProperty("separation");
-                                distance = get_distance(gene_pair[0],gene_pair[1]);
+                                distance = remove_best_pair(main_tree_node, node_pair);
                                 tree_node = graphDb.createNode(tree_node_lable);
-                                tree_node.createRelationshipTo(gene_pair[0], RelTypes.branches).setProperty("branch_length", (distance + separation1 - separation2)/2);
-                                tree_node.createRelationshipTo(gene_pair[1], RelTypes.branches).setProperty("branch_length", (distance + separation2 - separation1)/2);
-                                //if (gene_pair[0].equals(outgroup_gene) || gene_pair[1].equals(outgroup_gene))
-                                  //  root_id = tree_node.getId();
+                                tree_node.createRelationshipTo(node_pair[0], RelTypes.branches).setProperty("branch_length", distance/2 - (double)node_pair[0].getProperty("time"));
+                                tree_node.createRelationshipTo(node_pair[1], RelTypes.branches).setProperty("branch_length", distance/2 - (double)node_pair[1].getProperty("time"));
+                                tree_node.setProperty("time", distance/2);
+                                c1 = (int)node_pair[0].getProperty("cardinality");
+                                c2 = (int)node_pair[1].getProperty("cardinality");
+                                tree_node.setProperty("cardinality", c1 + c2);
                                 main_tree_node.createRelationshipTo(tree_node, RelTypes.branches);
                             // Update distances    
-                                for (Relationship rel1: gene_pair[0].getRelationships(RelTypes.resembles)){
-                                    gene = rel1.getOtherNode(gene_pair[0]);
-                                    if (!gene.equals(gene_pair[1])){
-                                        Relationship rel2 = get_edge(gene_pair[1], gene, RelTypes.resembles);
-                                        tree_node.createRelationshipTo(gene, RelTypes.resembles).setProperty("distance", ((double)rel1.getProperty("distance") + (double)rel2.getProperty("distance") - 0) / 2);
+                                for (Relationship rel1: node_pair[0].getRelationships(RelTypes.resembles)){
+                                    gene = rel1.getOtherNode(node_pair[0]);
+                                    if (!gene.equals(node_pair[1])){
+                                        Relationship rel2 = get_edge(node_pair[1], gene, RelTypes.resembles);
+                                        tree_node.createRelationshipTo(gene, RelTypes.resembles).setProperty("distance", ((double)rel1.getProperty("distance") * c1 + (double)rel2.getProperty("distance") * c2) / (c1 + c2));
                                         rel1.delete();
                                         rel2.delete();
                                     }
@@ -775,13 +758,6 @@ public class AnnotationLayer {
                             Relationship r = main_tree_node.getSingleRelationship(RelTypes.branches,Direction.OUTGOING);
                             r.getEndNode().addLabel(tree_root_lable);
                             r.delete();
-                            //remove_best_pair(main_tree_node, gene_pair);
-                            //distance = get_distance(gene_pair[0],gene_pair[1]);
-                            //gene_pair[0].createRelationshipTo(gene_pair[1], RelTypes.branches).setProperty("branch_length", distance);
-                            //outgroup_gene.getSingleRelationship(RelTypes.branches, Direction.INCOMING).delete();
-                            //root_node = graphDb.getNodeById(root_id);
-                            //root_node.addLabel(tree_root_lable);
-                            //orient_tree(root_node, null);
                             main_tree_node.delete();
                         }
                         System.out.print("\rTrees : " + num);
@@ -790,34 +766,10 @@ public class AnnotationLayer {
                 }
             }
             nodes.close();
-            /*for (Relationship r: outgroup_gene.getRelationships() )
-                r.delete();
-            outgroup_gene.delete();
-            outgroup_rna.delete();*/
             System.out.println();
             tx1.success();
         }
     }   
-    
-    private void orient_tree(Node tree_node, Relationship branch){
-        Node node;
-        Relationship rel;
-        if (!tree_node.hasLabel(coding_gene_label)){
-            for (Relationship r: tree_node.getRelationships(RelTypes.branches))
-                if (!r.equals(branch)){
-                    node = r.getStartNode();
-                    if (!node.equals(tree_node)){ // is incoming edge
-                        rel = tree_node.createRelationshipTo(node, RelTypes.branches);
-                        rel.setProperty("branch_length", r.getProperty("branch_length", 0.0));
-                        r.delete();
-                        orient_tree(node, rel);
-                    }
-                    else
-                        orient_tree(r.getEndNode(), r);
-                }
-        }
-        
-    }    
     
     void build_orthology_groups() {
         int i, num = 0;
@@ -834,7 +786,7 @@ public class AnnotationLayer {
                         if (gene.hasLabel(coding_gene_label) && !gene.hasRelationship(RelTypes.contains)){
                             for (node = gene; !node.hasLabel(tree_root_lable); node = r.getStartNode()){
                                 r = node.getSingleRelationship(RelTypes.branches, Direction.INCOMING);
-                                if ((double)r.getProperty("branch_length", 0.0) > 0.02)
+                                if ((double)r.getProperty("branch_length") > 0.02)
                                     break;
                             }
                             group_subtree(node, node.hasLabel(tree_root_lable)?null:r, graphDb.createNode(orthology_group_lable));
@@ -864,35 +816,20 @@ public class AnnotationLayer {
         }
     }
 
-    private void calculate_seperations(Node main_tree_node, int num_members){
-        double sum;
-        Node node;
-        for (Relationship rel1: main_tree_node.getRelationships(Direction.OUTGOING)){
-            node = rel1.getEndNode();
-            sum = 0;
-            for (Relationship rel2: node.getRelationships(RelTypes.resembles))
-                sum += (double)rel2.getProperty("distance");
-            node.setProperty("separation", sum/(num_members-2));
-        }
-    }
-
-
-    private void remove_best_pair(Node main_tree_node, Node[] gene_pair){
+    private double remove_best_pair(Node main_tree_node, Node[] node_pair){
         double score, smallest_score = Double.MAX_VALUE;
-        Node gene1, gene2;
+        Node node1, node2;
         long r1_id = 0, r2_id = 0;
         for (Relationship rel1: main_tree_node.getRelationships(Direction.OUTGOING)){
-            gene1 = rel1.getEndNode();
+            node1 = rel1.getEndNode();
             for (Relationship rel2: main_tree_node.getRelationships(Direction.OUTGOING)){
-                gene2 = rel2.getEndNode();
-                if (!gene1.equals(gene2)){
-                    score = get_distance(gene1, gene2);
-                       // - (double)gene1.getProperty("separation",0.0)
-                       // - (double)gene2.getProperty("separation",0.0);
+                node2 = rel2.getEndNode();
+                if (!node1.equals(node2)){
+                    score = get_distance(node1, node2);
                     if (score < smallest_score){
                         smallest_score = score;
-                        gene_pair[0] = gene1;
-                        gene_pair[1] = gene2;
+                        node_pair[0] = node1;
+                        node_pair[1] = node2;
                         r1_id = rel1.getId();
                         r2_id = rel2.getId();
                     }
@@ -901,15 +838,20 @@ public class AnnotationLayer {
         }
         graphDb.getRelationshipById(r1_id).delete();
         graphDb.getRelationshipById(r2_id).delete();
+        return smallest_score;
     }
    
     private void compute_pairwise_distances(Node tree_node){
         LinkedList<Node> nodes = new LinkedList();
         Iterator<Node> itr1, itr2;
-        Node gene1, gene2;
+        Node gene1, gene2, node;
         int i;
-        for (Relationship rel: tree_node.getRelationships(Direction.OUTGOING))
-            nodes.add(rel.getEndNode());
+        for (Relationship rel: tree_node.getRelationships(Direction.OUTGOING)){
+            node = rel.getEndNode();
+            node.setProperty("time", (double)0.0);
+            node.setProperty("cardinality", 1);
+            nodes.add(node);
+        }
         for (i = 0, itr1 = nodes.iterator(); itr1.hasNext(); ++i){
             gene1 = itr1.next();
             for (itr2 = nodes.listIterator(i+1); itr2.hasNext(); ){
