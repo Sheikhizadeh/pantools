@@ -720,7 +720,7 @@ public class AnnotationLayer {
         int i, num = 0, num_members, c1, c2;
         double distance;
         ResourceIterator<Node> nodes;
-        Node tree_node, main_tree_node, gene;
+        Node tree_node = null, main_tree_node, gene;
         Node[] node_pair = new Node[2];
         System.out.println("Making gene trees...");
         try (Transaction tx1 = graphDb.beginTx()) {
@@ -755,9 +755,8 @@ public class AnnotationLayer {
                                     }
                                 }                            
                             }
-                            Relationship r = main_tree_node.getSingleRelationship(RelTypes.branches,Direction.OUTGOING);
-                            r.getEndNode().addLabel(tree_root_lable);
-                            r.delete();
+                            main_tree_node.getSingleRelationship(RelTypes.branches,Direction.OUTGOING).delete();
+                            tree_node.addLabel(tree_root_lable);
                             main_tree_node.delete();
                         }
                         System.out.print("\rTrees : " + num);
@@ -772,7 +771,8 @@ public class AnnotationLayer {
     }   
     
     void build_orthology_groups() {
-        int i, num = 0;
+        int i, num = 0, c1, c2;
+        double prev_branch_len, branch_length;
         ResourceIterator<Node> nodes;
         Node gene, node;
         Relationship r = null;
@@ -784,12 +784,22 @@ public class AnnotationLayer {
                     for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
                         gene = nodes.next();
                         if (gene.hasLabel(coding_gene_label) && !gene.hasRelationship(RelTypes.contains)){
+                            prev_branch_len = 1;
                             for (node = gene; !node.hasLabel(tree_root_lable); node = r.getStartNode()){
                                 r = node.getSingleRelationship(RelTypes.branches, Direction.INCOMING);
-                                if ((double)r.getProperty("branch_length") > 0.02)
+                                branch_length = (double)r.getProperty("branch_length");
+                                if (branch_length == 0)
+                                    branch_length = 0.001;
+                                if (branch_length > 10 * prev_branch_len){
+                                    c1 = (int)node.getProperty("cardinality");
+                                    c2 = (int)r.getStartNode().getProperty("cardinality");
+                                    if (c2 - c1 <= 0.1 * c2 )
+                                        node = r.getStartNode();
                                     break;
+                                }
+                                prev_branch_len = branch_length;
                             }
-                            group_subtree(node, node.hasLabel(tree_root_lable)?null:r, graphDb.createNode(orthology_group_lable));
+                            group_subtree(node, graphDb.createNode(orthology_group_lable));
                             ++num;
                             System.out.print("\rOrthology groups : " + num);
                         }
@@ -804,15 +814,14 @@ public class AnnotationLayer {
     }   
 
     
-    private void group_subtree(Node tree_node, Relationship branch, Node group_node){
+    private void group_subtree(Node tree_node, Node group_node){
         if (tree_node.hasLabel(coding_gene_label)){
             if (!tree_node.hasRelationship(Direction.INCOMING, RelTypes.contains))
                 group_node.createRelationshipTo(tree_node, RelTypes.contains);
         }
         else {
-            for (Relationship r: tree_node.getRelationships(RelTypes.branches))
-                if (!r.equals(branch))
-                    group_subtree(r.getOtherNode(tree_node), r, group_node);
+            for (Relationship r: tree_node.getRelationships(RelTypes.branches, Direction.OUTGOING))
+                group_subtree(r.getOtherNode(tree_node), group_node);
         }
     }
 
