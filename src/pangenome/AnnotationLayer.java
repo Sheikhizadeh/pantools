@@ -741,7 +741,7 @@ public class AnnotationLayer {
                                     orthology_group_node = graphDb.createNode(orthology_group_lable);
                                     for (int j = 0; j < fields.length; ++j)
                                         orthology_group_node.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[j])), RelTypes.contains);
-                                    build_phylogeny_tree(orthology_group_node);
+                                    //build_phylogeny_tree(orthology_group_node);
                                 }
                                 clusters_file.close();
                             }catch (IOException ex){
