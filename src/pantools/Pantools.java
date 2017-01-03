@@ -50,8 +50,7 @@ public class Pantools {
     public static Label CDS_label = DynamicLabel.label("CDS");
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
     public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
-    public static Label noncoding_group_lable = DynamicLabel.label("noncoding_group");
-    public static Label gene_tree_lable = DynamicLabel.label("gene_tree");
+    public static Label homology_group_lable = DynamicLabel.label("homology_group");
     public static Label tree_node_lable = DynamicLabel.label("tree_node");
     public static Label tree_root_lable = DynamicLabel.label("tree_root");
     public static Label outgroup_gene_lable = DynamicLabel.label("outgroup_gene");
@@ -60,10 +59,10 @@ public class Pantools {
         FF, FR, RF, RR,
         has, // for pointing to genome and sequence nodes
         visits, // for connecting genes to the nodes
-        contains, // for pointing to gene nodes of the group
+        has_homolog, // for pointing to gene nodes from the homology group
+        has_ortholog, // for pointing to gene nodes from the orthology group
         codes_for,// for connecting genes to mRNAs
-        contributes_to,// for connecting CDSs and LTRs to mRNA
-        covers, //to connect CDSs to the nodes
+        contributes_to,// for connecting CDSs to mRNA
         resembles, //to connect similar proteins (coding_mRNA) nodes
         branches //to connect tree nodes
     }
@@ -135,14 +134,7 @@ public class Pantools {
                     print_help_comment();
                     System.exit(1);
                 }
-                annLayer.group_homologs(args);
-                break;
-            case "cnv":
-                if (args.length < 3) {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                annLayer.cnv_report(args[1], args[2]);
+                annLayer.group(args);
                 break;
             case "compare":
                 if (args.length < 3) {

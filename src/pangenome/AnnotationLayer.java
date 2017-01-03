@@ -5,7 +5,6 @@
  */
 package pangenome;
 
-import alignment.AlignmentBlock;
 import alignment.ProteinAlignment;
 import alignment.SequenceAlignment;
 import genome.SequenceDatabase;
@@ -27,10 +26,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.PriorityQueue;
-import java.util.Queue;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
-import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
@@ -62,10 +59,7 @@ import static pantools.Pantools.broken_protein_label;
 import static pantools.Pantools.coding_gene_label;
 import static pantools.Pantools.executeCommand;
 import static pantools.Pantools.orthology_group_lable;
-import static pantools.Pantools.gene_tree_lable;
-import static pantools.Pantools.node_label;
-import static pantools.Pantools.noncoding_group_lable;
-import static pantools.Pantools.outgroup_gene_lable;
+import static pantools.Pantools.homology_group_lable;
 import static pantools.Pantools.reverse_complement;
 import static pantools.Pantools.tree_node_lable;
 import static pantools.Pantools.tree_root_lable;
@@ -81,6 +75,8 @@ public class AnnotationLayer {
     public double LEN_FACTOR = 0.5;
     public double THRESHOLD = 0.75;
     public int MAX_LENGTH  = 1000;
+    public String SIMILARITY_GRAPH_FILE_NAME = "graph.abc";
+    public String CLUSTERS_FILE_NAME = "clusters.txt";
     ProteinAlignment pro_aligner;
     SequenceAlignment seq_aligner;
     /**
@@ -103,8 +99,7 @@ public class AnnotationLayer {
     }
 
     /**
-     * Adds nodes of different genomic features to the pangenome.
-     * All features should be annotated in the hierarchical order of gene, RNA, exon, CDS  
+     * Adds nodes related to different genomic features to the pangenome.
      * 
      * @param gff_paths_file A text file listing the paths to the annotation files
      * @param PATH Path to the database folder
@@ -501,9 +496,13 @@ public class AnnotationLayer {
     }
 
     /**
-     * Groups the highly similar genes together
+     * Groups the similar genes into homology and orthology groups
+     * @param args The command line arguments:
+     * args[1] Path to the database folder
+     * args[2] THRESHOLD to be replaced by the default value, if given
+     * args[3] LEN_FACTOR to be replaced by the default value, if given
      */
-    public void group_homologs(String[] args) {
+    public void group(String[] args) {
         int num, num_coding_groups=0, total_genes=0, num_genes,trsc;
         Node gene_node;
         ResourceIterator<Node> genes_iterator;
@@ -534,8 +533,9 @@ public class AnnotationLayer {
                         for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc, ++total_genes) {
                             gene_node=genes_iterator.next();
                         // To avoid having one gene in different groups    
-                            if (gene_node.hasLabel(coding_gene_label) && !gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { 
-                                num = group_similar_genes(similar_groups, pq, gene_node);
+                            if (gene_node.hasLabel(coding_gene_label) && !gene_node.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)) { 
+                            // num would be negative if some groups merge 
+                                num = build_homology_groups(similar_groups, pq, gene_node);
                                 num_coding_groups += num;
                                 if (trsc % 11 == 1 )
                                     System.out.print("\r" + total_genes + "\t" + num_coding_groups);
@@ -549,8 +549,9 @@ public class AnnotationLayer {
                 tx1.success();
             } // transaction 1
             build_orthology_groups();
-            drop_edges_of_type(RelTypes.resembles);
             set_groups_properties();
+            System.out.println("Elapsed time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
+            build_phylogeny_trees();
         } else {
             System.out.println("pangenome database not found!");
             System.exit(0);
@@ -558,16 +559,15 @@ public class AnnotationLayer {
     }
 
     /**
-     * Finds and puts all the similar coding genes in the gene_bag
-     * @param gene_bag The output of the function, containing the genes similar to gene
+     * Puts all the genes homologous to a query gene in one homology group
+     * @param similar_groups An empty list to be used for storing groups with a member similar the the query_gene
      * @param crossing_genes An empty priority queue to be filled with the genes crossing the query_gene 
-     * @param query_gene The gene to which similar one should be found
-     * @param pro_aligner The protein aligner object
-     * @return If exists, the group node of the similar genes; otherwise null
+     * @param query_gene The gene to which similar ones should be found
+     * @return The value by which the number of groups have been increased. (Could be a negative value if some groups get merged) 
      */
-    private int group_similar_genes(LinkedList<Node> similar_groups, PriorityQueue<Long> crossing_genes, Node query_gene){
+    private int build_homology_groups(LinkedList<Node> similar_groups, PriorityQueue<Long> crossing_genes, Node query_gene){
         double similarity;
-        Node current_gene_node,node, group_node, main_group_node;
+        Node current_gene_node,node, group_node, homology_group_node;
         Relationship r = null;
         long gene_id, current_gene_id;
         crossing_genes.clear();
@@ -581,8 +581,8 @@ public class AnnotationLayer {
                     crossing_genes.offer(current_gene_node.getId());
             }
         }
-        main_group_node = graphDb.createNode(orthology_group_lable);
-        main_group_node.createRelationshipTo(query_gene, RelTypes.contains);
+        homology_group_node = graphDb.createNode(homology_group_lable);
+        homology_group_node.createRelationshipTo(query_gene, RelTypes.has_homolog);
         if (!crossing_genes.isEmpty())
         {
             gene_id = -1l;
@@ -595,26 +595,31 @@ public class AnnotationLayer {
                     //similarity = query_gene.hasLabel(coding_gene_label)?get_coding_genes_similarity(query_gene, current_gene_node):get_noncoding_genes_similarity(query_gene, current_gene_node);
                     similarity = get_coding_genes_similarity(query_gene, current_gene_node);
                    if ( similarity > THRESHOLD ) {
-                        if(current_gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)){
-                            group_node = current_gene_node.getSingleRelationship(RelTypes.contains, Direction.INCOMING).getStartNode();
+                        if(current_gene_node.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
+                            group_node = current_gene_node.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING).getStartNode();
                             if (!similar_groups.contains(group_node))
                                 similar_groups.add(group_node);
                         }
                         else 
-                            main_group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
+                            homology_group_node.createRelationshipTo(current_gene_node, RelTypes.has_homolog);
                         query_gene.createRelationshipTo(current_gene_node, RelTypes.resembles).setProperty("similarity", similarity);
                     }
                     gene_id = current_gene_id;
                 }
             }// while
             if (similar_groups.size() > 0){
-                merge_groups(similar_groups, main_group_node);
+                merge_groups(similar_groups, homology_group_node);
                 return 1 - similar_groups.size(); // One group created but some others merged into it
             }
         }
         return 1; // One group created
     }
     
+    /**
+     * Given a list of homology groups with a gene shared by the main group, merges them in one group
+     * @param groups A linked list of the homology groups with a gene shared by the main group
+     * @param main_group The main group
+     */
     private void merge_groups(LinkedList<Node> groups, Node main_group){
         ListIterator<Node> itr = groups.listIterator();
         Node group, node;
@@ -622,13 +627,19 @@ public class AnnotationLayer {
             group = itr.next();
             for (Relationship rel: group.getRelationships(Direction.OUTGOING)){
                 node = rel.getEndNode();
-                main_group.createRelationshipTo(node, RelTypes.contains);
+                main_group.createRelationshipTo(node, RelTypes.has_homolog);
                 rel.delete();
             }
             group.delete();
         }
     }
     
+    /**
+     * Given two genes calculates the normalized similarity score between them. (score <= 1)
+     * @param gene1 The first coding gene
+     * @param gene2 The second coding gene
+     * @return The normalized similarity score which is at most 1
+     */
     private double get_coding_genes_similarity(Node gene1 , Node gene2){
         Node mRNA_node1, mRNA_node2;
         String p1, p2;
@@ -656,33 +667,13 @@ public class AnnotationLayer {
         return best_similarity;
     }
     
-    private double get_noncoding_genes_similarity(Node gene1 , Node gene2){
-        Node RNA_node1, RNA_node2;
-        String RNA_seq1, RNA_seq2, RNA_node1_type,RNA_node2_type;
-        int RNA_len1, RNA_len2;
-        double similarity, best_similarity = 0;
-        for (Relationship r1: gene1.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-            RNA_node1 = r1.getEndNode();
-            RNA_node1_type = (String)RNA_node1.getProperty("type");
-            for (Relationship r2: gene2.getRelationships(Direction.OUTGOING,RelTypes.codes_for)) {
-                RNA_node2 = r2.getEndNode();
-                RNA_node2_type = (String)RNA_node2.getProperty("type");
-                if ( RNA_node1_type.equals(RNA_node2_type) && (RNA_node1_type.equals("tRNA") || RNA_node1_type.equals("rRNA"))){
-                    RNA_seq1 = (String)RNA_node1.getProperty("sequence");
-                    RNA_seq2 = (String)RNA_node2.getProperty("sequence");
-                    RNA_len1 = RNA_seq1.length();
-                    RNA_len2 = RNA_seq2.length();
-                    if ( Math.abs(RNA_len1 - RNA_len2) <= Math.max(RNA_len1, RNA_len2)*LEN_FACTOR){
-                            similarity = sequence_similarity(RNA_seq1,RNA_seq2);
-                            if ( similarity > best_similarity ) 
-                                best_similarity = similarity;
-                    }
-                }
-            }
-        }
-        return best_similarity;
-    }
-    
+    /**
+     * Given two proteins calculates the normalized similarity score between them which is less or equal to 1.
+     * Proteins longer than MAX_LENGTH will be broken in smaller parts to be compared correspondingly.  
+     * @param p1 The first protein
+     * @param p2 The second protein
+     * @return The normalized similarity score which is less or equal to 1
+     */
     double protein_similarity(String p1, String p2){
         int m = p1.length(), n = p2.length(), max_len = max(m,n);
         int i, parts_num = 1, part_len1, part_len2;
@@ -698,6 +689,12 @@ public class AnnotationLayer {
         return score / parts_num;
     }
 
+    /**
+     * Given two nucleotide sequences, calculates the normalized similarity score between them which is less or equal to 1.
+     * @param s1 The first sequence
+     * @param s2 The second sequence
+     * @return The normalized similarity score which is less or equal to 1
+     */
     double sequence_similarity(String s1, String s2){
         int m = s1.length(), n = s2.length(), max_len = max(m,n);
         int i, parts_num = 1, part_len1, part_len2;
@@ -714,12 +711,12 @@ public class AnnotationLayer {
     }
     
     /**
-     * Creates super groups and sets copy_number_variation and num_members of the groups
-     */    
+     * divides the pre-calculated homology groups into orthology groups using MCL algorithm 
+     */   
     void build_orthology_groups() {
         int i, num = 0, num_members;
         ResourceIterator<Node> nodes;
-        Node group_node, orthology_group_node;
+        Node homology_group_node, orthology_group_node;
         String line;
         String[] fields;
         System.out.println("Building orthology groups...");
@@ -728,119 +725,57 @@ public class AnnotationLayer {
             while (nodes.hasNext()) {
                 try (Transaction tx2 = graphDb.beginTx()) {
                     for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
-                        group_node = nodes.next();
-                        num_members = group_node.getDegree(); 
-                        if (group_node.hasLabel(orthology_group_lable) && num_members > 2){
+                        homology_group_node = nodes.next();
+                        num_members = homology_group_node.getDegree(); 
+                        if (homology_group_node.hasLabel(homology_group_lable) && num_members > 2){
                             ++num;
-                            compute_pairwise_distances(group_node);
-                            executeCommand("mcl graph.abc --abc -I 5 -o clusters.txt");
+                            compute_pairwise_similaities(homology_group_node);
+                            executeCommand("mcl graph.abc --abc -I 5 -o " + CLUSTERS_FILE_NAME);
                             try (BufferedReader clusters_file = new BufferedReader(new FileReader("clusters.txt"))){
                                 while (clusters_file.ready()){
                                     line = clusters_file.readLine().trim();
                                     fields = line.split("\\s");
                                     orthology_group_node = graphDb.createNode(orthology_group_lable);
                                     for (int j = 0; j < fields.length; ++j)
-                                        orthology_group_node.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[j])), RelTypes.contains);
-                                    //build_phylogeny_tree(orthology_group_node);
+                                        orthology_group_node.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[j])), RelTypes.has_ortholog);
                                 }
                                 clusters_file.close();
                             }catch (IOException ex){
                                 
                             }
                         }
-                        System.out.print("\rOrthology groups : " + num);
+                        if (i % 11 == 1)
+                            System.out.print("\rOrthology groups : " + num);
                     }
+                    System.out.print("\rOrthology groups : " + num);
                     tx2.success();
                 }
             }
+            System.out.print("\rOrthology groups : " + num);
             nodes.close();
             System.out.println();
             tx1.success();
         }
     }   
 
-    void build_phylogeny_tree(Node orthology_group_node) {
-        int num_members, c1, c2;
-        double distance, d1, d2;
-        LinkedList<Node> members = new LinkedList();
-        Node tree_node = null, gene;
-        Node[] node_pair = new Node[2];
-        try (Transaction tx1 = graphDb.beginTx()) {
-            for (Relationship rel: orthology_group_node.getRelationships(Direction.OUTGOING))
-                 members.add(rel.getEndNode());
-            num_members = orthology_group_node.getDegree(); 
-            if (num_members > 2){
-            // while tree is not completed    
-                for(; num_members > 1; --num_members){
-                    distance = remove_best_pair(members, node_pair);
-                    tree_node = graphDb.createNode(tree_node_lable);
-                    tree_node.createRelationshipTo(node_pair[0], RelTypes.branches).setProperty("branch_length", distance/2 - (double)node_pair[0].getProperty("time"));
-                    tree_node.createRelationshipTo(node_pair[1], RelTypes.branches).setProperty("branch_length", distance/2 - (double)node_pair[1].getProperty("time"));
-                    tree_node.setProperty("time", distance/2);
-                    c1 = (int)node_pair[0].getProperty("cardinality");
-                    c2 = (int)node_pair[1].getProperty("cardinality");
-                    tree_node.setProperty("cardinality", c1 + c2);
-                // Update distances    
-                    for (Relationship rel1: node_pair[0].getRelationships(RelTypes.resembles)){
-                        gene = rel1.getOtherNode(node_pair[0]);
-                        if (!gene.equals(node_pair[1])){
-                            Relationship rel2 = get_edge(node_pair[1], gene, RelTypes.resembles);
-                            d1 = 1 - (double)rel1.getProperty("similarity");
-                            d2 = 1 - (double)rel2.getProperty("similarity");
-                            tree_node.createRelationshipTo(gene, RelTypes.resembles).setProperty("similarity", 1 -((d1 * c1 + d2 * c2) / (c1 + c2)));
-                        }
-                    }                            
-                    members.add(tree_node);
-                }
-                tree_node.addLabel(tree_root_lable);
-            }
-            tx1.success();
-        }
-    }   
-
-    private double remove_best_pair(LinkedList<Node> members, Node[] node_pair){
-        double distance, smallest_distance = Double.MAX_VALUE;
-        Node node1, node2;
-        ListIterator<Node> itr1 = members.listIterator(), itr2;
-        int i, j, indx1 = 0, indx2 = 0;
-        for (i = 0; itr1.hasNext(); ++i){
-            node1 = itr1.next();
-            itr2 = members.listIterator(i+1);
-            for (j = i+1; itr2.hasNext(); ++j){
-                node2 = itr2.next();
-                distance = 1 - get_similarity(node1, node2);
-                if (distance < smallest_distance){
-                    smallest_distance = distance;
-                    node_pair[0] = node1;
-                    node_pair[1] = node2;
-                    indx1 = i;
-                    indx2 = j;
-                }
-            }
-        }
-        members.remove(indx1);
-        members.remove(indx2);
-        return smallest_distance;
-    }
-   
-    private void compute_pairwise_distances(Node group_node){
+    /**
+     * Given a homology group complete all the pairwise similarities between its members and 
+     * writes the weighted edges of the graph in SIMILARITY_GRAPH_FILE_NAME to be used by MCL clustering algorithm.
+     * @param homology_group_node The homology group
+     */
+    private void compute_pairwise_similaities(Node homology_group_node){
         LinkedList<Node> nodes = new LinkedList();
-        Iterator<Node> itr1, itr2;
+        ListIterator<Node> itr1, itr2;
         Node gene1, gene2, node;
         double similarity;
-        int i;
-        try (BufferedWriter graph = new BufferedWriter(new FileWriter("graph.abc"))){
-            for (Relationship rel: group_node.getRelationships(Direction.OUTGOING)){
+        try (BufferedWriter graph = new BufferedWriter(new FileWriter(SIMILARITY_GRAPH_FILE_NAME))){
+            for (Relationship rel: homology_group_node.getRelationships(Direction.OUTGOING)){
                 node = rel.getEndNode();
-                node.setProperty("time", (double)0.0);
-                node.setProperty("cardinality", 1);
                 nodes.add(node);
-                rel.delete();
             }
-            group_node.delete();
-            for (i = 0, itr1 = nodes.iterator(); itr1.hasNext(); ++i){
+            for (itr1 = nodes.listIterator(); itr1.hasNext(); ){
                 gene1 = itr1.next();
-                for (itr2 = nodes.listIterator(i+1); itr2.hasNext(); ){
+                for (itr2 = nodes.listIterator(itr1.nextIndex()); itr2.hasNext(); ){
                     gene2 = itr2.next();
                     if (get_edge(gene1, gene2, RelTypes.resembles) == null){
                         similarity = get_coding_genes_similarity(gene1, gene2);
@@ -849,7 +784,9 @@ public class AnnotationLayer {
                     else
                         similarity = get_similarity(gene1, gene2);
                     if (similarity > THRESHOLD)
-                        graph.write(gene1.getId()+" "+gene2.getId()+" "+ Math.pow((similarity - THRESHOLD)*100,2) +"\n");
+                    // converts the similarity scores to a number between 0 and ( 1 - THRESHOLD)*100 ^ 2.
+                    // This increases the sensitivity of MCL clustering algorithm.
+                        graph.write(gene1.getId()+" "+gene2.getId()+" "+ (similarity <= 0 ? 0.0 : Math.pow((similarity - THRESHOLD)*100,2)) +"\n");
                 } 
             }
             graph.close();
@@ -857,88 +794,37 @@ public class AnnotationLayer {
         }
     }
     
+    /**
+     * Retrieves the similarity score of two nodes. Nodes represent tips (genes) or internal nodes of the phylogeny tree. 
+     * @param node1 The first node
+     * @param node2 The second node
+     * @return The similarity score between two nodes of the phylogeny tree.
+     */
     private double get_similarity(Node node1, Node node2){
         Relationship rel = get_edge(node1, node2, RelTypes.resembles);
         return (double)rel.getProperty("similarity");
     }
 
+    /**
+     * Retrieves the first random relationship of a specific type which connects two nodes in any direction. 
+     * @param node1 The first node
+     * @param node2 The second node
+     * @param rt The relationship type
+     * @return 
+     */
     private Relationship get_edge(Node node1, Node node2, RelationshipType rt){
-        for (Relationship rel: node1.getRelationships(rt, Direction.OUTGOING))
+        for (Relationship rel: node1.getRelationships(rt,Direction.OUTGOING))
             if (rel.getEndNode().equals(node2))
                 return rel;
-        for (Relationship rel: node2.getRelationships(rt, Direction.OUTGOING))
-            if (rel.getEndNode().equals(node1))
+        for (Relationship rel: node1.getRelationships(rt,Direction.INCOMING))
+            if (rel.getStartNode().equals(node2))
                 return rel;
         return null;
     }
 
-    void old_build_orthology_groups() {
-        int i, num = 0, c1, c2;
-        double prev_branch_len, branch_length;
-        ResourceIterator<Node> nodes;
-        Node gene, node;
-        Relationship r = null;
-        System.out.println("Building orthology groups...");
-        try (Transaction tx1 = graphDb.beginTx()) {
-            nodes = graphDb.getAllNodes().iterator();
-            while (nodes.hasNext()) {
-                try (Transaction tx2 = graphDb.beginTx()) {
-                    for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
-                        gene = nodes.next();
-                        if (gene.hasLabel(coding_gene_label) && !gene.hasRelationship(RelTypes.contains)){
-                            prev_branch_len = 1;
-                            for (node = gene; !node.hasLabel(tree_root_lable); node = r.getStartNode()){
-                                r = node.getSingleRelationship(RelTypes.branches, Direction.INCOMING);
-                                branch_length = (double)r.getProperty("branch_length");
-                                if (branch_length == 0)
-                                    branch_length = 0.001;
-                                if (branch_length > 10 * prev_branch_len){
-                                    //c1 = (int)node.getProperty("cardinality");
-                                    //c2 = (int)r.getStartNode().getProperty("cardinality");
-                                    //if (c2 - c1 <= 0.1 * c2 )
-                                    //    node = r.getStartNode();
-                                    break;
-                                }
-                                prev_branch_len = branch_length;
-                            }
-                            //group_subtree(node, graphDb.createNode(orthology_group_lable));
-                            ++num;
-                            System.out.print("\rOrthology groups : " + num);
-                        }
-                    }
-                    tx2.success();
-                }
-            }
-            System.out.println();
-            nodes.close();
-            tx1.success();
-        }
-    }  
-    
     /**
-     * Remove the occurrence arrays of the edges.
-     */    
-    void drop_edges_of_type(RelationshipType type) {
-        int i;
-        ResourceIterator<Relationship> rels;
-        Relationship r;
-        try (Transaction tx = graphDb.beginTx()) {
-            rels = graphDb.getAllRelationships().iterator();
-            tx.success();
-        }
-        while (rels.hasNext()) {
-            try (Transaction tx = graphDb.beginTx()) {
-                for (i = 0; i < MAX_TRANSACTION_SIZE && rels.hasNext(); ++i) {
-                    r = rels.next();
-                    if (r.isType(type))
-                        r.delete();
-                }
-                tx.success();
-            }
-        }
-        rels.close();
-    }   
-    
+     * Calculates the copy number of the genes in different geneomes to be stored in the orthology nodes.
+     */
     void set_groups_properties() {
         int i, num_members;
         int[] copy_number = new int[genomeDb.num_genomes+1];
@@ -971,83 +857,140 @@ public class AnnotationLayer {
         nodes.close();
     }    
     
-    public void cnv_report(String PATH, String keyword) {
-        /*int num_coding_groups=0, num_noncoding_groups=0, total_genes=0, group_size, num_genes,trsc;
-        Node group_node, current_gene_node = null;
-        ResourceIterator<Node> groups_iterator;
-        if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
-                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
-            registerShutdownHook(graphDb);
-            startTime = System.currentTimeMillis();
-            genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
-            Queue<Node> gene_nodes = new LinkedList(); 
-            PriorityQueue<Long> pq = new PriorityQueue();
-            SequenceAlignment seq_aligner = new SequenceAlignment(-2.0,-1.0,4.0,-2.0,1000);
-            ProteinAlignment pro_aligner = new ProteinAlignment(-1.0,0.25,1000);
-            try (Transaction tx1 = graphDb.beginTx()) {
-                groups_iterator = graphDb.findNodes(coding_group_lable);
-                System.out.println("THRESHOLD="+THRESHOLD+"\tLEN_FACTOR="+LEN_FACTOR);
-                System.out.println("Grouping " + num_genes +" genes...");
-                System.out.println("genes\t\tcoding_groups\t\tnoncoding_groups");
-                while (groups_iterator.hasNext()) {
-                    try (Transaction tx2 = graphDb.beginTx()) {
-                        for (trsc = 0; groups_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
-                            group_node=groups_iterator.next();
-                        // To avoid having one gene in different groups    
-                            if (!gene_node.hasRelationship(RelTypes.contains, Direction.INCOMING)) { 
-                                if (gene_node.hasLabel(coding_gene_label) )
-                                    group_node = get_homologs(gene_nodes, pq, gene_node, pro_aligner);
-                                else 
-                                    group_node = get_gene_family(gene_nodes, pq, gene_node, seq_aligner);
-                                group_size = gene_nodes.size()+1;
-                                if (group_node == null){
-                                    if (group_size == 1){
-                                        if (gene_node.hasLabel(coding_gene_label)){
-                                            group_node = graphDb.createNode(coding_group_lable);
-                                            ++num_coding_groups;
-                                        } else {
-                                            group_node = graphDb.createNode(noncoding_group_lable);
-                                            ++num_noncoding_groups;
-                                        }
-                                        total_genes += 1;
-                                        group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                                        continue;
-                                    }
-                                    if (gene_node.hasLabel(coding_gene_label)){
-                                        group_node = graphDb.createNode(coding_group_lable);
-                                        ++num_coding_groups;
-                                    } else {
-                                        group_node = graphDb.createNode(noncoding_group_lable);
-                                        ++num_noncoding_groups;
-                                    }
-                                }
-                                total_genes += group_size;
-                            // Because the gene has not been added to the group itself    
-                                group_node.createRelationshipTo(gene_node, RelTypes.contains);
-                                while (!gene_nodes.isEmpty()) {
-                                    current_gene_node = gene_nodes.remove();
-                                    group_node.createRelationshipTo(current_gene_node, RelTypes.contains);
-                                }
-                                if (num_coding_groups % 10 == 1 )
-                                    break;
+    /**
+     * Constructs a UPMGA phylogeny tree for the members of each orthology group
+     */
+    public void build_phylogeny_trees() {
+        ResourceIterator<Node> nodes;
+        Node orthology_group_node;
+        int i, num = 0, num_members, c1, c2;
+        double distance, d1, d2;
+        LinkedList<Node> members = new LinkedList();
+        Node tree_node = null, node;
+        Node[] node_pair = new Node[2];
+        System.out.println("Building gene trees...");
+        try (Transaction tx1 = graphDb.beginTx()) {
+            nodes = graphDb.getAllNodes().iterator();
+            while (nodes.hasNext()) {
+                try (Transaction tx2 = graphDb.beginTx()) {
+                    for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
+                        orthology_group_node = nodes.next();
+                        if (orthology_group_node.hasLabel(orthology_group_lable)){
+                            ++num;
+                            members.clear();
+                        // Initialize the cardinality and time of the leaves    
+                            for (Relationship rel: orthology_group_node.getRelationships(Direction.OUTGOING)){
+                                node = rel.getEndNode();
+                                node.setProperty("time", (double)0.0);
+                                node.setProperty("cardinality", 1);
+                                members.add(node);
                             }
-                        }// for
-                        System.out.print("\r" + total_genes + "\t\t" + num_coding_groups + "\t\t" + num_noncoding_groups);
-                        tx2.success();
-                    }// transaction 2
-                } // while 
-                tx1.success();
-                System.out.println("\r" + total_genes + "\t\t" + num_coding_groups + "\t\t" + num_noncoding_groups);
-                finalize_groups();
-                drop_edges_of_type(RelTypes.resembles);
-            } // transaction 1
-        } else {
-            System.out.println("pangenome database not found!");
-            System.exit(0);
-        }*/
+                            num_members = orthology_group_node.getDegree(); 
+                        // while tree is not completed    
+                            for(; num_members > 1; --num_members){
+                                distance = remove_best_pair(members, node_pair);
+                                tree_node = graphDb.createNode(tree_node_lable);
+                                tree_node.createRelationshipTo(node_pair[0], RelTypes.branches).setProperty("branch_length", distance/2 - (double)node_pair[0].getProperty("time"));
+                                tree_node.createRelationshipTo(node_pair[1], RelTypes.branches).setProperty("branch_length", distance/2 - (double)node_pair[1].getProperty("time"));
+                                tree_node.setProperty("time", distance/2);
+                                c1 = (int)node_pair[0].getProperty("cardinality");
+                                c2 = (int)node_pair[1].getProperty("cardinality");
+                                tree_node.setProperty("cardinality", c1 + c2);
+                            // Update distances    
+                                for (Relationship rel1: node_pair[0].getRelationships(RelTypes.resembles)){
+                                    node = rel1.getOtherNode(node_pair[0]);
+                                    if (!node.equals(node_pair[1])
+                                        && (node.hasLabel(tree_node_lable) || node.getSingleRelationship(RelTypes.has_ortholog, Direction.INCOMING).getStartNode().equals(orthology_group_node))){
+                                        Relationship rel2 = get_edge(node_pair[1], node, RelTypes.resembles);
+                                        d1 = 1 - (double)rel1.getProperty("similarity");
+                                        d2 = 1 - (double)rel2.getProperty("similarity");
+                                        tree_node.createRelationshipTo(node, RelTypes.resembles).setProperty("similarity", 1 -((d1 * c1 + d2 * c2) / (c1 + c2)));
+                                        rel1.delete();
+                                        rel2.delete();
+                                    }
+                                }                            
+                                members.add(tree_node);
+                            }
+                            tree_node.addLabel(tree_root_lable);
+                            tx1.success();
+                        }
+                        if (i % 11 == 1)
+                            System.out.print("\rTrees : " + num);
+                    }
+                    System.out.print("\rTrees : " + num);
+                    tx2.success();
+                }
+            }
+            System.out.print("\rTrees : " + num);
+            nodes.close();
+        // drops the resembles edges from the pangenome    
+            drop_edges_of_type(RelTypes.resembles);
+            System.out.println();
+            tx1.success();
+        }
     }
 
+    /**
+     * Given a list of nodes, removes the pair with the highest resemblance (lowest distance) from the list and returns their distance.
+     * @param members List of the tree nodes
+     * @param node_pair An output containing the closest pair 
+     * @return 
+     */
+    private double remove_best_pair(LinkedList<Node> members, Node[] node_pair){
+        double distance, smallest_distance = Double.MAX_VALUE;
+        Node node1, node2;
+        ListIterator<Node> itr1 = members.listIterator(), itr2;
+        int indx1 = 0, indx2 = 0;
+        while (itr1.hasNext()){
+            node1 = itr1.next();
+            itr2 = members.listIterator(itr1.nextIndex());
+            while (itr2.hasNext()){
+                node2 = itr2.next();
+                distance = 1 - get_similarity(node1, node2);
+                if (distance < smallest_distance){
+                    smallest_distance = distance;
+                    node_pair[0] = node1;
+                    node_pair[1] = node2;
+                    indx1 = itr1.nextIndex()-1;
+                    indx2 = itr2.nextIndex()-1;
+                }
+            }
+        }
+        if (indx1 < indx2){
+            members.remove(indx1);
+            members.remove(indx2-1);
+        }else{
+            members.remove(indx2);
+            members.remove(indx1-1);
+        }
+        return smallest_distance;
+    }
+    
+    /**
+     * Removes the relationships of a specific type from the pan-genome
+     * @param type The relationship type of interest.
+     */   
+    void drop_edges_of_type(RelationshipType type) {
+        int i;
+        ResourceIterator<Relationship> rels;
+        Relationship r;
+        try (Transaction tx = graphDb.beginTx()) {
+            rels = graphDb.getAllRelationships().iterator();
+            tx.success();
+        }
+        while (rels.hasNext()) {
+            try (Transaction tx = graphDb.beginTx()) {
+                for (i = 0; i < MAX_TRANSACTION_SIZE && rels.hasNext(); ++i) {
+                    r = rels.next();
+                    if (r.isType(type))
+                        r.delete();
+                }
+                tx.success();
+            }
+        }
+        rels.close();
+    }   
+    
     /**
      * Shuts down the graph database if the program halts unexpectedly.
      * 
