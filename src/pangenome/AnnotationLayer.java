@@ -75,8 +75,7 @@ public class AnnotationLayer {
     public double LEN_FACTOR = 0.5;
     public double THRESHOLD = 0.75;
     public int MAX_LENGTH  = 1000;
-    public String SIMILARITY_GRAPH_FILE_NAME = "graph.abc";
-    public String CLUSTERS_FILE_NAME = "clusters.txt";
+    public String PATH;
     ProteinAlignment pro_aligner;
     SequenceAlignment seq_aligner;
     /**
@@ -506,7 +505,7 @@ public class AnnotationLayer {
         int num, num_coding_groups=0, total_genes=0, num_genes,trsc;
         Node gene_node;
         ResourceIterator<Node> genes_iterator;
-        String PATH = args[1];
+        PATH = args[1];
         if (args.length > 2){
             THRESHOLD = Double.parseDouble(args[2]);
             if (args.length > 3)
@@ -577,7 +576,7 @@ public class AnnotationLayer {
             for (Relationship r2: node.getRelationships(Direction.INCOMING,RelTypes.visits)) {
                 current_gene_node = r2.getStartNode();
             // avoid comparisons to the gene itself  
-                if(!current_gene_node.equals(query_gene))  
+                if(current_gene_node.hasLabel(coding_gene_label) && !current_gene_node.equals(query_gene))  
                     crossing_genes.offer(current_gene_node.getId());
             }
         }
@@ -717,7 +716,7 @@ public class AnnotationLayer {
         int i, num = 0, num_members;
         ResourceIterator<Node> nodes;
         Node homology_group_node, orthology_group_node;
-        String line;
+        String line, graph_path, clusters_path;
         String[] fields;
         System.out.println("Building orthology groups...");
         try (Transaction tx1 = graphDb.beginTx()) {
@@ -729,9 +728,12 @@ public class AnnotationLayer {
                         num_members = homology_group_node.getDegree(); 
                         if (homology_group_node.hasLabel(homology_group_lable) && num_members > 2){
                             ++num;
-                            compute_pairwise_similaities(homology_group_node);
-                            executeCommand("mcl graph.abc --abc -I 5 -o " + CLUSTERS_FILE_NAME);
-                            try (BufferedReader clusters_file = new BufferedReader(new FileReader("clusters.txt"))){
+                            graph_path = PATH + "/" + homology_group_node.getId() + ".graph";
+                            clusters_path = PATH + "/" + homology_group_node.getId() + ".clusters";
+                            compute_pairwise_similaities(homology_group_node, graph_path);
+                            executeCommand("mcl " + graph_path + " --abc -I 5 -o " + clusters_path);
+                            new File(graph_path).delete();
+                            try (BufferedReader clusters_file = new BufferedReader(new FileReader(clusters_path))){
                                 while (clusters_file.ready()){
                                     line = clusters_file.readLine().trim();
                                     fields = line.split("\\s");
@@ -740,6 +742,7 @@ public class AnnotationLayer {
                                         orthology_group_node.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[j])), RelTypes.has_ortholog);
                                 }
                                 clusters_file.close();
+                                new File(clusters_path).delete();
                             }catch (IOException ex){
                                 
                             }
@@ -763,12 +766,12 @@ public class AnnotationLayer {
      * writes the weighted edges of the graph in SIMILARITY_GRAPH_FILE_NAME to be used by MCL clustering algorithm.
      * @param homology_group_node The homology group
      */
-    private void compute_pairwise_similaities(Node homology_group_node){
+    private void compute_pairwise_similaities(Node homology_group_node, String graph_path){
         LinkedList<Node> nodes = new LinkedList();
         ListIterator<Node> itr1, itr2;
         Node gene1, gene2, node;
         double similarity;
-        try (BufferedWriter graph = new BufferedWriter(new FileWriter(SIMILARITY_GRAPH_FILE_NAME))){
+        try (BufferedWriter graph = new BufferedWriter(new FileWriter(graph_path))){
             for (Relationship rel: homology_group_node.getRelationships(Direction.OUTGOING)){
                 node = rel.getEndNode();
                 nodes.add(node);
