@@ -138,12 +138,11 @@ public class IndexDatabase {
             executeCommand("kmc -r -k" + K_size + " -t" + cores + " -m" + 
                 (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
                 (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);
+            System.out.println("Sorting kmers...                      ");
             String output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
             if (output.startsWith("This database contains sorted k-mers already!")) {
                 new File(index_path + "/kmers.kmc_pre").renameTo(new File(index_path + "/sorted.kmc_pre"));
                 new File(index_path + "/kmers.kmc_suf").renameTo(new File(index_path + "/sorted.kmc_suf"));
-                //Files.copy(Paths.get(path+"/kmers.kmc_pre"), Paths.get(path+"/sorted.kmc_pre"));
-                //Files.copy(Paths.get(path+"/kmers.kmc_suf"), Paths.get(path+"/sorted.kmc_suf"));
             } else {
                 new File(index_path + "/kmers.kmc_pre").delete();
                 new File(index_path + "/kmers.kmc_suf").delete();
