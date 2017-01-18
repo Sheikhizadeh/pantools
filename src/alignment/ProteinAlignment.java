@@ -666,7 +666,7 @@ public class ProteinAlignment {
      */
     public AlignmentBlock get_alignment(String s1, String s2) {
         int i, j;
-        int m = Math.min(s1.length(), MAX_LENGTH), n = Math.min(s2.length(), MAX_LENGTH);
+        int m = s1.length(), n = s2.length();
         AlignmentBlock alignment = new AlignmentBlock();
         alignment.score = get_similarity(s1, s2);
         i = m;
@@ -699,7 +699,7 @@ public class ProteinAlignment {
     public double get_similarity(String s1, String s2) {
         int i, j;
         double match_score = 0, max_score = 0, match_length = 0;
-        int m = Math.min(s1.length(), MAX_LENGTH), n = Math.min(s2.length(), MAX_LENGTH);
+        int m = s1.length(), n = s2.length();
         /*if ( m > n )
             for (i=1; i<=m; ++i)
                 max_score += match[s1.charAt(i-1)][s1.charAt(i-1)];
@@ -708,11 +708,11 @@ public class ProteinAlignment {
                 max_score += match[s2.charAt(j-1)][s2.charAt(j-1)];
         */    
         for (i = 1; i <= m; i++) {
-            left[i][0] = -1000;
+            left[i][0] = Double.NEGATIVE_INFINITY;
             matrix[i][0] = GAP_OPEN + i*GAP_EXT;
         }        
         for (j = 1; j <= n; j++) {
-            up[0][j] = -1000;
+            up[0][j] = Double.NEGATIVE_INFINITY;
             matrix[0][j] = GAP_OPEN + j*GAP_EXT;
         }   
         for (i = 1; i <= m; i++) {

@@ -27,7 +27,7 @@ import static pantools.Pantools.executeCommand;
  * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
  * University, Netherlands
  */
-public class IndexDatabase {
+public final class IndexDatabase {
 
     private kmer key;
     private long[] prefix_ptr;
@@ -135,11 +135,14 @@ public class IndexDatabase {
         try {
             Files.createDirectory(Paths.get(index_path));
             System.out.println("Running KMC2...                      ");
+        // -m<size> - max amount of RAM in GB (from 1 to 1024); default: 12
+        // -ci<value> - exclude k-mers occurring less than <value> times (default: 2)
             executeCommand("kmc -r -k" + K_size + " -t" + cores + " -m" + 
                 (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
                 (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);
             System.out.println("Sorting kmers...                      ");
             String output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
+        // Small databases are usually sorted already    
             if (output.startsWith("This database contains sorted k-mers already!")) {
                 new File(index_path + "/kmers.kmc_pre").renameTo(new File(index_path + "/sorted.kmc_pre"));
                 new File(index_path + "/kmers.kmc_suf").renameTo(new File(index_path + "/sorted.kmc_suf"));
@@ -147,18 +150,63 @@ public class IndexDatabase {
                 new File(index_path + "/kmers.kmc_pre").delete();
                 new File(index_path + "/kmers.kmc_suf").delete();
             }
+        /*
+        All integers in the KMC output files are stored in LSB (least significant byte first) format.
+            
+        A .kmc pre file contains, in the order:
+        [marker] : 4 bytes with the letters: KMCP.
+        [data]: Here are k-mer prefix data. More precisely, it is an array of uint64 elements, of size 4^prefix length. Position x
+                in the array stores the number of different k-mers (in binary) whose prefix is less
+                than x. DNA symbols are encoded as follows: A   0, C   1, G   2, T   3. For example, if the queried
+                k-mer is ACGACTGA and lut prefix length = 4, then we cut off the first 4 symbols, i.e., the prefix ACGA,
+                which is interpreted in binary as x = 24 (since 0 (* 2^6 + 1 * 2^4 + 2 * 2^2 + 0 * 2^0 = 24). Now we look into
+                “data” at locations x and x+1 to read, e.g., 1523 and 1685. This means that in the file .kmc suf in records from
+                1523 to 1685􀀀1 there are suffixes of the k-mers with prefix ACGA. Having got this range, we can now binary
+                search the suffix CTGA.            
+        [header] : 
+        [header position] : An integer consisting of the last 4 bytes in the file. Its contains the relative position of the beginning of the
+        field [header].
+        [marker] : another copy, to signal the file is not truncated.
+        
+        After opening the file, one should do the following:
+        1. Read the first 4 bytes and check if they contain the letters KMCP.
+        2. Jump to position 4 bytes back from end of file (excluding the marker) and read the header position x.
+        3. Jump to position x + 4 (excluding the marker) bytes back from end of file and read the header.
+        4. Read [data].
+            
+        A .kmc suf file contains, in order:
+        [marker] : 4 bytes with the letters: KMCS
+        [data] :An array record t records[total kmers].
+                total kmers is a value taken from the .kmc pre file.
+                record t is a type representing a k-mer. Its first field is the k-mer suffix string, stored on (kmer length 􀀀
+                lut prefix length)=4 bytes. The next field is counter size, with the number of bytes used by the counter,
+                which is either a 1 : : : 4-byte integer, or a 4-byte float.            
+                The k-mers are stored with their leftmost symbol first, packed into bytes. For example, CCACAAAT is
+                represented as 0x51 (for CCAC), 0x03 (for AAAT). Integers are stored according to the LSB (little endian)
+                convention, floats are stored in the same way as they are stored in the memory.
+        [marker] (another copy, to signal the file is not truncated).
+        */
+        
             pre_file = new RandomAccessFile(index_path + "/sorted.kmc_pre", "r");
             pre_file.seek(pre_file.length() - 8);
             header_pos = read_int(pre_file);
-            pre_file.seek(pre_file.length() - 8 - header_pos);
-            // read the index properties    
+            pre_file.seek(pre_file.length() - (8 + header_pos));
+        // read the header of the index    
             K = read_int(pre_file);
-            mode = read_int(pre_file);
-            ctr_size = read_int(pre_file);
-            pre_len = read_int(pre_file);
+        //  k-mer length   
+            mode = read_int(pre_file); 
+        // 0 (occurrence count) or 1 (counting according to Quake quality)
+            ctr_size = read_int(pre_file); 
+        // counter field size: for mode 0 it is 1, 2, 3, or 4; for mode 1 it is always 4
+            pre_len = read_int(pre_file);  
+        // prefix length such that suffix length is divisible by 4. 
+        // Max prefix length is limited up to 15 in KMC (exact value is calculated in such a way that summary size of kmc_pre and kmc_suf should be minimal)
             min_count = read_int(pre_file);
+        // minimum number of k-mer occurrences to be written in the database    
             max_count = read_int(pre_file);
+        // maximum number of k-mer occurrences to be written in the database    
             kmers_num = read_long(pre_file);
+        // total number of k-mers in the database    
             suf_len = K - pre_len;
             key = new kmer(K, pre_len, suf_len);
             System.out.println("Indexing " + kmers_num + " kmers...                    ");

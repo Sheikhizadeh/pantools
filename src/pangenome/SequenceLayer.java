@@ -108,7 +108,6 @@ public class SequenceLayer {
         }
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();  
-               // .setConfig("keep_logical_logs", "4 files").newGraphDatabase(); // Limits the size of transaction log files.
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
         num_nodes = 0;
