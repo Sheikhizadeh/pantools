@@ -37,7 +37,7 @@ public class Pantools {
     public static IndexDatabase indexDb;
     public static SequenceDatabase genomeDb;
     public static SequenceDatabase sequenceDb;
-    public static int MAX_TRANSACTION_SIZE = 200;    //   The number of transactions to be committed in batch
+    public static int MAX_TRANSACTION_SIZE = 20;    //   The number of transactions to be committed in batch
 
     public static Label pangenome_label = DynamicLabel.label("pangenome");
     public static Label genome_label = DynamicLabel.label("genome");
@@ -53,18 +53,19 @@ public class Pantools {
     public static Label homology_group_lable = DynamicLabel.label("homology_group");
     public static Label tree_node_lable = DynamicLabel.label("tree_node");
     public static Label tree_root_lable = DynamicLabel.label("tree_root");
-    public static Label outgroup_gene_lable = DynamicLabel.label("outgroup_gene");
 
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
         has, // for pointing to genome and sequence nodes
         visits, // for connecting genes to the nodes
+        starts,
         has_homolog, // for pointing to gene nodes from the homology group
         has_ortholog, // for pointing to gene nodes from the orthology group
         codes_for,// for connecting genes to mRNAs
         contributes_to,// for connecting CDSs to mRNA
         resembles, //to connect similar proteins (coding_mRNA) nodes
-        branches //to connect tree nodes
+        branches, //to connect tree nodes
+        corsses // between crossing genes
     }
 
     public static long startTime;

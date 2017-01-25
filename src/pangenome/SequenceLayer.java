@@ -324,8 +324,8 @@ public class SequenceLayer {
                         {
                             ++i;
                             //System.out.println(record);
-                            start = graphDb.getNodeById((long)gene.getProperty("start_node_id"));
-                            rstart = graphDb.getRelationshipById((long)gene.getProperty("start_edge_id"));
+                            rstart = gene.getSingleRelationship(RelTypes.starts, Direction.OUTGOING);
+                            start = rstart.getEndNode();
                             address = (int[]) gene.getProperty("address");
                             begin = address[2];
                             end = address[3];
@@ -826,16 +826,18 @@ public class SequenceLayer {
         split_node.setProperty("length", split_len);
     // Updates the edges comming from gene level to the node.    
         for (Relationship r : node.getRelationships(RelTypes.visits, Direction.INCOMING)) 
+            r.getStartNode().createRelationshipTo(split_node, RelTypes.visits);
+        for (Relationship r : node.getRelationships(RelTypes.starts, Direction.INCOMING)) 
         {
-            rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.visits);
-            starts_at = (int) r.getProperty("starts_at",-1);
+            starts_at = (int) r.getProperty("starts_at");
             if (starts_at >= pos) {
+                rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.starts);
                 rel.setProperty("starts_at", (int) r.getProperty("starts_at") - pos);
                 rel.setProperty("forward", r.getProperty("forward"));
                 rel.setProperty("position", r.getProperty("position"));
                 r.delete();
             } 
-        }
+        }        
     // Updating the Kmers chain in the index    
         node_last_kmer = indexDb.find(make_kmer(gen, seq, loc + pos - 1)); 
     // Better than starting traversal from the first kmer of the node in index
@@ -1277,7 +1279,7 @@ public class SequenceLayer {
     void construct_pangenome(int previous_num_genomes) {
         int i;
         Node genome_node, sequence_node;
-        long[] sequence_ids;
+        //long[] sequence_ids;
         phaseTime = System.currentTimeMillis();
         fwd_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
         rev_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
@@ -1290,7 +1292,7 @@ public class SequenceLayer {
                 System.out.println("Processing genome " + genome + " :             ");
                 tx.success();
             }
-            sequence_ids = new long[genomeDb.num_sequences[genome] + 1];
+            //sequence_ids = new long[genomeDb.num_sequences[genome] + 1];
             for (sequence = 1; sequence <= genomeDb.num_sequences[genome]; ++sequence) {
                 System.out.println("sequence " + sequence + "/" + genomeDb.num_sequences[genome] + " of genome " + genome + "\tlength=" + genomeDb.sequence_length[genome][sequence]);
                 try (Transaction tx = graphDb.beginTx()) {
@@ -1299,7 +1301,7 @@ public class SequenceLayer {
                     sequence_node.setProperty("sequence_title", genomeDb.sequence_titles[genome][sequence]);
                     sequence_node.setProperty("sequence_length", genomeDb.sequence_length[genome][sequence]);
                     genome_node.createRelationshipTo(sequence_node, RelTypes.has);
-                    sequence_ids[sequence] = curr_node.getId();
+                    //sequence_ids[sequence] = curr_node.getId();
                     curr_side = 0;
                     position = -1;
                     seq_len = genomeDb.sequence_length[genome][sequence];
@@ -1333,7 +1335,7 @@ public class SequenceLayer {
                 }
             }//sequences
             try (Transaction tx = graphDb.beginTx()) {
-                genome_node.setProperty("sequence_ids", sequence_ids);
+                //genome_node.setProperty("sequence_ids", sequence_ids);
                 tx.success();
             }
             System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");

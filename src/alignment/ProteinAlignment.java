@@ -737,7 +737,7 @@ public class ProteinAlignment {
                 j = j - 1;
             }
         }      
-        return (match_score / max_score) * (match_length / Math.min(m, n));
+        return 100 * (match_score / max_score) * (match_length / Math.min(m, n));
         //return matrix[m][n] / max_score;
     }
 }
