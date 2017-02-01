@@ -563,7 +563,7 @@ public class SequenceDatabase {
      * @return The base 
      */
     public int get_code(int g, int s, int p) {
-        if (p < sequence_length[g][s]) {
+        if (p < sequence_length[g][s] && p > -1) {
             byte b;
             long position = sequence_start[g][s] + p / 2;
             b = genomes_buff[(int) (position / parts_size[0])].get((int) (position % parts_size[0]));
@@ -573,6 +573,7 @@ public class SequenceDatabase {
                 return (b & 0x0f);
             }
         } else {
+            System.out.println("Wrong genomic position: " + p);
             return -1;
         }
     }

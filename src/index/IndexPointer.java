@@ -16,7 +16,6 @@ public class IndexPointer {
     public long node_id;
     public int position;
     public boolean canonical;
-    public long next_index;
 
     /**
      * The default constructor of the class
@@ -25,7 +24,6 @@ public class IndexPointer {
         node_id = -1L;
         canonical = false;
         position = -1;
-        next_index = -1L;
     }
 
     /**
@@ -35,11 +33,10 @@ public class IndexPointer {
      * @param p The position in the node pointer points to
      * @param n Number of the pointer to the next kmer
      */
-    public IndexPointer(long id, boolean c, int p, long n) {
+    public IndexPointer(long id, boolean c, int p) {
         node_id = id;
         canonical = c;
         position = p;
-        next_index = n;
     }
 
     /**
@@ -49,7 +46,6 @@ public class IndexPointer {
         node_id = -1L;
         canonical = false;
         position = -1;
-        next_index = -1L;
     }
     
     public String ToString(){

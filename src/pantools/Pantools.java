@@ -37,7 +37,8 @@ public class Pantools {
     public static IndexDatabase indexDb;
     public static SequenceDatabase genomeDb;
     public static SequenceDatabase sequenceDb;
-    public static int MAX_TRANSACTION_SIZE = 20;    //   The number of transactions to be committed in batch
+    public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
+    public static int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
 
     public static Label pangenome_label = DynamicLabel.label("pangenome");
     public static Label genome_label = DynamicLabel.label("genome");
@@ -53,7 +54,6 @@ public class Pantools {
     public static Label homology_group_lable = DynamicLabel.label("homology_group");
     public static Label tree_node_lable = DynamicLabel.label("tree_node");
     public static Label tree_root_lable = DynamicLabel.label("tree_root");
-
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
         has, // for pointing to genome and sequence nodes

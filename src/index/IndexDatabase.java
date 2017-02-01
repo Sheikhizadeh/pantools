@@ -19,6 +19,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import static pantools.Pantools.cores;
 import static pantools.Pantools.executeCommand;
 
 /**
@@ -48,7 +49,7 @@ public final class IndexDatabase {
 
     private int suf_rec_size;
     private int suf_len;
-    public static int POINTER_LENGTH = 21; // The length of a poniter in bytes
+    public static int POINTER_LENGTH = 13; // The length of a poniter in bytes
     private RandomAccessFile suf_file;
     private RandomAccessFile pre_file;
     private MappedByteBuffer[] suf_buff;
@@ -128,7 +129,6 @@ public final class IndexDatabase {
      * @param genomeDb The genome database
      */
     public IndexDatabase(String index_path, String genomes_path_file, int K_size, SequenceDatabase genomeDb) {
-        int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
         int k;
         long p;
         IndexPointer null_pointer = new IndexPointer();
@@ -350,30 +350,10 @@ public final class IndexDatabase {
             }
             IndexPointer ptr = new IndexPointer();
             System.out.println("Updating kmer index...                    ");
-            for (i = 0; nodes.hasNext();) {
-                try (Transaction tx = graphDb.beginTx()) {
-                    for (trsc = 0; trsc < 10000 && nodes.hasNext(); ++trsc, ++i) {
-                        node = nodes.next();
-                        l = (long) node.getProperty("first_kmer");
-                        p_index = find(old_index.get_kmer(l));
-                        old_index.get_pointer(ptr, l);
-                        put_pointer(ptr, p_index);
-                        node.setProperty("first_kmer", p_index);
-                        for (l = old_index.get_next_index(l); l != -1L; l = old_index.get_next_index(l)) {
-                            c_index = find(old_index.get_kmer(l));
-                            old_index.get_pointer(ptr, l);
-                            put_pointer(ptr, c_index);
-                            put_next_index(c_index, p_index);
-                            p_index = c_index;
-                        }
-                        put_next_index(-1L, p_index);
-                        node.setProperty("last_kmer", p_index);
-                        if (i % (seq_nodes / 100 + 1) == 0) {
-                            System.out.print((long) i * 100 / seq_nodes + 1 + "%    \r");
-                        }
-                    }
-                    tx.success();
-                }
+            for (i = 0; i < old_index.kmers_num; ++i) {
+                p_index = find(old_index.get_kmer(i));
+                old_index.get_pointer(ptr, i);
+                put_pointer(ptr, p_index);
             }
             old_index.close();
             Files.delete(Paths.get(index_path + "/old_index/sorted.kmc_suf"));
@@ -520,7 +500,6 @@ public final class IndexDatabase {
         poniter.node_id = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]));
         poniter.canonical = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].get((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8)) == 0;
         poniter.position = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9));
-        poniter.next_index = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getLong((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 13));
     }
 
     /**
@@ -532,7 +511,6 @@ public final class IndexDatabase {
         ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]), poniter.node_id);
         ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].put((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8), (byte) (poniter.canonical ? 0 : 1));
         ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9), poniter.position);
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putLong((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 13), poniter.next_index);
     }
 
     /**
@@ -587,24 +565,6 @@ public final class IndexDatabase {
      */
     public void put_position(int position, long number) {
         ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9), position);
-    }
-
-    /**
-     * Reads the number of the next in the index database.
-     * @param number Number of the kmer in the index
-     * @return The number of the next kmer
-     */
-    public long get_next_index(long number) {
-        return ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getLong((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 13));
-    }
-
-    /**
-     * Writes the number of the next in the index database.
-     * @param next_index The node id to be written
-     * @param number Number of the kmer in the index
-     */
-    public void put_next_index(long next_index, long number) {
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putLong((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 13), next_index);
     }
 
     /**

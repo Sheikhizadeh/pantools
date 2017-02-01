@@ -25,9 +25,9 @@ import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
-import org.neo4j.io.fs.FileUtils;
 import org.neo4j.graphdb.Direction;
 import static org.neo4j.graphdb.factory.GraphDatabaseSettings.keep_logical_logs;
+import org.neo4j.io.fs.FileUtils;
 import static pantools.Pantools.GENOME_DATABASE_PATH;
 import static pantools.Pantools.GRAPH_DATABASE_PATH;
 import static pantools.Pantools.INDEX_DATABASE_PATH;
@@ -190,7 +190,7 @@ public class SequenceLayer {
                             start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
                             address[2] = 1;
                             address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
-                            extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1), address);
+                            extract_sequence(seq, new IndexPointer(start.getId(), true, 0), address);
                             len = seq.length();
                             if (len % 2 == 1) {
                                 --len;
@@ -330,7 +330,7 @@ public class SequenceLayer {
                             begin = address[2];
                             end = address[3];
                             strand = gene.getProperty("strand").toString().equals("+");
-                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("starts_at"), -1l), address);//
+                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("starts_at")), address);//
                             //genomeDb=new sequence_database(PATH+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
@@ -598,7 +598,7 @@ public class SequenceLayer {
                     }
                     indexDb1.get_pointer(p1, k);
                     indexDb2.get_pointer(p2, k);
-                    if (p1.next_index == -1L && p2.next_index == -1L) {
+                    if (true){//p1.next_index == -1L && p2.next_index == -1L) {
                         n1 = g1.getNodeById(p1.node_id);
                         len1 = (int) n1.getProperty("length");
                         n2 = g2.getNodeById(p2.node_id);
@@ -778,7 +778,7 @@ public class SequenceLayer {
             }
             tx.success();
         }
-        return new IndexPointer(node.getId(), forward, forward ? position - loc : node_len - 1 - (position - loc), -1L);
+        return new IndexPointer(node.getId(), forward, forward ? position - loc : node_len - 1 - (position - loc));
     }
     
     /***
@@ -804,11 +804,11 @@ public class SequenceLayer {
     private Node split(Node node, int pos) {
         int split_len, node_len;
         int i, s_id, gen, seq, loc,starts_at;
-        long inx, split_first_kmer, node_last_kmer;
+        long inx;
         int[] address;
         Node neighbor, split_node;
         Relationship rel;
-        
+        kmer fwd_k_mer, rev_k_mer;
         address = (int[]) node.getProperty("address");
         gen = address[0];
         seq = address[1];
@@ -838,20 +838,19 @@ public class SequenceLayer {
                 r.delete();
             } 
         }        
-    // Updating the Kmers chain in the index    
-        node_last_kmer = indexDb.find(make_kmer(gen, seq, loc + pos - 1)); 
-    // Better than starting traversal from the first kmer of the node in index
-        split_first_kmer = indexDb.get_next_index(node_last_kmer);
-        indexDb.put_next_index(-1L, node_last_kmer);
-        split_node.setProperty("first_kmer", split_first_kmer);
-        split_node.setProperty("last_kmer", node.getProperty("last_kmer"));
+    // Updating the Kmers chain in the index  
+        fwd_k_mer = make_fwd_kmer(gen, seq, loc + pos - 1);
+        rev_k_mer = make_rev_kmer(gen, seq, loc + pos - 1);
         s_id = (int) split_node.getId();
-        for (i = 0, inx = split_first_kmer; inx != -1L; inx = indexDb.get_next_index(inx), ++i) 
+        for (i = 0; i < split_len - K + 1; ++i) 
         {
+            fwd_k_mer.next_up_kmer(genomeDb.get_code(gen, seq, loc + pos - 1 + K + i));
+            rev_k_mer.next_down_kmer(genomeDb.get_complement_code(gen, seq, loc + pos - 1 + K + i));
+            inx = indexDb.find(fwd_k_mer.compare(rev_k_mer) == -1 ? fwd_k_mer : rev_k_mer);
             indexDb.put_node_id(s_id, inx);
             indexDb.put_position(i, inx);
         }
-    // Moving forward-outgoing and reverse-incoming edges from node to split node.    
+        // Moving forward-outgoing and reverse-incoming edges from node to split node.    
         for (Relationship r : node.getRelationships(Direction.OUTGOING,RelTypes.FR,RelTypes.FF)) {
             neighbor = r.getEndNode();
             if (neighbor.equals(node)) 
@@ -875,7 +874,6 @@ public class SequenceLayer {
             connect(split_node ,node, RelTypes.RR);
             ++num_edges;
         }
-        node.setProperty("last_kmer", node_last_kmer);
         node.setProperty("length", pos + K - 1);
         return split_node;
     }
@@ -888,20 +886,27 @@ public class SequenceLayer {
      * @param position The position of the kmer in the sequence
      * @return kmer The canonical form of the kmer 
      */
-    private kmer make_kmer(int genome, int sequence, int position) {
-        int j, fwd_code, rev_code;
+    private kmer make_fwd_kmer(int genome, int sequence, int position) {
+        int j, fwd_code;
         kmer fwd_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
-        kmer rev_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
         for (j = 0; j < K; ++j) {
             fwd_code = genomeDb.get_code(genome, sequence, position + j);
-            rev_code = 3 - fwd_code;
             fwd_kmer.next_up_kmer(fwd_code);
-            rev_kmer.next_down_kmer(rev_code);
         }
-        fwd_kmer.canonical = fwd_kmer.compare(rev_kmer) == -1;
-        return fwd_kmer.canonical ? fwd_kmer : rev_kmer;
+        return fwd_kmer;
     }
     
+    private kmer make_rev_kmer(int genome, int sequence, int position) {
+        int j, rev_code;
+        kmer rev_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
+        for (j = 0; j < K; ++j) {
+            rev_code = 3 - genomeDb.get_code(genome, sequence, position + j);
+            rev_kmer.next_down_kmer(rev_code);
+        }
+        return rev_kmer;
+    }
+
+
     /**
      * Extends a new node till reach to a previously visited K-mer or a degenerate region.
      * 
@@ -910,12 +915,11 @@ public class SequenceLayer {
     private void extend(Node node) {
         //System.out.println("extending node "+node.getId());
         int begin, len;
-        long id, last_kmer;
+        long id;
         boolean broke, degenerate;
         
         len = (int) node.getProperty("length");
         id = node.getId();
-        last_kmer = (long) node.getProperty("last_kmer");
         broke = false;
         degenerate = false;        
         while (position < seq_len - 1) { // Not reached to the end of the sequence
@@ -924,7 +928,6 @@ public class SequenceLayer {
                 ++position;
                 begin = position - K + 1;
                 node.setProperty("length", len);
-                node.setProperty("last_kmer", last_kmer);
                 jump();
                 int[] add = new int[]{genome,sequence,begin};
                 create_degenerate(add);
@@ -941,17 +944,13 @@ public class SequenceLayer {
             curr_index = indexDb.find(k_mer);
             indexDb.get_pointer(pointer, curr_index);
             if (pointer.node_id == -1L) {
-                indexDb.put_next_index(curr_index, last_kmer);
                 ++len;
                 //node.setProperty("length",(int)node.getProperty("length")+1);
                 ++num_bases;
                 pointer.node_id = id;
                 pointer.canonical = fwd_kmer.canonical;
                 pointer.position = len - K;//(int)node.getProperty("length")-K;
-                pointer.next_index = -1L;
                 indexDb.put_pointer(pointer, curr_index);
-                last_kmer = curr_index;
-                //node.setProperty("last_kmer",curr_index);
                 if (position % (seq_len / 100 + 1) == 0) 
                     System.out.print((long) position * 100 / seq_len + "%\r");
             } else {
@@ -961,7 +960,6 @@ public class SequenceLayer {
         }
         if (!degenerate) {
             node.setProperty("length", len);
-            node.setProperty("last_kmer", last_kmer);
         }
         if (!broke && position == seq_len - 1) {
             finish = true;
@@ -980,13 +978,10 @@ public class SequenceLayer {
         //System.out.println("create "+new_node.getId());
         new_node.setProperty("address", address);
         new_node.setProperty("length", K);
-        new_node.setProperty("last_kmer", curr_index); // Record number of the current Kmer in the Kmer table
-        new_node.setProperty("first_kmer", curr_index);
     // Set the pointer to the Kmer in the pointer database    
         pointer.node_id = new_node.getId();
         pointer.canonical = fwd_kmer.canonical;
         pointer.position = 0;
-        pointer.next_index = -1L;
         indexDb.put_pointer(pointer, curr_index);
         connect(curr_node ,new_node, RelTypes.values()[curr_side*2]);
         ++num_edges;

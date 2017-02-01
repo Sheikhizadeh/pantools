@@ -22,12 +22,14 @@ import static java.lang.Integer.max;
 import static java.lang.Integer.min;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
+import java.util.Set;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
@@ -76,7 +78,7 @@ import static pantools.Pantools.write_fasta;
  */
 public class AnnotationLayer {
     public double THRESHOLD = 75;
-    public int MAX_LENGTH  = 5000;
+    public int MAX_LENGTH  = 1000;
     public String PATH;
     ProteinAlignment pro_aligner;
     SequenceAlignment seq_aligner;
@@ -532,7 +534,6 @@ public class AnnotationLayer {
                     .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
-            genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
             seq_aligner = new SequenceAlignment(-5,-0.1,4.0,-2.0,MAX_LENGTH);
             pro_aligner = new ProteinAlignment(-10,-0.2,MAX_LENGTH);
             build_homology_groups();
@@ -548,40 +549,35 @@ public class AnnotationLayer {
      * Creates homology nodes which connect the homologous coding genes
      */
     private void build_homology_groups(){
-        int num, num_coding_groups=0, total_genes=0, num_genes,trsc;
+        int num_groups = 0, total_genes = 0;
         Node gene_node;
         ResourceIterator<Node> genes_iterator;
-        LinkedList<Node> similar_groups = new LinkedList(); 
-        Queue<Long> crossing_genes = new LinkedList(); 
-        Queue<Long> linked_genes = new LinkedList(); 
-        try (Transaction tx1 = graphDb.beginTx()) {
-            num_genes = (int)graphDb.findNodes(pangenome_label).next().getProperty("num_genes");
-            genes_iterator = graphDb.findNodes(gene_label);
-            System.out.println("THRESHOLD = "+THRESHOLD);
-            System.out.println("Grouping " + num_genes +" genes...");
+        System.out.println("Grouping coding genes...");
+        System.out.println("THRESHOLD = "+THRESHOLD);
+        try (Transaction tx = graphDb.beginTx()) {
+            genes_iterator = graphDb.findNodes(coding_gene_label);
             System.out.println("Genes\tHomology groups");
             while (genes_iterator.hasNext()) {
-                try (Transaction tx2 = graphDb.beginTx()) {
-                    for (trsc = 0; genes_iterator.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc, ++total_genes) {
-                        gene_node=genes_iterator.next();
-                    // To avoid having one gene in different groups    
-                        if (gene_node.hasLabel(coding_gene_label) && !gene_node.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)) { 
-                        // num would be negative if some groups merge 
-                            num = group_homologs(similar_groups, crossing_genes, linked_genes, gene_node);
-                            num_coding_groups += num;
-                            if (trsc % 11 == 1 )
-                                System.out.print("\r" + total_genes + "\t" + num_coding_groups);
-                        }
-                    }// for
-                    tx2.success();
-                }// transaction 2
-                System.out.print("\r" + total_genes + "\t" + num_coding_groups);
+                gene_node=genes_iterator.next();
+            // To avoid having one gene in different groups    
+                if (!gene_node.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)) { 
+                    num_groups += 1;
+                    total_genes += group_homologs(gene_node);
+                    System.out.print("\r" + total_genes + "\t" + num_groups);
+                    if (num_groups % 1000 == 0){
+                        System.gc ();
+                        System.runFinalization ();
+                    }
+                }
             } // while 
-            System.out.println("\r" + total_genes + "\t" + num_coding_groups);
-            tx1.success();
+            System.gc ();
+            System.runFinalization ();
+            tx.success();
+            genes_iterator.close();
         } // transaction 1
-        System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
+        System.out.println("\nTotal time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
         print_peak_memory();
+        System.out.println();
     }
     
     /**
@@ -591,87 +587,44 @@ public class AnnotationLayer {
      * @param query_gene The gene to which similar ones should be found
      * @return The value by which the number of groups have been increased. (Could be a negative value if some groups get merged) 
      */
-    private int group_homologs(LinkedList<Node> similar_groups, Queue<Long> crossing_genes, Queue<Long> linked_genes, Node query_gene){
+    private int group_homologs(Node start_gene){
+        int num_members = 1;
         double similarity;
-        Node current_gene_node, group_node, homology_group_node;
-        Relationship r = null;
-        long current_gene_id;
-        similar_groups.clear();
-        crossing_genes.clear();
-        linked_genes.clear();
-        linked_genes.add(query_gene.getId());
-        add_cossing_genes(crossing_genes, linked_genes, query_gene);
-        homology_group_node = graphDb.createNode(homology_group_lable);
-        homology_group_node.createRelationshipTo(query_gene, RelTypes.has_homolog);
-        // for all the candidates with some shared node with the gene    
-        while (!crossing_genes.isEmpty()) {
-            current_gene_id = crossing_genes.remove();
-            if (current_gene_id != -1l) 
-                current_gene_node = graphDb.getNodeById(current_gene_id);
-            else if (!crossing_genes.isEmpty()){ // end of crossing genes for current query gene in the queue
-                query_gene = graphDb.getNodeById(crossing_genes.remove());
-                linked_genes.add(query_gene.getId());
-                continue;
-            }
-            else
-                break;
-            similarity = get_coding_genes_similarity(query_gene, current_gene_node);
-            query_gene.createRelationshipTo(current_gene_node, RelTypes.resembles).setProperty("similarity", similarity);
-            if ( similarity > THRESHOLD ) {
-                if(current_gene_node.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
-                    group_node = current_gene_node.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING).getStartNode();
-                    if (!similar_groups.contains(group_node))
-                        similar_groups.add(group_node);
-                    linked_genes.add(current_gene_node.getId());
+        Node homology_group_node, crossing_gene;
+        Iterator<Relationship> itr;
+        Queue<Node> homologs = new LinkedList();
+        try (Transaction tx1 = graphDb.beginTx()) {
+            homology_group_node = graphDb.createNode(homology_group_lable);
+            homology_group_node.createRelationshipTo(start_gene, RelTypes.has_homolog);
+            homologs.add(start_gene);
+            // for all the candidates with some shared node with the gene    
+            while (!homologs.isEmpty()) {
+                start_gene = homologs.remove();
+                itr = start_gene.getRelationships(RelTypes.corsses).iterator();
+                while (itr.hasNext()) {
+                    try (Transaction tx2 = graphDb.beginTx()) {
+                        for (int trsc = 0; itr.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
+                            crossing_gene = itr.next().getOtherNode(start_gene);
+                            if(crossing_gene.hasLabel(coding_gene_label) && !crossing_gene.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
+                                similarity = compute_similarity(start_gene, crossing_gene);
+                                start_gene.createRelationshipTo(crossing_gene, RelTypes.resembles).setProperty("similarity", similarity);
+                                if ( similarity > THRESHOLD ) {
+                                    homology_group_node.createRelationshipTo(crossing_gene, RelTypes.has_homolog);
+                                    num_members++;
+                                    homologs.add(crossing_gene);
+                                }
+                            }
+                        }
+                        tx2.success(); 
+                    }
                 }
-                else{
-                    homology_group_node.createRelationshipTo(current_gene_node, RelTypes.has_homolog);
-                    linked_genes.add(current_gene_node.getId());
-                    crossing_genes.add(-1l);
-                    crossing_genes.add(current_gene_node.getId());
-                    add_cossing_genes(crossing_genes, linked_genes, current_gene_node);
-                }
-            }
-            if (similar_groups.size() > 0){
-                merge_groups(similar_groups, homology_group_node);
-                homology_group_node.setProperty("num_members", homology_group_node.getDegree(Direction.OUTGOING));
-                return 1 - similar_groups.size(); // One group created but some others merged into it
-            }
-        }// while
-        homology_group_node.setProperty("num_members", homology_group_node.getDegree(Direction.OUTGOING));
-        return 1; // One group created
-    }
-
-    private void add_cossing_genes(Queue<Long> crossing_genes, Queue<Long> processed_genes, Node gene){
-        Node c_gene;
-        long id;
-        for (Relationship r: gene.getRelationships(RelTypes.corsses)) {
-            c_gene = r.getOtherNode(gene);
-            id = c_gene.getId();
-            if(c_gene.hasLabel(coding_gene_label) && !processed_genes.contains(id) && !crossing_genes.contains(id))
-                    crossing_genes.add(id);
+            }// while
+            homology_group_node.setProperty("num_members", homology_group_node.getDegree(Direction.OUTGOING));
+            tx1.success(); 
         }
-    }
+        return num_members;
+    }  
     
-    
-    /**
-     * Given a list of homology groups with a gene shared by the main group, merges them in one group
-     * @param groups A linked list of the homology groups with a gene shared by the main group
-     * @param main_group The main group
-     */
-    private void merge_groups(LinkedList<Node> groups, Node main_group){
-        ListIterator<Node> itr = groups.listIterator();
-        Node group, node;
-        while (itr.hasNext()){
-            group = itr.next();
-            for (Relationship rel: group.getRelationships(Direction.OUTGOING)){
-                node = rel.getEndNode();
-                main_group.createRelationshipTo(node, RelTypes.has_homolog);
-                rel.delete();
-            }
-            group.delete();
-        }
-    }
     
     /**
      * Given two genes calculates the normalized similarity score between them. (score <= 100)
@@ -679,7 +632,7 @@ public class AnnotationLayer {
      * @param gene2 The second coding gene
      * @return The normalized similarity score which is at most 1
      */
-    private double get_coding_genes_similarity(Node gene1 , Node gene2){
+    private double compute_similarity(Node gene1 , Node gene2){
         Node mRNA_node1, mRNA_node2;
         String p1 = null, p2 = null;
         int mRNA_len1, mRNA_len2, len;
@@ -759,113 +712,131 @@ public class AnnotationLayer {
      * divides the pre-calculated homology groups into orthology groups using MCL algorithm 
      */   
     void build_orthology_groups() {
-        int num = 0, degree;
-        ResourceIterator<Node> nodes;
-        LinkedList<Node> homology_group_nodes = new LinkedList();
+        int num_groups = 0, degree, trsc;
+        int[] copy_number;
+        ResourceIterator<Node> homology_group_nodes;
         LinkedList<Node> orthology_group_nodes = new LinkedList();
         LinkedList<Node> members = new LinkedList();
-        int[] copy_number = new int[genomeDb.num_genomes+1];
-        ListIterator<Node> itr;
-        Node homology_group_node, orthology_group_node, node;
+        Node homology_group_node, orthology_group_node, node, single_gene;
         String graph_path, clusters_path;
         System.out.println("Building orthology groups...");
-        try (Transaction tx = graphDb.beginTx()) {
-            nodes = graphDb.getAllNodes().iterator();
-            while (nodes.hasNext()){
-                node = nodes.next();
-                if (node.hasLabel(homology_group_lable)){
-                    if( node.getDegree() > 1)
-                        homology_group_nodes.add(node);
-                    else{
-                        node.addLabel(orthology_group_lable);
-                        ++num;
-                    }
+        try (Transaction tx1 = graphDb.beginTx()) {
+            copy_number = new int[(int)graphDb.findNodes(pangenome_label).next().getProperty("num_genomes")+1];
+            homology_group_nodes = graphDb.findNodes(homology_group_lable);
+            while (homology_group_nodes.hasNext()){
+                try (Transaction tx2 = graphDb.beginTx()) {
+                    for (trsc = 0; homology_group_nodes.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
+                        homology_group_node = homology_group_nodes.next();
+                        if( homology_group_node.getDegree() > 1){
+                            graph_path = PATH + "/" + homology_group_node.getId() + ".graph";
+                            clusters_path = PATH + "/" + homology_group_node.getId() + ".clusters";
+                            for (Relationship rel: homology_group_node.getRelationships(Direction.OUTGOING))
+                                members.add(rel.getEndNode());
+                            compute_pairwise_similaities(members, graph_path);
+                            executeCommand("mcl " + graph_path + " --abc -I 5 -o " + clusters_path);
+                            new File(graph_path).delete();
+                            try (FileReader clusters_file = new FileReader(clusters_path)){
+                                while (clusters_file.ready()){
+                                    orthology_group_node = graphDb.createNode(orthology_group_lable);
+                                    orthology_group_nodes.add(orthology_group_node);
+                                    ++num_groups;
+                                    make_group(clusters_file, orthology_group_node);
+                                }
+                                clusters_file.close();
+                                new File(clusters_path).delete();
+                            }catch (IOException ex){
+                            }
+                        } else {
+                            single_gene = homology_group_node.getSingleRelationship(RelTypes.has_homolog, Direction.OUTGOING).getEndNode();
+                            orthology_group_node = graphDb.createNode(orthology_group_lable); 
+                            ++num_groups;
+                            orthology_group_node.createRelationshipTo(single_gene, RelTypes.has_ortholog);
+                            orthology_group_nodes.add(orthology_group_node);
+                        }
+                        System.out.print("\rOrthology groups : " + num_groups);
+                        if (num_groups % 1000 == 0){
+                            System.gc ();
+                            System.runFinalization ();
+                        }
+                    } // for
+                    tx2.success();
+                    homology_group_nodes.close();
                 }
             }
-            nodes.close();
-            tx.success();
+            tx1.success();
         }
-        for (itr = homology_group_nodes.listIterator(); itr.hasNext();){
+        System.out.println("\rOrthology groups : " + num_groups);
+        System.out.println("After housing singletons : " + (num_groups - group_singletons(orthology_group_nodes)));
+    // compute copy_number array in each group and delete singleton groups merged into the other ones and now empty 
+        while (!orthology_group_nodes.isEmpty()){
             try (Transaction tx = graphDb.beginTx()) {
-                homology_group_node = itr.next();
-                graph_path = PATH + "/" + homology_group_node.getId() + ".graph";
-                clusters_path = PATH + "/" + homology_group_node.getId() + ".clusters";
-                for (Relationship rel: homology_group_node.getRelationships(Direction.OUTGOING))
-                    members.add(rel.getEndNode());
-                compute_pairwise_similaities(members, graph_path);
-                executeCommand("mcl " + graph_path + " --abc -I 5 -o " + clusters_path);
-                new File(graph_path).delete();
-                try (FileReader clusters_file = new FileReader(clusters_path)){
-                    while (clusters_file.ready()){
-                        orthology_group_node = graphDb.createNode(orthology_group_lable);
-                        orthology_group_nodes.add(orthology_group_node);
-                        ++num;
-                        make_group(clusters_file, orthology_group_node);
-                    }
-                    clusters_file.close();
-                    new File(clusters_path).delete();
-                }catch (IOException ex){
-
+                for (trsc = 0; !orthology_group_nodes.isEmpty() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
+                    orthology_group_node = orthology_group_nodes.remove();
+                    degree = orthology_group_node.getDegree();
+                    if (degree > 0)
+                        set_group_properties(orthology_group_node, copy_number);
+                    else
+                        orthology_group_node.delete();   
                 }
-                System.out.print("\rOrthology groups : " + num);
                 tx.success();
             }
-        }
-        System.out.println("\rOrthology groups : " + (num - group_singletons(orthology_group_nodes)));
-        try (Transaction tx = graphDb.beginTx()) {
-            while (!orthology_group_nodes.isEmpty()){
-                orthology_group_node = orthology_group_nodes.remove();
-                degree = orthology_group_node.getDegree();
-                if (degree > 0){
-                    set_group_properties(orthology_group_node, copy_number);
-                    //if (degree > 2) 
-                    //    build_phylogeny_tree(orthology_group_node);
-                } else
-                    orthology_group_node.delete();                
-            }
-            nodes.close();
-            tx.success();
-        }        
+        }       
     }   
 
     int group_singletons(LinkedList<Node> orthology_group_nodes) {
-        int num = 0 ;
+        int num = 0;
         double best_similarity, similarity;
-        Node orthology_group_node, gene_node, mate_gene_node, best_group;
+        Node orthology_group_node, gene_node, mate_gene_node, mate_homology_group, gene_homology_group;
+        long best_mate_id;
         Relationship r;
         ListIterator<Node> itr = orthology_group_nodes.listIterator();
-        try (Transaction tx = graphDb.beginTx()) {
-            while (itr.hasNext()){
-                orthology_group_node = itr.next();
-                if (orthology_group_node.getDegree() == 1){
-                    r = orthology_group_node.getSingleRelationship(RelTypes.has_ortholog, Direction.OUTGOING);
-                    gene_node = r.getEndNode();
-                    best_similarity = THRESHOLD/2;
-                    best_group = null;
-                    for (Relationship rel: gene_node.getRelationships(RelTypes.resembles)){
-                        mate_gene_node = rel.getOtherNode(gene_node);
-                        similarity = (double)rel.getProperty("similarity");
-                        if (similarity > best_similarity){
-                            best_similarity = similarity;
-                            best_group = mate_gene_node.getSingleRelationship(RelTypes.has_ortholog, Direction.INCOMING).getStartNode();
+        while (itr.hasNext()){
+            try (Transaction tx2 = graphDb.beginTx()) {
+                for (int trsc = 0; itr.hasNext() && trsc < MAX_TRANSACTION_SIZE; ) {
+                    orthology_group_node = itr.next();
+                    if (orthology_group_node.getDegree() == 1){
+                        ++trsc;
+                        r = orthology_group_node.getSingleRelationship(RelTypes.has_ortholog, Direction.OUTGOING);
+                        gene_node = r.getEndNode();
+                        best_similarity = THRESHOLD/2;
+                        best_mate_id = -1l;
+                        for (Relationship rel: gene_node.getRelationships(RelTypes.resembles)){
+                            mate_gene_node = rel.getOtherNode(gene_node);
+                            similarity = (double)rel.getProperty("similarity");
+                            if (similarity > best_similarity){
+                                best_similarity = similarity;
+                                best_mate_id = mate_gene_node.getId();
+
+                            }
+                        }
+                        if (best_mate_id != -1l){
+                            ++num;
+                            mate_gene_node = graphDb.getNodeById(best_mate_id);
+                        // delete single orthology edge, orthology node will be deleted in the main function    
+                            r.delete();
+                        // join the best orthology group    
+                            mate_gene_node.getSingleRelationship(RelTypes.has_ortholog, Direction.INCOMING)
+                                    .getStartNode().createRelationshipTo(gene_node, RelTypes.has_ortholog);
+
+                            mate_homology_group = mate_gene_node.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING).getStartNode();
+                            r = gene_node.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING);
+                            gene_homology_group = r.getStartNode();
+                            if (!mate_homology_group.equals(gene_homology_group)){
+                            // delete the single homology node    
+                                r.delete();
+                                gene_homology_group.delete();
+                            // join the best homology group    
+                                mate_homology_group.createRelationshipTo(gene_node, RelTypes.has_homolog);
+                                mate_homology_group.setProperty("num_members", 1 + (int) mate_homology_group.getProperty("num_members"));
+                            }
                         }
                     }
-                    if (best_group != null){
-                        ++num;
-                        r.delete();
-                        best_group.createRelationshipTo(gene_node, RelTypes.has_homolog);
-                    // make the orthology graph complete    
-                        for (Relationship rel: best_group.getRelationships(RelTypes.has_ortholog, Direction.OUTGOING)){
-                            mate_gene_node = rel.getEndNode();
-                            if (get_edge(gene_node, mate_gene_node,RelTypes.resembles) == null)
-                                gene_node.createRelationshipTo(mate_gene_node, RelTypes.resembles).setProperty("similarity", get_coding_genes_similarity(gene_node, mate_gene_node));
-                        }
-                            
-                    }
-                }
+                } 
+                tx2.success();
             }
-            tx.success();
         }
+        System.gc ();
+        System.runFinalization ();
         return num;
     }   
 
@@ -904,12 +875,10 @@ public class AnnotationLayer {
                     try (Transaction tx = graphDb.beginTx()) {
                         for (int trsc = 0; itr2.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
                             gene2 = itr2.next();
-                            if (get_edge(gene1, gene2, RelTypes.resembles) == null){
-                                similarity = get_coding_genes_similarity(gene1, gene2);
-                                gene1.createRelationshipTo(gene2, RelTypes.resembles).setProperty("similarity", similarity);
-                            }
+                            if (get_edge(gene1, gene2, RelTypes.resembles) == null)
+                                similarity = compute_similarity(gene1, gene2);
                             else
-                                similarity = get_similarity(gene1, gene2);
+                                similarity = read_similarity(gene1, gene2);
                             if (similarity > THRESHOLD){
                             // converts the similarity scores to a number between 0 and ( 100 - THRESHOLD) ^ 2.
                             // This increases the sensitivity of MCL clustering algorithm.
@@ -933,7 +902,7 @@ public class AnnotationLayer {
      * @param node2 The second node
      * @return The similarity score between two nodes of the phylogeny tree.
      */
-    private double get_similarity(Node node1, Node node2){
+    private double read_similarity(Node node1, Node node2){
         Relationship rel = get_edge(node1, node2, RelTypes.resembles);
         return (double)rel.getProperty("similarity");
     }
@@ -974,104 +943,27 @@ public class AnnotationLayer {
     }    
     
     /**
-     * Constructs the phylogeny tree for a set of orthologs
-     * @param orthology_group_node The orthology node pointing to the orthologs
-     */
-    public void build_phylogeny_tree(Node orthology_group_node) {
-        int num_members, c1, c2;
-        double distance, d1, d2;
-        LinkedList<Node> members = new LinkedList();
-        Node tree_node = null, node;
-        Node[] node_pair = new Node[2];
-    // Initialize the cardinality and time of the leaves    
-        for (Relationship rel: orthology_group_node.getRelationships(Direction.OUTGOING)){
-            node = rel.getEndNode();
-            node.setProperty("time", (double)0.0);
-            node.setProperty("cardinality", 1);
-            members.add(node);
-        }
-        num_members = orthology_group_node.getDegree(); 
-    // while tree is not completed   
-        for(; num_members > 1; --num_members){
-            distance = remove_best_pair(members, node_pair);
-            tree_node = graphDb.createNode(tree_node_lable);
-            tree_node.createRelationshipTo(node_pair[0], RelTypes.branches).setProperty("branch_length", distance/2 - (double)node_pair[0].getProperty("time"));
-            tree_node.createRelationshipTo(node_pair[1], RelTypes.branches).setProperty("branch_length", distance/2 - (double)node_pair[1].getProperty("time"));
-            tree_node.setProperty("time", distance/2);
-            c1 = (int)node_pair[0].getProperty("cardinality");
-            c2 = (int)node_pair[1].getProperty("cardinality");
-            tree_node.setProperty("cardinality", c1 + c2);
-        // Update distances    
-            for (Relationship rel1: node_pair[0].getRelationships(RelTypes.resembles)){
-                node = rel1.getOtherNode(node_pair[0]);
-                if (members.contains(node) && !node.equals(node_pair[1])){
-                    Relationship rel2 = get_edge(node_pair[1], node, RelTypes.resembles);
-                    d1 = 1 - (double)rel1.getProperty("similarity");
-                    d2 = 1 - (double)rel2.getProperty("similarity");
-                    tree_node.createRelationshipTo(node, RelTypes.resembles).setProperty("similarity", 1 -((d1 * c1 + d2 * c2) / (c1 + c2)));
-                    rel1.delete();
-                    rel2.delete();
-                }
-            }                            
-            members.add(tree_node);
-        }
-        tree_node.addLabel(tree_root_lable);
-    }
-
-    /**
-     * Given a list of nodes, removes the pair with the highest resemblance (lowest distance) from the list and returns their distance.
-     * @param members List of the tree nodes
-     * @param node_pair An output containing the closest pair 
-     * @return 
-     */
-    private double remove_best_pair(LinkedList<Node> members, Node[] node_pair){
-        double distance, smallest_distance = Double.MAX_VALUE;
-        Node node1, node2;
-        ListIterator<Node> itr1 = members.listIterator(), itr2;
-        int indx1 = 0, indx2 = 0;
-        while (itr1.hasNext()){
-            node1 = itr1.next();
-            itr2 = members.listIterator(itr1.nextIndex());
-            while (itr2.hasNext()){
-                node2 = itr2.next();
-                distance = 1 - get_similarity(node1, node2);
-                if (distance < smallest_distance){
-                    smallest_distance = distance;
-                    node_pair[0] = node1;
-                    node_pair[1] = node2;
-                    indx1 = itr1.nextIndex()-1;
-                    indx2 = itr2.nextIndex()-1;
-                }
-            }
-        }
-        if (indx1 < indx2){
-            members.remove(indx1);
-            members.remove(indx2-1);
-        }else{
-            members.remove(indx2);
-            members.remove(indx1-1);
-        }
-        return smallest_distance;
-    }
-    
-    /**
      * Removes the relationships of a specific type from the pan-genome
      * @param type The relationship type of interest.
      */   
     void drop_edges_of_type(RelationshipType type) {
-        int i;
+        int trsc;
         ResourceIterator<Relationship> rels;
         Relationship r;
         try (Transaction tx = graphDb.beginTx()) {
             rels = graphDb.getAllRelationships().iterator();
             tx.success();
+                    System.gc ();
+                    System.runFinalization ();
         }
         while (rels.hasNext()) {
             try (Transaction tx = graphDb.beginTx()) {
-                for (i = 0; i < MAX_TRANSACTION_SIZE && rels.hasNext(); ++i) {
+                for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && rels.hasNext(); ) {
                     r = rels.next();
-                    if (r.isType(type))
+                    if (r.isType(type)){
+                        ++trsc;
                         r.delete();
+                    }
                 }
                 tx.success();
             }
