@@ -378,7 +378,6 @@ public class SequenceLayer {
             String[] fields;
             String line;
             IndexPointer start_ptr;
-            Node start_node;
             StringBuilder seq;
             int c, num_regions;
             int[] address = new int[4];
@@ -452,7 +451,7 @@ public class SequenceLayer {
             BufferedReader in;
             BufferedWriter out;
             Node seq_node;
-            Relationship rel;
+            IndexPointer start;
             String[] fields;
             String line;
             int[] address;
@@ -477,12 +476,12 @@ public class SequenceLayer {
                         try {
                             out = new BufferedWriter(new FileWriter(PATH + "/genome_" + address[0] + ".fasta"));
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                                out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
-                                rel = seq_node.getRelationships(Direction.OUTGOING).iterator().next();
                                 address[2] = 1;
                                 address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
-                                extract_sequence(seq, locate(address), address);
+                                start = locate(address);
+                                out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
+                                extract_sequence(seq, start, address);
                                 write_fasta(out, seq.toString(), 80);
                                 seq.setLength(0);
                             }
@@ -506,12 +505,12 @@ public class SequenceLayer {
                             try {
                                 out = new BufferedWriter(new FileWriter(PATH + (fields.length > 1 ? "/" + fields[1] : "/genome_" + address[0]) + ".fasta"));
                                 for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                                    out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                     seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
-                                    rel = seq_node.getRelationships(Direction.OUTGOING).iterator().next();
                                     address[2] = 1;
                                     address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
-                                    extract_sequence(seq, locate(address), address);
+                                    start = locate(address);
+                                    out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
+                                    extract_sequence(seq, start, address);
                                     write_fasta(out, seq.toString(), 80);
                                     seq.setLength(0);
                                 }
@@ -770,6 +769,10 @@ public class SequenceLayer {
             {
                 address[2] = loc + node_len - K + 1;
                 rel = get_outgoing_edge(node, address);
+                if (rel == null){
+                    System.out.println("Failed to locate address : " + addr[0] + " " + addr[1] + " "+ addr[2]);
+                    System.exit(1);
+                }
                 neighbor = rel.getEndNode();
                 forward = rel.getType().name().charAt(1) == 'F';
                 loc += node_len - K + 1;

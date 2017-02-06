@@ -52,8 +52,6 @@ public class Pantools {
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
     public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
     public static Label homology_group_lable = DynamicLabel.label("homology_group");
-    public static Label tree_node_lable = DynamicLabel.label("tree_node");
-    public static Label tree_root_lable = DynamicLabel.label("tree_root");
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
         has, // for pointing to genome and sequence nodes
@@ -63,9 +61,8 @@ public class Pantools {
         has_ortholog, // for pointing to gene nodes from the orthology group
         codes_for,// for connecting genes to mRNAs
         contributes_to,// for connecting CDSs to mRNA
-        resembles, //to connect similar proteins (coding_mRNA) nodes
         branches, //to connect tree nodes
-        corsses // between crossing genes
+        crosses // between crossing genes
     }
 
     public static long startTime;
