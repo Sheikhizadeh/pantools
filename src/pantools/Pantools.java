@@ -48,6 +48,9 @@ public class Pantools {
     public static Label gene_label = DynamicLabel.label("gene");
     public static Label coding_gene_label = DynamicLabel.label("coding_gene");
     public static Label RNA_label = DynamicLabel.label("RNA");
+    public static Label mRNA_label = DynamicLabel.label("mRNA");
+    public static Label tRNA_label = DynamicLabel.label("tRNA");
+    public static Label rRNA_label = DynamicLabel.label("rRNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
     public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
@@ -333,7 +336,7 @@ public class Pantools {
      * @param seq The sequence to be written in the file.
      * @param length Length of the lines.
      */    
-    public static void write_fasta(BufferedWriter fasta_file, String seq, int length) {
+    public static void write_fasta(BufferedWriter fasta_file, StringBuilder seq, int length) {
         int i;
         try {
             for (i = 1; i <= seq.length(); ++i) {
@@ -355,53 +358,50 @@ public class Pantools {
      * @param s The input string
      * @return The reverse complement of the input string
      */     
-    public static String reverse_complement(String s) {
-        StringBuilder rv = new StringBuilder();
-        for (int i = s.length() - 1; i >= 0; --i) {
-            switch (s.charAt(i)) {
-                case 'A':
-                    rv.append('T');
-                    break;
-                case 'C':
-                    rv.append('G');
-                    break;
-                case 'G':
-                    rv.append('C');
-                    break;
-                case 'T':
-                    rv.append('A');
-                    break;
-                case 'R':
-                    rv.append('Y');
-                    break;
-                case 'Y':
-                    rv.append('R');
-                    break;
-                case 'K':
-                    rv.append('M');
-                    break;
-                case 'M':
-                    rv.append('K');
-                    break;
-                case 'B':
-                    rv.append('V');
-                    break;
-                case 'V':
-                    rv.append('B');
-                    break;
-                case 'D':
-                    rv.append('H');
-                    break;
-                case 'H':
-                    rv.append('D');
-                    break;
-                default:
-                    rv.append(s.charAt(i));
-            }
+    public static void reverse_complement(StringBuilder s) {
+        char ch;
+        int i, j;
+        for ( i=0, j = s.length() - 1; i < j; ++i, --j) {
+            ch = s.charAt(i);
+            s.setCharAt(i, complement(s.charAt(j)));
+            s.setCharAt(j, complement(ch));
         }
-        return rv.toString();
+        if (i == j)
+            s.setCharAt(i, complement(s.charAt(i)));
     }
 
+    public static char complement(char ch) {
+        switch (ch) {
+            case 'A':
+                return 'T';
+            case 'C':
+                return 'G';
+            case 'G':
+                return 'C';
+            case 'T':
+                return 'A';
+            case 'R':
+                return 'Y';
+            case 'Y':
+                return 'R';
+            case 'K':
+                return 'M';
+            case 'M':
+                return 'K';
+            case 'B':
+                return 'V';
+            case 'V':
+                return 'B';
+            case 'D':
+                return 'H';
+            case 'H':
+                return 'D';
+            default:
+                return ch;
+        }
+    }
+    
+    
     /**
      * Executes a shell command. 
      * @param command The command

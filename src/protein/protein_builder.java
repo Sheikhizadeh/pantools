@@ -51,12 +51,12 @@ public class protein_builder {
      * @param mRNA The sequence of the codinf RNA
      * @return The protein sequence
      */
-    public String translate(String mRNA)
+    public StringBuilder translate(StringBuilder mRNA)
     {
         sequence.setLength(0);
         int i;   
         for(i=0;i<=mRNA.length()-3;i+=3)
             sequence.append(table[binary[mRNA.charAt(i)]*16+binary[mRNA.charAt(i+1)]*4+binary[mRNA.charAt(i+2)]]);
-        return sequence.toString();
+        return sequence;
     }
 } 

@@ -610,7 +610,7 @@ public class SequenceDatabase {
      * @param direction specifies the direction, True for forward and False for reverse
      * @return The genomic region
      */
-    public String get_sequence(int g, int s, int p, int l, boolean direction) {
+    public StringBuilder get_sequence(int g, int s, int p, int l, boolean direction) {
         int i;
         StringBuilder seq = new StringBuilder();
         if (p < 0) // take the part is available at the start of the sequence
@@ -631,7 +631,7 @@ public class SequenceDatabase {
                 seq.append(get_complement_symbol(g, s, p + i));
             }
         }
-        return seq.toString();
+        return seq;
     }
 
     /**

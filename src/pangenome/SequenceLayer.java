@@ -49,6 +49,7 @@ import static pantools.Pantools.phaseTime;
 import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
+import static pantools.Pantools.complement;
 import static pantools.Pantools.reverse_complement;
 import static pantools.Pantools.write_fasta;
 
@@ -338,9 +339,10 @@ public class SequenceLayer {
                                 ++j;
                                 out.write(">" + record + "\n");
                                 if (strand) {
-                                    write_fasta(out, gene_seq.toString(), 70);
+                                    write_fasta(out, gene_seq, 70);
                                 } else {
-                                    write_fasta(out, reverse_complement(gene_seq.toString()), 70);
+                                    reverse_complement(gene_seq);
+                                    write_fasta(out, gene_seq, 70);
                                 }
                             } else {
                                 System.out.println("Failed to assemble:\n" + record);
@@ -351,7 +353,7 @@ public class SequenceLayer {
                             System.out.print((long) i * 100 / num_genes + 1 + "%\r");
                         }
                     }//for i
-                    System.out.println(j + " out of " + i + " found genes retrieved successfully.");
+                    System.out.println(j + " out of " + i + " genes found and retrieved successfully.");
                     out.close();
                 } catch (IOException ioe) {
                     System.out.println("Failed to read file names!");
@@ -421,7 +423,7 @@ public class SequenceLayer {
                         start_ptr = locate(address);
                         extract_sequence(seq, start_ptr, address);
                         out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
-                        write_fasta(out, seq.toString(), 70);
+                        write_fasta(out, seq, 70);
                         seq.setLength(0);
                         ++c;
                         if (c % (num_regions / 100 + 1) == 0) {
@@ -482,7 +484,7 @@ public class SequenceLayer {
                                 start = locate(address);
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 extract_sequence(seq, start, address);
-                                write_fasta(out, seq.toString(), 80);
+                                write_fasta(out, seq, 80);
                                 seq.setLength(0);
                             }
                             out.close();
@@ -511,7 +513,7 @@ public class SequenceLayer {
                                     start = locate(address);
                                     out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                     extract_sequence(seq, start, address);
-                                    write_fasta(out, seq.toString(), 80);
+                                    write_fasta(out, seq, 80);
                                     seq.setLength(0);
                                 }
                                 out.close();
@@ -709,7 +711,8 @@ public class SequenceLayer {
      * @return The length of substring appended to the string builder.
      */
     public static int append_fwd(StringBuilder seq, String s, int from, int to) {
-        seq.append(s.substring(from, to + 1));
+        for (int i = from; i <= to; ++i)
+            seq.append(s.charAt(i));
         return to - from + 1;
     }
     
@@ -722,7 +725,8 @@ public class SequenceLayer {
      * @return The length of substring appended to the string builder.
      */
     public static int append_rev(StringBuilder seq, String s, int from, int to) {
-        seq.append(reverse_complement(s.substring(from, to + 1)));
+        for (int i = to; i >= from; --i)
+            seq.append(complement(s.charAt(i)));
         return to - from + 1;
     }
     
@@ -1472,7 +1476,7 @@ public class SequenceLayer {
                     node = nodes_iterator.next();
                     addr = (int[]) node.getProperty("address");
                     node_length = (int) node.getProperty("length");
-                    node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true));
+                    node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
                 }
                 tx.success();
             }
@@ -1488,7 +1492,7 @@ public class SequenceLayer {
                     node = nodes_iterator.next();
                     addr = (int[]) node.getProperty("address");
                     node_length = (int) node.getProperty("length");
-                    node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true));
+                    node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
                 }
                 tx.success();
             }
