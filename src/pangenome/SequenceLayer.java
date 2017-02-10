@@ -832,8 +832,6 @@ public class SequenceLayer {
         split_len = node_len - pos;
         split_node.setProperty("length", split_len);
     // Updates the edges comming from gene level to the node.    
-        for (Relationship r : node.getRelationships(RelTypes.visits, Direction.INCOMING)) 
-            r.getStartNode().createRelationshipTo(split_node, RelTypes.visits);
         for (Relationship r : node.getRelationships(RelTypes.starts, Direction.INCOMING)) 
         {
             starts_at = (int) r.getProperty("starts_at");
