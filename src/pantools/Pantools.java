@@ -11,6 +11,7 @@ import genome.SequenceDatabase;
 import index.IndexDatabase;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
@@ -55,6 +56,9 @@ public class Pantools {
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
     public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
     public static Label homology_group_lable = DynamicLabel.label("homology_group");
+    public static Label pentamer_lable = DynamicLabel.label("pentamer");
+
+    
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
         has, // for pointing to genome and sequence nodes
@@ -66,7 +70,8 @@ public class Pantools {
         represents,
         contributes_to,// for connecting CDSs to mRNA
         branches, //to connect tree nodes
-        crosses // between crossing genes
+        crosses, // between crossing genes
+        occurs_in
     }
 
     public static long startTime;
@@ -102,17 +107,24 @@ public class Pantools {
                 break;
             case "build":
                 try{
-                    if (args.length < 4) {
-                        print_help_comment();
-                        System.exit(1);
+                    switch (args.length) {
+                        case 3:
+                            annLayer.build_protein_graph(args[2],args[1]);
+                            break;
+                        case 4:
+                            K = Integer.parseInt(args[3]);
+                            if (K < 6 || K > 256) {
+                                System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
+                                System.exit(1);
+                            }
+                            seqLayer.build_nucleotide_layer(args[2],args[1]);
+                            break;
+                        default:                    
+                            print_help_comment();
+                            System.exit(1);
                     }
-                    K = Integer.parseInt(args[1]);
-                    if (K < 6 || K > 256) {
-                        System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
-                        System.exit(1);
-                    }
-                    seqLayer.build(args[3],args[2]);
-                } catch(NumberFormatException nfe) {
+                } catch(Exception ex) {
+                    System.err.println(ex.getMessage());
                     print_help_comment();
                     System.exit(1);
                 }
@@ -137,13 +149,6 @@ public class Pantools {
                     System.exit(1);
                 }
                 annLayer.group(args);
-                break;
-            case "compare":
-                if (args.length < 3) {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                seqLayer.compare_pangenomes(args[1], args[2]);
                 break;
             case "retrieve":
                 if (args.length < 4) {

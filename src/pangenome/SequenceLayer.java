@@ -87,27 +87,27 @@ public class SequenceLayer {
      * Constructs a pangenome database from given genomes.
      * 
      * @param genome_paths_file Path to the FASTA genome files. 
-     * @param PATH Path to the database folder
+     * @param pangenome_path Path to the database folder
      */  
-    public void build(String genome_paths_file, String PATH) {
+    public void build_nucleotide_layer(String genome_paths_file, String pangenome_path) {
     // If a database folder is already exist in the specified path, removes all the content of it.    
-        File theDir = new File(PATH);
+        File theDir = new File(pangenome_path);
         if (theDir.exists()) {
             try {
-                FileUtils.deleteRecursively(new File(PATH));
+                FileUtils.deleteRecursively(new File(pangenome_path));
             } catch (IOException ioe) {
-                System.out.println("Failed to delete the database " + PATH);
+                System.out.println("Failed to delete the database " + pangenome_path);
                 System.exit(1);  
             }
         } else {
             try {
                 theDir.mkdir();
             } catch (SecurityException se) {
-                System.out.println("Failed to create " + PATH);
+                System.out.println("Failed to create " + pangenome_path);
                 System.exit(1);
             }
         }
-        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
+        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();  
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
@@ -118,8 +118,8 @@ public class SequenceLayer {
             db_node.setProperty("k_mer_size", K);
             tx.success();
         }
-        genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, genome_paths_file);
-        indexDb = new IndexDatabase(PATH + INDEX_DATABASE_PATH, genome_paths_file, K, genomeDb);
+        genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH, genome_paths_file);
+        indexDb = new IndexDatabase(pangenome_path + INDEX_DATABASE_PATH, genome_paths_file, K, genomeDb);
         construct_pangenome(0);
         System.out.println("Number of kmers:   " + indexDb.length());
         System.out.println("Number of nodes:   " + num_nodes);
@@ -139,30 +139,30 @@ public class SequenceLayer {
         graphDb.shutdown();
         genomeDb.close();
         indexDb.close();
-        File directory = new File(PATH + GRAPH_DATABASE_PATH);
+        File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
         for (File f : directory.listFiles()) {
             if (f.getName().startsWith("neostore.transaction.db.")) {
                 f.delete();
             }
         }
-        System.out.println("graph.db size: " + getFolderSize(new File(PATH + GRAPH_DATABASE_PATH)) + " MB");
-        System.out.println("index.db size: " + getFolderSize(new File(PATH + INDEX_DATABASE_PATH)) + " MB");
-        System.out.println("genome.db size: " + getFolderSize(new File(PATH + GENOME_DATABASE_PATH)) + " MB");
+        System.out.println("graph.db size: " + getFolderSize(new File(pangenome_path + GRAPH_DATABASE_PATH)) + " MB");
+        System.out.println("index.db size: " + getFolderSize(new File(pangenome_path + INDEX_DATABASE_PATH)) + " MB");
+        System.out.println("genome.db size: " + getFolderSize(new File(pangenome_path + GENOME_DATABASE_PATH)) + " MB");
     }
     
     /**
      * Adds new genomes to an available pangenome.
      * 
      * @param genome_paths_file Path to the FASTA genome files. 
-     * @param PATH Path to the database folder
+     * @param pangenome_path Path to the database folder
      */
-    public void add(String genome_paths_file, String PATH) {
+    public void add(String genome_paths_file, String pangenome_path) {
         int i, j, s, len, previous_num_genomes;
         long byte_number = 0;
         int[] address = new int[4];
         Node start, seq_node;
-        if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
+        if (new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
+            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                     .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
@@ -180,10 +180,10 @@ public class SequenceLayer {
                 num_bases = (int) db_node.getProperty("num_bases");
                 previous_num_genomes = (int) db_node.getProperty("num_genomes");
             // if the genome database is not available, reconstruct it.    
-                if (!Files.exists(Paths.get(PATH + GENOME_DATABASE_PATH))) 
+                if (!Files.exists(Paths.get(pangenome_path + GENOME_DATABASE_PATH))) 
                 {
                 // read genomes information from the graph and rebuild the genomes database
-                    genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, graphDb);
+                    genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH, graphDb);
                     StringBuilder seq = new StringBuilder();
                     for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
                         for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
@@ -205,12 +205,12 @@ public class SequenceLayer {
                             }
                         }
                     }
-                    genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH); //Readable only
+                    genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH); //Readable only
                 } else {
-                    genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH);
+                    genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
                 }
-                genomeDb.add_genomes(PATH + GENOME_DATABASE_PATH, genome_paths_file);
-                indexDb = new IndexDatabase(PATH + INDEX_DATABASE_PATH, genome_paths_file, genomeDb, graphDb, previous_num_genomes);
+                genomeDb.add_genomes(pangenome_path + GENOME_DATABASE_PATH, genome_paths_file);
+                indexDb = new IndexDatabase(pangenome_path + INDEX_DATABASE_PATH, genome_paths_file, genomeDb, graphDb, previous_num_genomes);
                 tx.success();
             }
         // the sequences should be dropped out as they will change and add_sequence_properties() function will rebuild them.    
@@ -236,17 +236,17 @@ public class SequenceLayer {
             graphDb.shutdown();
             genomeDb.close();
             indexDb.close();
-            File directory = new File(PATH + GRAPH_DATABASE_PATH);
+            File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
             for (File f : directory.listFiles()) {
                 if (f.getName().startsWith("neostore.transaction.db.")) {
                     f.delete();
                 }
             }
-            System.out.println("graph.db size: " + getFolderSize(new File(PATH + GRAPH_DATABASE_PATH)) + " MB");
-            System.out.println("index.db size: " + getFolderSize(new File(PATH + INDEX_DATABASE_PATH)) + " MB");
-            System.out.println("genome.db size: " + getFolderSize(new File(PATH + GENOME_DATABASE_PATH)) + " MB");
+            System.out.println("graph.db size: " + getFolderSize(new File(pangenome_path + GRAPH_DATABASE_PATH)) + " MB");
+            System.out.println("index.db size: " + getFolderSize(new File(pangenome_path + INDEX_DATABASE_PATH)) + " MB");
+            System.out.println("genome.db size: " + getFolderSize(new File(pangenome_path + GENOME_DATABASE_PATH)) + " MB");
         } else {
-            System.out.println("No database found in " + PATH);
+            System.out.println("No database found in " + pangenome_path);
             System.exit(1);
         }
     }
@@ -255,10 +255,10 @@ public class SequenceLayer {
      * Retrieves sequence of the genes sequence from the pangenome and stores them in a FASTA file. 
      * 
      * @param annotation_records_file a text file containing annotation records of the genes to be retrieved.
-     * @param PATH Path to the database folder
+     * @param pangenome_path Path to the database folder
      */
-    public void retrieve_genes(String annotation_records_file, String PATH) {
-        if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
+    public void retrieve_genes(String annotation_records_file, String pangenome_path) {
+        if (new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
             BufferedReader in;
             ResourceIterator<Node> gene_nodes;
             Relationship rstart;
@@ -271,7 +271,7 @@ public class SequenceLayer {
             String[] fields;
             StringBuilder gene_seq;
 
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
+            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                     .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
@@ -332,7 +332,7 @@ public class SequenceLayer {
                             end = address[3];
                             strand = gene.getProperty("strand").toString().equals("+");
                             extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("starts_at")), address);//
-                            //genomeDb=new sequence_database(PATH+GENOME_DATABASE_PATH);
+                            //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
                             if (gene_seq.length() == end - begin + 1) {
@@ -363,7 +363,7 @@ public class SequenceLayer {
             }
             graphDb.shutdown();
         } else {
-            System.out.println("No database found in " + PATH);
+            System.out.println("No database found in " + pangenome_path);
             System.exit(1);
         }
     }
@@ -373,17 +373,17 @@ public class SequenceLayer {
      * 
      * @param region_records_file a text file with lines containing genome number, sequence number, start and stop positions
      *        of the genomic regions seperated by one space.
-     * @param PATH Path to the database folder
+     * @param pangenome_path Path to the database folder
      */
-    public void retrieve_regions(String region_records_file, String PATH) {
-        if (new File(PATH + GRAPH_DATABASE_PATH).exists()) {
+    public void retrieve_regions(String region_records_file, String pangenome_path) {
+        if (new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
             String[] fields;
             String line;
             IndexPointer start_ptr;
             StringBuilder seq;
             int c, num_regions;
             int[] address = new int[4];
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
+            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                     .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             try (Transaction tx = graphDb.beginTx()) {
@@ -446,10 +446,10 @@ public class SequenceLayer {
      * Reconstructs all or some of the genomes in separated FASTA files.
      * 
      * @param genome_records_file A text file containing the number and a given name for each genome. 
-     * @param PATH Path to the database folder
+     * @param pangenome_path Path to the database folder
      */
-    public void reconstruct_genomes(String genome_records_file, String PATH) {
-        if (new File(PATH + GENOME_DATABASE_PATH).exists()) {
+    public void reconstruct_genomes(String genome_records_file, String pangenome_path) {
+        if (new File(pangenome_path + GENOME_DATABASE_PATH).exists()) {
             BufferedReader in;
             BufferedWriter out;
             Node seq_node;
@@ -458,11 +458,11 @@ public class SequenceLayer {
             String line;
             int[] address;
             StringBuilder seq;
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH + GRAPH_DATABASE_PATH))
+            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                     .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
-            genomeDb = new SequenceDatabase(PATH + GENOME_DATABASE_PATH, graphDb);
+            genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH, graphDb);
             address = new int[4];
             seq = new StringBuilder();
             try (Transaction tx = graphDb.beginTx()) {
@@ -476,7 +476,7 @@ public class SequenceLayer {
                     for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
                         System.out.println("Reconstructing genome " + address[0] + "...");
                         try {
-                            out = new BufferedWriter(new FileWriter(PATH + "/genome_" + address[0] + ".fasta"));
+                            out = new BufferedWriter(new FileWriter(pangenome_path + "/genome_" + address[0] + ".fasta"));
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                                 seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
                                 address[2] = 1;
@@ -505,7 +505,7 @@ public class SequenceLayer {
                             address[0] = Integer.parseInt(fields[0]);
                             System.out.println("Reconstructing genome " + fields[1] + "...");
                             try {
-                                out = new BufferedWriter(new FileWriter(PATH + (fields.length > 1 ? "/" + fields[1] : "/genome_" + address[0]) + ".fasta"));
+                                out = new BufferedWriter(new FileWriter(pangenome_path + (fields.length > 1 ? "/" + fields[1] : "/genome_" + address[0]) + ".fasta"));
                                 for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                                     seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
                                     address[2] = 1;
@@ -530,99 +530,12 @@ public class SequenceLayer {
                 }
                 tx.success();
             }
-            System.out.println("Genomes are ready in " + PATH);
+            System.out.println("Genomes are ready in " + pangenome_path);
             graphDb.shutdown();
             genomeDb.close();
         } else {
-            System.out.println("No database found in " + PATH);
+            System.out.println("No database found in " + pangenome_path);
             System.exit(1);
-        }
-    }
-    
-    /**
-     * Compares the topology of two pangenomes. 
-     * @param path1 Path to the first pangenome
-     * @param path2 Path to the second pangenome
-     */
-    public void compare_pangenomes(String path1, String path2) {
-        int sq_num1, sq_num2, ed_num1, ed_num2, K1, K2, ng1, ng2, len1, len2;
-        long k, knum1, knum2;
-        IndexDatabase indexDb1;
-        IndexDatabase indexDb2;
-        SequenceDatabase genomeDb1;
-        SequenceDatabase genomeDb2;
-        Node db_node1, db_node2, n1, n2;
-        kmer k_mer1, k_mer2;
-        if (new File(path1 + GRAPH_DATABASE_PATH).exists() && new File(path2 + GRAPH_DATABASE_PATH).exists()) {
-            startTime = System.currentTimeMillis();
-            GraphDatabaseService g1 = new GraphDatabaseFactory().newEmbeddedDatabase(new File(path1 + GRAPH_DATABASE_PATH));
-            GraphDatabaseService g2 = new GraphDatabaseFactory().newEmbeddedDatabase(new File(path2 + GRAPH_DATABASE_PATH));
-            registerShutdownHook(g1);
-            registerShutdownHook(g2);
-            try (Transaction tx1 = g1.beginTx(); Transaction tx2 = g2.beginTx();) {
-                db_node1 = g1.findNodes(pangenome_label).next();
-                db_node2 = g2.findNodes(pangenome_label).next();
-                if (db_node1 == null) {
-                    System.out.println("Can not locate database node for " + path1);
-                    System.exit(1);
-                }
-                if (db_node2 == null) {
-                    System.out.println("Can not locate database node for " + path2);
-                    System.exit(1);
-                }
-                K1 = (int) db_node1.getProperty("k_mer_size");
-                K2 = (int) db_node2.getProperty("k_mer_size");
-                sq_num1 = (int) db_node1.getProperty("num_nodes");
-                sq_num2 = (int) db_node2.getProperty("num_nodes");
-                ed_num1 = (int) db_node1.getProperty("num_edges");
-                ed_num2 = (int) db_node2.getProperty("num_edges");
-                ng1 = (int) db_node1.getProperty("num_genomes");
-                ng2 = (int) db_node2.getProperty("num_genomes");
-                knum1 = (long) db_node1.getProperty("num_k_mers");
-                knum2 = (long) db_node2.getProperty("num_k_mers");
-                if (K1 != K2 || sq_num1 != sq_num2 || sq_num1 != sq_num2 || ed_num1 != ed_num2 || ng1 != ng2 || knum1 != knum2) {
-                    System.out.println("Basic properties are different.");
-                }
-                genomeDb1 = new SequenceDatabase(path1 + GENOME_DATABASE_PATH);
-                genomeDb2 = new SequenceDatabase(path2 + GENOME_DATABASE_PATH);
-                indexDb1 = new IndexDatabase(path1 + INDEX_DATABASE_PATH);
-                indexDb2 = new IndexDatabase(path2 + INDEX_DATABASE_PATH);
-                System.out.println("Comparing pangenomes...");
-                K = K1;
-                IndexPointer p1 = new IndexPointer();
-                IndexPointer p2 = new IndexPointer();
-                for (k = 0; k < knum1; ++k) {
-                    k_mer1 = indexDb1.get_kmer(k);
-                    k_mer2 = indexDb2.get_kmer(k);
-                    if (k_mer1.compare(k_mer2) != 0) {
-                        System.out.println("Kmers number " + k + " are different.");
-                    }
-                    indexDb1.get_pointer(p1, k);
-                    indexDb2.get_pointer(p2, k);
-                    if (true){//p1.next_index == -1L && p2.next_index == -1L) {
-                        n1 = g1.getNodeById(p1.node_id);
-                        len1 = (int) n1.getProperty("length");
-                        n2 = g2.getNodeById(p2.node_id);
-                        len2 = (int) n2.getProperty("length");
-                        if (len1 != len2 || (!genomeDb1.compare(genomeDb2, (int[]) n1.getProperty("address"), (int[]) n2.getProperty("address"), 0, 0, len1, true)
-                                && !genomeDb1.compare(genomeDb2, (int[]) n1.getProperty("address"), (int[]) n2.getProperty("address"), 0, 0, len1, false))) {
-                            System.out.println("Nodes " + p1.node_id + " and " + p2.node_id + " are different.");
-                        }
-                        if (n1.getDegree(Direction.BOTH) != n2.getDegree(Direction.BOTH)) {
-                            System.out.println("Nodes " + p1.node_id + " and " + p2.node_id + " have different degrees.");
-                        }
-                    }
-                    if (k % (knum1 / 100 + 1) == 0) {
-                        System.out.print(k * 100 / knum1 + 1 + "%\r");
-                    }
-                }
-                System.out.println();
-                tx1.success();
-                tx2.success();
-            }
-            g1.shutdown();
-            g2.shutdown();
-            System.out.println("Pangenomes are equal.");
         }
     }
     
