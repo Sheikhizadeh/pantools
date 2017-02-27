@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
 import org.neo4j.graphdb.RelationshipType;
@@ -39,6 +40,8 @@ import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import static org.neo4j.graphdb.factory.GraphDatabaseSettings.keep_logical_logs;
+import org.neo4j.graphdb.schema.IndexDefinition;
+import org.neo4j.graphdb.schema.Schema;
 import static pangenome.SequenceLayer.append_fwd;
 import static pangenome.SequenceLayer.append_rev;
 
@@ -404,7 +407,7 @@ public class AnnotationLayer {
                         gene_start_pos = address[2];
                         // extract gene sequence as appears in the sequence and connects it to its nodes
                         gene_builder.setLength(0);
-                        get_gene_sequenced(gene_builder, address, gene_node);
+                        get_sequence_of_gene(gene_builder, address, gene_node);
                         if (gene_builder.length() == 0)
                             continue;
                         isoforms_num =0;
@@ -430,7 +433,7 @@ public class AnnotationLayer {
                                 if (gene_node.getProperty("strand").equals("-"))
                                     reverse_complement(rna_builder);
                                 protein = pb.translate(rna_builder);
-                                if (protein.charAt(0) == 'M'  && protein.charAt(protein.length() - 1) == '*'){
+                                if (protein.length() > 0 && protein.charAt(0) == 'M'  && protein.charAt(protein.length() - 1) == '*'){
                                     ++protein_num;
                                     if (protein_num % 11 == 1)
                                         System.out.print("\rAdding protein sequences... " + protein_num);
@@ -498,7 +501,7 @@ public class AnnotationLayer {
      * @param address An array containing {genome, sequence, begin, end}
      * @param gene_node The gene node itself
      */
-    public void get_gene_sequenced(StringBuilder gene_builder, int[] address, Node gene_node){
+    public void get_sequence_of_gene(StringBuilder gene_builder, int[] address, Node gene_node){
         Relationship rel;
         Node neighbor, node;
         int loc, node_len, neighbor_len, seq_len = address[3] - address[2] + 1, starts_at;
@@ -548,7 +551,6 @@ public class AnnotationLayer {
                 tx.success();
             }
         } // while
-        gene_node.setProperty("stop_node", node.getId());
     }
 
     /**
@@ -568,7 +570,7 @@ public class AnnotationLayer {
         pro_aligner = new ProteinAlignment(-10,-0.2,MAX_LENGTH);
         if (args.length > 2)
             THRESHOLD = Double.parseDouble(args[2]);
-        System.out.println("THRESHOLD = "+THRESHOLD);
+        System.out.println("THRESHOLD = " + THRESHOLD);
         find_crossing_proteins();
         build_homology_groups();
         build_orthology_groups(pangenome_path);
@@ -584,16 +586,17 @@ public class AnnotationLayer {
         LinkedList<Node> proteins = new LinkedList();
         ResourceIterator<Node> proteins_iterator;
         PriorityQueue<Long> crossing_protein_ids = new PriorityQueue();
-        Node protein_node, pentamer, db_node;
+        Node protein_node, pentamer_node, db_node, other_node;
         int protein_length, total_proteins, pentamer_index;
         String protein;
+        //StringBuilder pentamer = new StringBuilder();
         int[] seed = new int[5];
         int i, p, count, start, trsc;
         long crossing_protein_id, p_id;
         System.out.println("Finding crossing proteins...");
         try (Transaction tx = graphDb.beginTx()) {
             db_node = graphDb.findNodes(pangenome_label).next();
-            if (db_node.hasProperty("tetra_mer_node_ids"))
+            if (db_node.hasProperty("penta_mer_node_ids"))
                 penta_mer_node_ids = (long[])db_node.getProperty("penta_mer_node_ids");
             else
                 penta_mer_node_ids = new long[3200000]; //20 ^ 5 
@@ -617,23 +620,31 @@ public class AnnotationLayer {
                         for (start = 0; start < protein_length - 5; ++start){
                             seed[(start + 4) % 5] = protein.charAt(start + 4);
                             pentamer_index = 0;
-                            for (i = 0; i < 5; ++i)
+                            //pentamer.setLength(0);
+                            for (i = 0; i < 5; ++i){
                                 pentamer_index = pentamer_index * 20 + code[seed[(start + i) % 5]];
+                                //pentamer.append((char)seed[(start + i) % 5]);
+                            }
                             if (penta_mer_node_ids[pentamer_index] == 0){
-                                pentamer = graphDb.createNode(pentamer_lable);
-                                penta_mer_node_ids[pentamer_index] = pentamer.getId();
-                            } else
-                                pentamer = graphDb.getNodeById(penta_mer_node_ids[pentamer_index]);
-                            for (Relationship rel: pentamer.getRelationships())
-                                crossing_protein_ids.add(rel.getEndNode().getId());
-                            if (get_edge(pentamer, protein_node, RelTypes.occurs_in) == null)
-                                pentamer.createRelationshipTo(protein_node, RelTypes.occurs_in);
+                                pentamer_node = graphDb.createNode(pentamer_lable);
+                                //pentamer_node.setProperty("index", pentamer_index);
+                                //pentamer_node.setProperty("peptide", pentamer.toString());
+                                penta_mer_node_ids[pentamer_index] = pentamer_node.getId();
+                            } else {
+                                pentamer_node = graphDb.getNodeById(penta_mer_node_ids[pentamer_index]);
+                                for (Relationship rel: pentamer_node.getRelationships()){
+                                    other_node = rel.getStartNode();
+                                    if (other_node != protein_node)
+                                        crossing_protein_ids.add(other_node.getId());
+                                }
+                            }
+                            protein_node.createRelationshipTo(pentamer_node, RelTypes.visits);
                         }
                         if (!crossing_protein_ids.isEmpty()){
                             for (count = 0, crossing_protein_id = crossing_protein_ids.peek(); !crossing_protein_ids.isEmpty();){
                                 p_id = crossing_protein_ids.remove();
                                 if (crossing_protein_id != p_id){
-                                    if (count > protein_length/10)
+                                    if (count > protein_length/20 + 1)
                                         protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
                                     crossing_protein_id = p_id;
                                     count = 1;
@@ -641,7 +652,7 @@ public class AnnotationLayer {
                                 else
                                     ++count;
                             }
-                            if (count > protein_length/10) // for the last range of IDs in the queue
+                            if (count > protein_length/20 + 1) // for the last range of IDs in the queue
                                 protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
                         }
                     }  
@@ -651,11 +662,11 @@ public class AnnotationLayer {
                 tx.success();
             }
         } // for protein
-        System.out.println("\r" + p + "/" + total_proteins);
         try (Transaction tx = graphDb.beginTx()) {
-             db_node.setProperty("penta_mer_node_ids", penta_mer_node_ids);
-             tx.success();
+            db_node.setProperty("penta_mer_node_ids", penta_mer_node_ids);
+            tx.success();
         }
+        System.out.println("\r" + p + "/" + total_proteins);
     }
     
     /**
@@ -715,8 +726,8 @@ public class AnnotationLayer {
                                 crossing_protein = crossing_edge.getOtherNode(start_protein);
                                 if(crossing_protein.hasProperty("protein") && !crossing_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
                                     similarity = protein_similarity((String)start_protein.getProperty("protein"), (String)crossing_protein.getProperty("protein"));
-                                    crossing_edge.setProperty("similarity", similarity);
                                     if ( similarity > THRESHOLD ) {
+                                        crossing_edge.setProperty("similarity", similarity);
                                         homology_group_node.createRelationshipTo(crossing_protein, RelTypes.has_homolog);
                                         num_members++;
                                         homologs.add(crossing_protein);
@@ -815,7 +826,7 @@ public class AnnotationLayer {
                 }
             }
             System.out.println("\rOrthology groups : " + num_groups);
-            System.out.println("After housing singletons : " + (num_groups - group_singletons(orthology_group_nodes)));
+            //System.out.println("After housing singletons : " + (num_groups - group_singletons(orthology_group_nodes)));
         // compute copy_number array in each group and delete singleton groups merged into the other ones and now empty 
             while (!orthology_group_nodes.isEmpty()){
                 try (Transaction tx = graphDb.beginTx()) {
@@ -894,7 +905,6 @@ public class AnnotationLayer {
         return num;
     }   
     
-    
     private void make_group(FileReader clusters_file, Node orthology_group_node){
         char ch;
         long id = 0;
@@ -925,7 +935,7 @@ public class AnnotationLayer {
         ListIterator<Node> itr1, itr2;
         Node protein1, protein2;
         Relationship crossing_edge;
-        double similarity;
+        double similarity = 0;
         try (PrintWriter graph = new PrintWriter(graph_path)){
             for (itr1 = members.listIterator(); itr1.hasNext(); ){
                 protein1 = itr1.next();
@@ -936,17 +946,15 @@ public class AnnotationLayer {
                             crossing_edge = get_edge(protein1, protein2, RelTypes.crosses);
                             if (crossing_edge != null){
                                 similarity = (double)crossing_edge.getProperty("similarity", -1.0);
-                                if(similarity == -1.0){ // do not have similarity property
+                                if(similarity == -1.0) // do not have similarity property
                                     similarity = protein_similarity((String)protein1.getProperty("protein"), (String)protein2.getProperty("protein"));
+                                if (similarity > THRESHOLD){
                                     crossing_edge.setProperty("similarity", similarity); // to be usedful for group_singles()
+                                // converts the similarity scores to a number between 0 and ( 100 - THRESHOLD) ^ 2.
+                                // This increases the sensitivity of MCL clustering algorithm.
+                                    similarity = similarity - THRESHOLD;
+                                    graph.write(protein1.getId()+" "+protein2.getId()+" "+ (similarity * similarity) +"\n");
                                 }
-                            } else // do not cross
-                                similarity = protein_similarity((String)protein1.getProperty("protein"), (String)protein2.getProperty("protein"));
-                            if (similarity > THRESHOLD){
-                            // converts the similarity scores to a number between 0 and ( 100 - THRESHOLD) ^ 2.
-                            // This increases the sensitivity of MCL clustering algorithm.
-                                similarity = similarity - THRESHOLD;
-                                graph.write(protein1.getId()+" "+protein2.getId()+" "+ (similarity * similarity) +"\n");
                             }
                         } 
                         tx.success();
