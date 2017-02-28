@@ -586,7 +586,8 @@ public class AnnotationLayer {
         LinkedList<Node> proteins = new LinkedList();
         ResourceIterator<Node> proteins_iterator;
         PriorityQueue<Long> crossing_protein_ids = new PriorityQueue();
-        Node protein_node, pentamer_node, db_node, other_node;
+        Node protein_node, pentamer_node, db_node;
+        long other_node_id, protein_node_id;
         int protein_length, total_proteins, pentamer_index;
         String protein;
         //StringBuilder pentamer = new StringBuilder();
@@ -612,9 +613,10 @@ public class AnnotationLayer {
                 for (trsc = 0; !proteins.isEmpty()&& trsc < 2 * MAX_TRANSACTION_SIZE; ++trsc){
                     protein_node = proteins.remove();
                     if (protein_node.hasProperty("protein")){
+                        protein_node_id = protein_node.getId();
                         ++p;
-                        protein_length = (int)protein_node.getProperty("protein_length");
                         protein = (String)protein_node.getProperty("protein");
+                        protein_length = protein.length();
                         for (i = 0; i < 4; ++i)
                             seed[i] = protein.charAt(i);
                         for (start = 0; start < protein_length - 5; ++start){
@@ -633,9 +635,9 @@ public class AnnotationLayer {
                             } else {
                                 pentamer_node = graphDb.getNodeById(penta_mer_node_ids[pentamer_index]);
                                 for (Relationship rel: pentamer_node.getRelationships()){
-                                    other_node = rel.getStartNode();
-                                    if (other_node != protein_node)
-                                        crossing_protein_ids.add(other_node.getId());
+                                    other_node_id = rel.getStartNode().getId();
+                                    if (other_node_id != protein_node_id)
+                                        crossing_protein_ids.add(other_node_id);
                                 }
                             }
                             protein_node.createRelationshipTo(pentamer_node, RelTypes.visits);
@@ -686,7 +688,7 @@ public class AnnotationLayer {
         } 
         while (!proteins.isEmpty()) {
             protein_node = proteins.remove();
-            num_grouped_proteins = group_homologs(protein_node);
+            num_grouped_proteins = breadth_first_search(protein_node);
             if (num_grouped_proteins > 0)
                 num_groups += 1;
             System.out.print("\rHomology groups : " + num_groups);
@@ -701,7 +703,7 @@ public class AnnotationLayer {
      * @param query_gene The gene to which similar ones should be found
      * @return The value by which the number of groups have been increased. (Could be a negative value if some groups get merged) 
      */
-    private int group_homologs(Node start_protein){
+    private int breadth_first_search(Node start_protein){
         int num_members = 0;
         double similarity;
         Node homology_group_node, crossing_protein;
@@ -724,7 +726,7 @@ public class AnnotationLayer {
                             for (int trsc = 0; itr.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
                                 crossing_edge = itr.next();
                                 crossing_protein = crossing_edge.getOtherNode(start_protein);
-                                if(crossing_protein.hasProperty("protein") && !crossing_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
+                                if(!crossing_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING) && crossing_protein.hasProperty("protein")){
                                     similarity = protein_similarity((String)start_protein.getProperty("protein"), (String)crossing_protein.getProperty("protein"));
                                     if ( similarity > THRESHOLD ) {
                                         crossing_edge.setProperty("similarity", similarity);
@@ -826,7 +828,6 @@ public class AnnotationLayer {
                 }
             }
             System.out.println("\rOrthology groups : " + num_groups);
-            //System.out.println("After housing singletons : " + (num_groups - group_singletons(orthology_group_nodes)));
         // compute copy_number array in each group and delete singleton groups merged into the other ones and now empty 
             while (!orthology_group_nodes.isEmpty()){
                 try (Transaction tx = graphDb.beginTx()) {
@@ -834,10 +835,10 @@ public class AnnotationLayer {
                         orthology_group_node = orthology_group_nodes.remove();
                         groups_file.write(Long.toString(orthology_group_node.getId()));
                         degree = orthology_group_node.getDegree();
-                        if (degree > 0)
+                        //if (degree > 0)
                             set_and_write_orthology_groups(orthology_group_node, copy_number, groups_file);
-                        else
-                            orthology_group_node.delete();   
+                        //else
+                        //    orthology_group_node.delete();   
                     }
                     tx.success();
                 }
@@ -846,63 +847,6 @@ public class AnnotationLayer {
         }catch (IOException ex){
             System.out.print(ex.getMessage());
         }
-    }   
-
-    int group_singletons(LinkedList<Node> orthology_group_nodes) {
-        int num = 0;
-        double best_similarity, similarity;
-        Node orthology_group_node, gene_node, mate_gene_node, mate_homology_group, gene_homology_group;
-        long best_mate_id;
-        Relationship r;
-        ListIterator<Node> itr = orthology_group_nodes.listIterator();
-        while (itr.hasNext()){
-            try (Transaction tx2 = graphDb.beginTx()) {
-                for (int trsc = 0; itr.hasNext() && trsc < MAX_TRANSACTION_SIZE; ) {
-                    orthology_group_node = itr.next();
-                    if (orthology_group_node.getDegree() == 1){
-                        ++trsc;
-                        r = orthology_group_node.getSingleRelationship(RelTypes.has_ortholog, Direction.OUTGOING);
-                        gene_node = r.getEndNode();
-                        best_similarity = THRESHOLD/2;
-                        best_mate_id = -1l;
-                        for (Relationship rel: gene_node.getRelationships(RelTypes.crosses)){
-                            mate_gene_node = rel.getOtherNode(gene_node);
-                            similarity = (double)rel.getProperty("similarity", 0.0);
-                            if (similarity > best_similarity){
-                                best_similarity = similarity;
-                                best_mate_id = mate_gene_node.getId();
-
-                            }
-                        }
-                        if (best_mate_id != -1l){
-                            ++num;
-                            mate_gene_node = graphDb.getNodeById(best_mate_id);
-                        // delete single orthology edge, orthology node will be deleted in the main function    
-                            r.delete();
-                        // join the best orthology group    
-                            mate_gene_node.getSingleRelationship(RelTypes.has_ortholog, Direction.INCOMING)
-                                    .getStartNode().createRelationshipTo(gene_node, RelTypes.has_ortholog);
-
-                            mate_homology_group = mate_gene_node.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING).getStartNode();
-                            r = gene_node.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING);
-                            gene_homology_group = r.getStartNode();
-                            if (!mate_homology_group.equals(gene_homology_group)){
-                            // delete the single homology node    
-                                r.delete();
-                                gene_homology_group.delete();
-                            // join the best homology group    
-                                mate_homology_group.createRelationshipTo(gene_node, RelTypes.has_homolog);
-                                mate_homology_group.setProperty("num_members", 1 + (int) mate_homology_group.getProperty("num_members"));
-                            }
-                        }
-                    }
-                } 
-                tx2.success();
-            }
-        }
-        /*System.gc ();
-        System.runFinalization ();*/
-        return num;
     }   
     
     private void make_group(FileReader clusters_file, Node orthology_group_node){

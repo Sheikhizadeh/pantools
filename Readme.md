@@ -24,11 +24,11 @@ List of commands and examples for the provided sample data :
 1. build:
    To build a pan-genome out of a set of genomes.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  K_VALUE  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE
+   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE K_VALUE
 
-   K_VALUE :   size of K for construction of the de Bruijn graph which should be 6 <= K <= 255.
    PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files (genomes); each in a seperated line.
    PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored.  
+   K_VALUE :   size of K for construction of the de Bruijn graph which should be 6 <= K <= 255.
 
    Example: 
    
