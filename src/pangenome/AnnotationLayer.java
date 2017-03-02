@@ -774,7 +774,7 @@ public class AnnotationLayer {
      * divides the pre-calculated homology groups into orthology groups using MCL algorithm 
      */   
     void build_orthology_groups(String pangenome_path) {
-        int num_groups = 0, degree, trsc;
+        int num_groups = 0, trsc;
         int[] copy_number;
         ResourceIterator<Node> nodes;
         LinkedList<Node> homology_group_nodes = new LinkedList();
@@ -834,7 +834,7 @@ public class AnnotationLayer {
                     for (trsc = 0; !orthology_group_nodes.isEmpty() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
                         orthology_group_node = orthology_group_nodes.remove();
                         groups_file.write(Long.toString(orthology_group_node.getId()));
-                        degree = orthology_group_node.getDegree();
+                        //degree = orthology_group_node.getDegree();
                         //if (degree > 0)
                             set_and_write_orthology_groups(orthology_group_node, copy_number, groups_file);
                         //else
