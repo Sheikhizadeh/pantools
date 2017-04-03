@@ -265,15 +265,13 @@ public final class IndexDatabase {
      */
     public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb, GraphDatabaseService graphDb, int previous_num_genomes) {
         int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
-        int i, k, p, trsc, seq_nodes;
-        long c_index, p_index, l, new_kmers_num;
+        int i, k, p;
+        long p_index, new_kmers_num;
         IndexPointer null_pointer = new IndexPointer();
-        Node node;
-        ResourceIterator<Node> nodes;
-        Path old_index_folder;
         // move current index files to directory old_index
         try {
-            old_index_folder = Files.createDirectory(Paths.get(index_path+"/old_index"));
+            if (! new File(index_path+"/old_index").exists())
+                Files.createDirectory(Paths.get(index_path+"/old_index"));
             Files.move(Paths.get(index_path + "/sorted.kmc_pre"), Paths.get(index_path + "/old_index/sorted.kmc_pre"));
             Files.move(Paths.get(index_path + "/sorted.kmc_suf"), Paths.get(index_path + "/old_index/sorted.kmc_suf"));
             Files.move(Paths.get(index_path + "/pointers.db"), Paths.get(index_path + "/old_index/pointers.db"));
@@ -343,11 +341,6 @@ public final class IndexDatabase {
                 put_pointer(null_pointer, p);
             }
         // adjusting available pointers
-            try (Transaction tx = graphDb.beginTx()) {
-                nodes = graphDb.findNodes(DynamicLabel.label("node"));
-                seq_nodes = (int) graphDb.findNodes(DynamicLabel.label("pangenome")).next().getProperty("num_nodes");
-                tx.success();
-            }
             IndexPointer ptr = new IndexPointer();
             System.out.println("Updating kmer index...                    ");
             for (i = 0; i < old_index.kmers_num; ++i) {

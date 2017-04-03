@@ -362,6 +362,7 @@ public class AnnotationLayer {
         for (File f : directory.listFiles())
             if (f.getName().startsWith("neostore.transaction.db."))
                 f.delete();
+        System.out.println("Annotation done. See "+pangenome_path + "/annotation.log");
     }
 
     /**
