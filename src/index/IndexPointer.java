@@ -14,7 +14,7 @@ package index;
 public class IndexPointer {
 
     public long node_id;
-    public int position;
+    public int offset;
     public boolean canonical;
 
     /**
@@ -23,7 +23,7 @@ public class IndexPointer {
     public IndexPointer() {
         node_id = -1L;
         canonical = false;
-        position = -1;
+        offset = -1;
     }
 
     /**
@@ -36,7 +36,7 @@ public class IndexPointer {
     public IndexPointer(long id, boolean c, int p) {
         node_id = id;
         canonical = c;
-        position = p;
+        offset = p;
     }
 
     /**
@@ -45,11 +45,11 @@ public class IndexPointer {
     public void reset() {
         node_id = -1L;
         canonical = false;
-        position = -1;
+        offset = -1;
     }
     
     public String ToString(){
-        return Long.toString(node_id)+Boolean.toString(canonical)+Integer.toString(position);
+        return Long.toString(node_id)+Boolean.toString(canonical)+Integer.toString(offset);
     }
 
 }

@@ -63,6 +63,7 @@ public class Pantools {
         FF, FR, RF, RR,
         has, // for pointing to genome and sequence nodes
         starts,
+        stops,
         has_homolog, // for pointing to gene nodes from the homology group
         has_ortholog, // for pointing to gene nodes from the orthology group
         codes_for,// for connecting genes to mRNAs

@@ -492,7 +492,7 @@ public final class IndexDatabase {
     public void get_pointer(IndexPointer poniter, long number) {
         poniter.node_id = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]));
         poniter.canonical = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].get((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8)) == 0;
-        poniter.position = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9));
+        poniter.offset = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9));
     }
 
     /**
@@ -503,7 +503,7 @@ public final class IndexDatabase {
     public void put_pointer(IndexPointer poniter, long number) {
         ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]), poniter.node_id);
         ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].put((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8), (byte) (poniter.canonical ? 0 : 1));
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9), poniter.position);
+        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9), poniter.offset);
     }
 
     /**

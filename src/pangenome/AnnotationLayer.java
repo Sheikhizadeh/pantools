@@ -505,53 +505,59 @@ public class AnnotationLayer {
     public void get_sequence_of_gene(StringBuilder gene_builder, int[] address, Node gene_node){
         Relationship rel;
         Node neighbor, node;
-        int loc, node_len, neighbor_len, seq_len = address[3] - address[2] + 1, starts_at;
+        int genomic_pos, node_len, neighbor_len, seq_len = address[3] - address[2] + 1, offset;
         String rel_name;
         gene_builder.setLength(0);
-        loc = address[2]-1;
-        IndexPointer start_ptr = locate(address);
-        starts_at = start_ptr.position;
+        genomic_pos = address[2]-1;
+        IndexPointer start_ptr, stop_ptr;
+        start_ptr = locate(address);
+        offset = start_ptr.offset;
         node = graphDb.getNodeById(start_ptr.node_id);
         node_len = (int) node.getProperty("length");
         rel = gene_node.createRelationshipTo(node, RelTypes.starts);
-        rel.setProperty("starts_at", starts_at);
-        rel.setProperty("position", loc);
+        rel.setProperty("offset", offset);
+        rel.setProperty("genomic_position", genomic_pos);
         rel.setProperty("forward", start_ptr.canonical);
+        stop_ptr = locate(new int[]{address[0], address[1], address[2] + seq_len - 1});
+        rel = gene_node.createRelationshipTo(graphDb.getNodeById(stop_ptr.node_id), RelTypes.stops);
+        rel.setProperty("offset", stop_ptr.offset);
+        rel.setProperty("genomic_position", genomic_pos + seq_len - 1);
+        rel.setProperty("forward", stop_ptr.canonical);
         if (start_ptr.canonical) {
-            if (starts_at + seq_len - 1 <= node_len - 1)
-                loc += append_fwd(gene_builder, (String) node.getProperty("sequence"), starts_at, starts_at + seq_len - 1);
+            if (offset + seq_len - 1 <= node_len - 1) // node covers the gene
+                genomic_pos += append_fwd(gene_builder, (String) node.getProperty("sequence"), offset, offset + seq_len - 1);
             else
-                loc += append_fwd(gene_builder, (String) node.getProperty("sequence"), starts_at, node_len - 1);
+                genomic_pos += append_fwd(gene_builder, (String) node.getProperty("sequence"), offset, node_len - 1);
         } else {
-            if (starts_at - (seq_len - 1) >= 0)
-                loc += append_rev(gene_builder, (String) node.getProperty("sequence"), starts_at - (seq_len - 1), starts_at);
+            if (offset - (seq_len - 1) >= 0) // node covers the gene
+                genomic_pos += append_rev(gene_builder, (String) node.getProperty("sequence"), offset - (seq_len - 1), offset);
             else
-                loc += append_rev(gene_builder, (String) node.getProperty("sequence"), 0, starts_at);
+                genomic_pos += append_rev(gene_builder, (String) node.getProperty("sequence"), 0, offset);
         }
         while (gene_builder.length() < seq_len ) {
             try (Transaction tx = graphDb.beginTx()) {
                 for (int trsc = 0; gene_builder.length() < seq_len && trsc < MAX_TRANSACTION_SIZE; ++trsc){
-                    address[2] = loc - K + 1;
+                    address[2] = genomic_pos - K + 1;
                     rel = get_outgoing_edge(node, address);
                     neighbor = rel.getEndNode();
                     rel_name = rel.getType().name();
                     neighbor_len = (int) neighbor.getProperty("length");
                     if (rel_name.charAt(1) == 'F') {
                         if (gene_builder.length() + neighbor_len - K + 1 > seq_len) 
-                            loc += append_fwd(gene_builder, (String) neighbor.getProperty("sequence"), K - 1, seq_len - gene_builder.length() + K - 2);
+                            genomic_pos += append_fwd(gene_builder, (String) neighbor.getProperty("sequence"), K - 1, seq_len - gene_builder.length() + K - 2);
                         else 
-                            loc += append_fwd(gene_builder, (String) neighbor.getProperty("sequence"), K - 1, neighbor_len - 1);
+                            genomic_pos += append_fwd(gene_builder, (String) neighbor.getProperty("sequence"), K - 1, neighbor_len - 1);
                     } else {
                         if (gene_builder.length() + neighbor_len - K + 1 > seq_len) 
-                        loc += append_rev(gene_builder, (String) neighbor.getProperty("sequence"), neighbor_len - K - (seq_len - gene_builder.length()) + 1, neighbor_len - K);
+                        genomic_pos += append_rev(gene_builder, (String) neighbor.getProperty("sequence"), neighbor_len - K - (seq_len - gene_builder.length()) + 1, neighbor_len - K);
                     else 
-                        loc += append_rev(gene_builder, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
+                        genomic_pos += append_rev(gene_builder, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
                     }
                     node = neighbor;
                 }
                 tx.success();
             }
-        } // while
+        } // while forward, forward ? genomic_pos - node_start_pos : node_len - 1 - (genomic_pos - node_start_pos)
     }
 
     /**
@@ -618,45 +624,47 @@ public class AnnotationLayer {
                         ++p;
                         protein = (String)protein_node.getProperty("protein");
                         protein_length = protein.length();
-                        for (i = 0; i < 4; ++i)
-                            seed[i] = protein.charAt(i);
-                        for (start = 0; start < protein_length - 5; ++start){
-                            seed[(start + 4) % 5] = protein.charAt(start + 4);
-                            pentamer_index = 0;
-                            //pentamer.setLength(0);
-                            for (i = 0; i < 5; ++i){
-                                pentamer_index = pentamer_index * 20 + code[seed[(start + i) % 5]];
-                                //pentamer.append((char)seed[(start + i) % 5]);
-                            }
-                            if (penta_mer_node_ids[pentamer_index] == 0){
-                                pentamer_node = graphDb.createNode(pentamer_lable);
-                                //pentamer_node.setProperty("index", pentamer_index);
-                                //pentamer_node.setProperty("peptide", pentamer.toString());
-                                penta_mer_node_ids[pentamer_index] = pentamer_node.getId();
-                            } else {
-                                pentamer_node = graphDb.getNodeById(penta_mer_node_ids[pentamer_index]);
-                                for (Relationship rel: pentamer_node.getRelationships()){
-                                    other_node_id = rel.getStartNode().getId();
-                                    if (other_node_id != protein_node_id)
-                                        crossing_protein_ids.add(other_node_id);
+                        if (protein_length > 5 ){
+                            for (i = 0; i < 4; ++i)
+                                seed[i] = protein.charAt(i);
+                            for (start = 0; start < protein_length - 5; ++start){// for each penta-mer of the protein
+                                seed[(start + 4) % 5] = protein.charAt(start + 4);
+                                pentamer_index = 0;
+                                //pentamer.setLength(0);
+                                for (i = 0; i < 5; ++i){
+                                    pentamer_index = pentamer_index * 20 + code[seed[(start + i) % 5]];
+                                    //pentamer.append((char)seed[(start + i) % 5]);
                                 }
-                            }
-                            protein_node.createRelationshipTo(pentamer_node, RelTypes.visits);
-                        }
-                        if (!crossing_protein_ids.isEmpty()){
-                            for (count = 0, crossing_protein_id = crossing_protein_ids.peek(); !crossing_protein_ids.isEmpty();){
-                                p_id = crossing_protein_ids.remove();
-                                if (crossing_protein_id != p_id){
-                                    if (count > protein_length/20 + 1)
-                                        protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
-                                    crossing_protein_id = p_id;
-                                    count = 1;
+                                if (penta_mer_node_ids[pentamer_index] == 0){
+                                    pentamer_node = graphDb.createNode(pentamer_lable);
+                                    //pentamer_node.setProperty("index", pentamer_index);
+                                    //pentamer_node.setProperty("peptide", pentamer.toString());
+                                    penta_mer_node_ids[pentamer_index] = pentamer_node.getId();
+                                } else {
+                                    pentamer_node = graphDb.getNodeById(penta_mer_node_ids[pentamer_index]);
+                                    for (Relationship rel: pentamer_node.getRelationships()){
+                                        other_node_id = rel.getStartNode().getId();
+                                        if (other_node_id != protein_node_id)
+                                            crossing_protein_ids.add(other_node_id);
+                                    }
                                 }
-                                else
-                                    ++count;
+                                protein_node.createRelationshipTo(pentamer_node, RelTypes.visits);
                             }
-                            if (count > protein_length/20 + 1) // for the last range of IDs in the queue
-                                protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
+                            if (!crossing_protein_ids.isEmpty()){
+                                for (count = 0, crossing_protein_id = crossing_protein_ids.peek(); !crossing_protein_ids.isEmpty();){
+                                    p_id = crossing_protein_ids.remove();
+                                    if (crossing_protein_id != p_id){
+                                        if (count > protein_length/20 + 1)
+                                            protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
+                                        crossing_protein_id = p_id;
+                                        count = 1;
+                                    }
+                                    else
+                                        ++count;
+                                }
+                                if (count > protein_length/20 + 1) // for the last range of IDs in the queue
+                                    protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
+                            }
                         }
                     }  
                     if (p % 11 == 1)

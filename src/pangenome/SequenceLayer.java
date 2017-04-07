@@ -331,7 +331,7 @@ public class SequenceLayer {
                             begin = address[2];
                             end = address[3];
                             strand = gene.getProperty("strand").toString().equals("+");
-                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("starts_at")), address);//
+                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset")), address);//
                             //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
@@ -555,7 +555,7 @@ public class SequenceLayer {
         seq_len = end - begin + 1;
         seq.setLength(0);
         loc = begin;
-        position=start_ptr.position;
+        position=start_ptr.offset;
         node=graphDb.getNodeById(start_ptr.node_id);
         node_len = (int) node.getProperty("length");
     // Takes the part of the region lies in the first node of the path that region takes in the graph    
@@ -650,7 +650,7 @@ public class SequenceLayer {
      * @return A pointer to the genomic position in the pangenome
      */
     public static IndexPointer locate(int[] addr) {
-        int loc, low, high, mid , node_len, position;
+        int node_start_pos, low, high, mid , node_len, genomic_pos;
         boolean forward;
         Node node, neighbor, seq_node;
         Relationship rel;
@@ -658,33 +658,33 @@ public class SequenceLayer {
         long[] anchor_nodes;
         int[] anchor_positions;
         int[] address = Arrays.copyOf(addr,addr.length);
-        position = address[2] - 1;
+        genomic_pos = address[2] - 1;
         seq_node = graphDb.findNode(sequence_label, "number", address[0]+"_"+address[1]);
         anchor_nodes = (long[]) seq_node.getProperty("anchor_nodes");
         anchor_positions = (int[]) seq_node.getProperty("anchor_positions");
         anchor_sides = (String) seq_node.getProperty("anchor_sides");
     // Find the immediate preceding anchor_node, searching in the sorted array of anchor positions.      
         for (low = 0, high = anchor_sides.length() - 1, mid = (low + high) / 2; low <= high; mid = (low + high) / 2) {
-            if (position < anchor_positions[mid]) {
+            if (genomic_pos < anchor_positions[mid]) {
                 high = mid - 1;
-            } else if (position > anchor_positions[mid]) {
+            } else if (genomic_pos > anchor_positions[mid]) {
                 low = mid + 1;
             } else {
                 break;
             }
         }
-        if (position < anchor_positions[mid]) {
+        if (genomic_pos < anchor_positions[mid]) {
             --mid;
         }
         forward = anchor_sides.charAt(mid) == 'F';
         try (Transaction tx = graphDb.beginTx()) {
             node = graphDb.getNodeById(anchor_nodes[mid]);
-            loc = anchor_positions[mid];
+            node_start_pos = anchor_positions[mid];
             node_len = (int) node.getProperty("length");
         // Traverse the pangenome from the anchor node until reach to the target
-            while (loc + node_len - K + 1 <= position) 
+            while (node_start_pos + node_len - K + 1 <= genomic_pos) 
             {
-                address[2] = loc + node_len - K + 1;
+                address[2] = node_start_pos + node_len - K + 1;
                 rel = get_outgoing_edge(node, address);
                 if (rel == null){
                     System.out.println("Failed to locate address : " + addr[0] + " " + addr[1] + " "+ addr[2]);
@@ -692,13 +692,13 @@ public class SequenceLayer {
                 }
                 neighbor = rel.getEndNode();
                 forward = rel.getType().name().charAt(1) == 'F';
-                loc += node_len - K + 1;
+                node_start_pos += node_len - K + 1;
                 node = neighbor;
                 node_len = (int) node.getProperty("length");
             }
             tx.success();
         }
-        return new IndexPointer(node.getId(), forward, forward ? position - loc : node_len - 1 - (position - loc));
+        return new IndexPointer(node.getId(), forward, forward ? genomic_pos - node_start_pos : node_len - 1 - (genomic_pos - node_start_pos));
     }
     
     /***
@@ -747,12 +747,12 @@ public class SequenceLayer {
     // Updates the edges comming from gene level to the node.    
         for (Relationship r : node.getRelationships(RelTypes.starts, Direction.INCOMING)) 
         {
-            starts_at = (int) r.getProperty("starts_at");
+            starts_at = (int) r.getProperty("offset");
             if (starts_at >= pos) {
                 rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.starts);
-                rel.setProperty("starts_at", (int) r.getProperty("starts_at") - pos);
+                rel.setProperty("offset", (int) r.getProperty("offset") - pos);
                 rel.setProperty("forward", r.getProperty("forward"));
-                rel.setProperty("position", r.getProperty("position"));
+                rel.setProperty("genomic_position", r.getProperty("genomic_position"));
                 r.delete();
             } 
         }        
@@ -867,7 +867,7 @@ public class SequenceLayer {
                 ++num_bases;
                 pointer.node_id = id;
                 pointer.canonical = fwd_kmer.canonical;
-                pointer.position = len - K;//(int)node.getProperty("length")-K;
+                pointer.offset = len - K;//(int)node.getProperty("length")-K;
                 indexDb.put_pointer(pointer, curr_index);
                 if (position % (seq_len / 100 + 1) == 0) 
                     System.out.print((long) position * 100 / seq_len + "%\r");
@@ -899,7 +899,7 @@ public class SequenceLayer {
     // Set the pointer to the Kmer in the pointer database    
         pointer.node_id = new_node.getId();
         pointer.canonical = fwd_kmer.canonical;
-        pointer.position = 0;
+        pointer.offset = 0;
         indexDb.put_pointer(pointer, curr_index);
         connect(curr_node ,new_node, RelTypes.values()[curr_side*2]);
         ++num_edges;
@@ -916,7 +916,7 @@ public class SequenceLayer {
         RelationshipType rel_type;
         int[] address;
         boolean degenerated, loop, repeated_edge;
-        pos = pointer.position;
+        pos = pointer.offset;
         node = graphDb.getNodeById(pointer.node_id);
         //System.out.println("follow_forward "+pointer.node_id);
     // The first split might be done to seperate the part we need to enter in.
@@ -1008,7 +1008,7 @@ public class SequenceLayer {
         int[] address;
         Node node, split_node1, split_node2 ,des, src;
         boolean degenerated = false, loop, first_split = false, repeated_edge;
-        pos = pointer.position;
+        pos = pointer.offset;
         node = graphDb.getNodeById(pointer.node_id);
         //System.out.println("follow_reverse "+pointer.node_id);
         RelationshipType rel_type;
