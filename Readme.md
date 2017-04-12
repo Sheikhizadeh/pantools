@@ -32,65 +32,42 @@ List of commands and examples for the provided sample data :
 
    Example: 
    
-   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  15  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt
+   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt 15
              
-2. annotate:
-   To add annotations to a pan-genome. For each genome, this function also produce a FASTA file containing all the protein sequences in the same order as they have been annotated in the GFF file.
+2. add:
+   To add new genomes and annotations to an available pan-genome. 
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  annotate  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_PATH_FILE
-
-   PATH_TO_THE_ANNOTATION_PATH_FILE : a text file containing paths to the GFF files corresponding to the genomes in the same order as they apear in PATH_TO_THE_GENOMES_PATH_FILE.
-                                      Missing annotations should be indicated by an empty line.
-
-   Example: 
-
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  annotate  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotations_path.txt
-
-3. add:
-   To add new genomes to an available pan-genome.
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  add  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_NEW_GENOMES_PATH_FILE
+   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  add  genomes [or annotaions] PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_NEW_GENOMES_PATH_FILE [or PATH_TO_THE_ANNOTATION_PATH_FILE]
    
    PATH_TO_THE_NEW_GENOMES_PATH_FILE : a text file containing paths to FASTA files of the new genomes to be added to the pangeome; each in a seperated line.
                                        New genomes could also be annotated later in the same way; however, there should be empty lines in the annotations path file for pre-existing genomes.
 
-4. retrieve genes:
-   To extract sequence of some annotated genes. 
+   PATH_TO_THE_ANNOTATION_PATH_FILE : a text file each line of which contains genome number and path to the corresponding GFF file seperated by one space.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  genes  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_RECORDS_FILE
+   Example: 
+
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  add annotations /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotations_path.txt
+
+3. retrieve:
+   To retrieve the sequence of annotated genes, genomic regios or constituent genomes. 
+
+   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  genes [or regions or genomes]  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_RECORDS_FILE [or PATH_TO_THE_GENOMIC_REGIONS_FILE or PATH_TO_THE_GENOME_NUMBERS_FILE]
 
    PATH_TO_THE_ANNOTATION_RECORDS_FILE : a text file containing records of annotated genes, as they appear in GFF file, to be retrieved.
                                          The resulting FASTA file would have the same name as the PATH_TO_THE_ANNOTATION_RECORDS_FILE with an additional .fasta extention.
 
-   Example: 
-
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotaion_records.txt
-
-5. retrieve regions:
-   To extract sequence of some genomic regios.
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  regions  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMIC_REGIONS_FILE
-
    PATH_TO_THE_GENOMIC_REGIONS_FILE : a text file containing records with genome_number, sequence_number, begin and end positions seperated by one space for each region.
                                       The resulting FASTA file would have the same name as the PATH_TO_THE_GENOMIC_REGIONS_FILE with an additional .fasta extention.
 
-   Example: 
+   PATH_TO_THE_GENOME_NUMBERS_FILE : a text file containing genome_numbers to be retrieved in each line. The resulting FASTA files are named as genome_X.fasta where X determines the number of the genome in the pangenome.
 
+   Examples: 
+
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotaion_records.txt
    java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  regions  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomic_regions.txt
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genomes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genome_numbers.txt
 
-6. reconstruct:
-   To reconstruct all or a set of genomes out of the pan-genome.
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  reconstruct all/PATH_TO_THE_GENOME_NAMES_FILE  PATH_TO_THE_PANGENOME_DATABASE
-
-   PATH_TO_THE_GENOME_NAMES_FILE : a text file containing genome_number and a given name for that genome seperated by a single space in each line. 
-                                   The resulting FASTA files are named as genome_X.fasta where X determines the number of the genome in the pangenome.
-
-   Example: 
-
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  reconstruct  all  /home/sheik005/two_hiv_pangenome_database
-
-7. group:
+4. group:
    To add homology and orthology nodes which point to a groups of homologous or orthologous genes. This functionality needs MCL to be installed on your machine.
 
    java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE 

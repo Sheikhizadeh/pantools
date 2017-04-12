@@ -156,7 +156,7 @@ public class SequenceLayer {
      * @param genome_paths_file Path to the FASTA genome files. 
      * @param pangenome_path Path to the database folder
      */
-    public void add(String genome_paths_file, String pangenome_path) {
+    public void add_genomes(String genome_paths_file, String pangenome_path) {
         int i, j, s, len, previous_num_genomes;
         long byte_number = 0;
         int[] address = new int[4];
@@ -320,7 +320,7 @@ public class SequenceLayer {
                     // for all the genes in the database    
                     for (i = j = 0, gene_nodes = graphDb.findNodes(gene_label); gene_nodes.hasNext();) {
                         gene = gene_nodes.next();
-                        record = ((String[]) gene.getProperty("fields"))[8];
+                        record = (String) gene.getProperty("attribute");
                         if (record != null && Arrays.binarySearch(records, record) >= 0) // gene is in the records
                         {
                             ++i;
@@ -421,8 +421,8 @@ public class SequenceLayer {
                         address[2] = Integer.parseInt(fields[2]);
                         address[3] = Integer.parseInt(fields[3]);
                         start_ptr = locate(address);
-                        extract_sequence(seq, start_ptr, address);
                         out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
+                        extract_sequence(seq, start_ptr, address);
                         write_fasta(out, seq, 70);
                         seq.setLength(0);
                         ++c;
@@ -445,17 +445,15 @@ public class SequenceLayer {
     /**
      * Reconstructs all or some of the genomes in separated FASTA files.
      * 
-     * @param genome_records_file A text file containing the number and a given name for each genome. 
+     * @param genome_numbers_file A text file containing the genome numbers to be . 
      * @param pangenome_path Path to the database folder
      */
-    public void reconstruct_genomes(String genome_records_file, String pangenome_path) {
+    public void retrieve_genomes(String genome_numbers_file, String pangenome_path) {
         if (new File(pangenome_path + GENOME_DATABASE_PATH).exists()) {
             BufferedReader in;
             BufferedWriter out;
-            Node seq_node;
             IndexPointer start;
-            String[] fields;
-            String line;
+            String genome_number;
             int[] address;
             StringBuilder seq;
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
@@ -472,13 +470,24 @@ public class SequenceLayer {
                     System.exit(1);
                 }
                 K = (int) db_node.getProperty("k_mer_size");
-                if (genome_records_file.equals("all")) {
-                    for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
-                        System.out.println("Reconstructing genome " + address[0] + "...");
+                try {
+                    in = new BufferedReader(new FileReader(genome_numbers_file));
+                    while (in.ready()) {
+                        genome_number = in.readLine().trim();
+                        try{
+                            address[0] = Integer.parseInt(genome_number);
+                        }catch(NumberFormatException e){
+                            System.out.println(genome_number + "is not a valid genome number.");
+                            continue;
+                        }
+                        if (address[0] < 1 || address[0] > genomeDb.num_genomes){
+                            System.out.println(genome_number + "is not a valid genome number.");
+                            continue;
+                        }
+                        System.out.println("Reconstructing genome " + genome_number + "...");
                         try {
-                            out = new BufferedWriter(new FileWriter(pangenome_path + "/genome_" + address[0] + ".fasta"));
+                            out = new BufferedWriter(new FileWriter(pangenome_path + "/genome_" + genome_number + ".fasta"));
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                                seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
                                 address[2] = 1;
                                 address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
                                 start = locate(address);
@@ -493,40 +502,10 @@ public class SequenceLayer {
                             System.exit(1);
                         }
                     }
-                } else {
-                    try {
-                        in = new BufferedReader(new FileReader(genome_records_file));
-                        while (in.ready()) {
-                            line = in.readLine();
-                            if (line.equals("")) {
-                                continue;
-                            }
-                            fields = line.split(" ");
-                            address[0] = Integer.parseInt(fields[0]);
-                            System.out.println("Reconstructing genome " + fields[1] + "...");
-                            try {
-                                out = new BufferedWriter(new FileWriter(pangenome_path + (fields.length > 1 ? "/" + fields[1] : "/genome_" + address[0]) + ".fasta"));
-                                for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                                    seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
-                                    address[2] = 1;
-                                    address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
-                                    start = locate(address);
-                                    out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
-                                    extract_sequence(seq, start, address);
-                                    write_fasta(out, seq, 80);
-                                    seq.setLength(0);
-                                }
-                                out.close();
-                            } catch (IOException e) {
-                                System.out.println(e.getMessage());
-                                System.exit(1);
-                            }
-                        }
-                        in.close();
-                    } catch (IOException ioe) {
-                        System.out.println("Failed to read file names!");
-                        System.exit(1);
-                    }
+                    in.close();
+                } catch (IOException ioe) {
+                    System.out.println("Failed to read file names!");
+                    System.exit(1);
                 }
                 tx.success();
             }
@@ -686,9 +665,9 @@ public class SequenceLayer {
             {
                 address[2] = node_start_pos + node_len - K + 1;
                 rel = get_outgoing_edge(node, address);
-                if (rel == null){
-                    System.out.println("Failed to locate address : " + addr[0] + " " + addr[1] + " "+ addr[2]);
-                    System.exit(1);
+                if (rel == null && address[2] + node_len >= genomic_pos){
+                    System.out.println("Failed to locate address : " + address[0] + " " + address[1] + " "+ address[2]);
+                    break;
                 }
                 neighbor = rel.getEndNode();
                 forward = rel.getType().name().charAt(1) == 'F';
@@ -745,18 +724,17 @@ public class SequenceLayer {
         split_len = node_len - pos;
         split_node.setProperty("length", split_len);
     // Updates the edges comming from gene level to the node.    
-        for (Relationship r : node.getRelationships(RelTypes.starts, Direction.INCOMING)) 
-        {
-            starts_at = (int) r.getProperty("offset");
+        for (Relationship r : node.getRelationships(RelTypes.starts, Direction.INCOMING)) {
+            starts_at = (int)r.getProperty("offset");
             if (starts_at >= pos) {
                 rel = r.getStartNode().createRelationshipTo(split_node, RelTypes.starts);
-                rel.setProperty("offset", (int) r.getProperty("offset") - pos);
+                rel.setProperty("offset", starts_at - pos);
                 rel.setProperty("forward", r.getProperty("forward"));
                 rel.setProperty("genomic_position", r.getProperty("genomic_position"));
-                r.delete();
+            r.delete();
             } 
         }        
-    // Updating the Kmers chain in the index  
+        // Updating the Kmers chain in the index  
         fwd_k_mer = make_fwd_kmer(gen, seq, loc + pos - 1);
         rev_k_mer = make_rev_kmer(gen, seq, loc + pos - 1);
         s_id = (int) split_node.getId();
@@ -1364,6 +1342,7 @@ public class SequenceLayer {
                 pos.setLength(0);
                 sds.setLength(0);
             }//sequences
+            System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");
         }//genomes
         System.out.println();
     }
@@ -1465,8 +1444,9 @@ public class SequenceLayer {
             try (Transaction tx = graphDb.beginTx()) {
                 for (i = 0; i < MAX_TRANSACTION_SIZE && rels.hasNext(); ++i) {
                     r = rels.next();
-                    for(String p:r.getPropertyKeys())
-                        r.removeProperty(p);
+                    if (r.isType(RelTypes.FF) || r.isType(RelTypes.FR) || r.isType(RelTypes.RF) || r.isType(RelTypes.RR))
+                        for(String p:r.getPropertyKeys())
+                            r.removeProperty(p);
                 }
                 tx.success();
             }

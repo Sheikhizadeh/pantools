@@ -1,45 +1,40 @@
-/home/sheik005/hiv/data/1/genome.gff
 ##gff-version 3
-##sequence-region AF069671.1 1 8859
-AF069671.1	annotation	remark	1	8859	.	.	.	accessions=AF069671;comment=Small sections of the 5%27 and 3%27 LTRs are not included in this%0Asequence.;data_file_division=VRL;date=21-AUG-2000;gi=3808260;keywords=;organism=Human immunodeficiency virus 1;references=location: %5B0:8859%5D%0Aauthors: Carr%2CJ.K.%2C Laukkanen%2CT.%2C Salminen%2CM.O.%2C Albert%2CJ.%2C Alaeus%2CA.%2C Kim%2CB.%2C Sanders-Buell%2CE.%2C Birx%2CD.L. and McCutchan%2CF.E.%0Atitle: Characterization of subtype A HIV-1 from Africa by full genome sequencing%0Ajournal: AIDS 13 %2814%29%2C 1819-1826 %281999%29%0Amedline id: %0Apubmed id: 10513639%0Acomment:,location: %5B0:8859%5D%0Aauthors: Carr%2CJ.K.%2C Kim%2CB.%2C Sanders-Buell%2CE.%2C Salminen%2CM.O.%2C Alaeus%2CA.%2C Albert%2CJ.A.%2C Birx%2CD.L. and McCutchan%2CF.E.%0Atitle: Direct Submission%0Ajournal: Submitted %2803-JUN-1998%29 Retrovirology%2C Jackson Foundation%2C 1600 E. Gude Drive%2C Rockville%2C MD 20850%2C USA%0Amedline id: %0Apubmed id: %0Acomment:;sequence_version=1;source=Human immunodeficiency virus 1 %28HIV-1%29;taxonomy=Viruses,Retro-transcribing viruses,Retroviridae,Orthoretrovirinae,Lentivirus,Primate lentivirus group
-AF069671.1	feature	source	1	8859	.	+	.	country=Uganda;db_xref=taxon:11676;isolate=SE7535;mol_type=genomic DNA;note=PBMC sample taken in 1994 from a 45 year old man living in Sweden who aquired the HIV-1 infection heterosexually in Uganda%3B the patient was CDC stage A1 with a CD4-positive lymphocyte count of 581%3B HIV-1 was isolated by co-cultivation with donor PBMC%3B the isolate had an NSI phenotype with CCR5 coreceptor usage%3B DNA from the p24 antigen positive culture was the template for nested PCR amplification of an 8.86 kb fragment encompassing all but small segments of the 5%27 and 3%27 LTRs%3B serial template dilution in the first round PCR was employed to limit the complexity of the sample%3B the PCR product was sequenced directly to derive a consensus of the viral quasispecies%3B SE7535 is subtype A throughout the genome;organism=Human immunodeficiency virus 1;proviral=
-AF069671.1	feature	gene	22	1509	.	+	.	ID=gag;
-AF069671.1	feature	mRNA	22	1509	.	+	.	ID=gag_mrna0;Parent=gag;product=gag protein;protein_id=AAC69297.1;translation=MGARASVLSGGKLDAWEKIRLRPGGKKQYRLKHLVWASRELERFALNPSLLETAEGCQQIMKQLQPALKTGTEELRSLYNTVATLYCVHQRINVTDTKEALDKIEEIQNKSEQKTQQAAADTGNSKVSQNYPIVQNAQGQMVHQSLSPRTLNAWVKVIEEKAFSPEVIPMFSALSEGATPQDLNMMLNIVGGHQAAMQMLKDTINEEAAEWDRLHPVHAGPIPPGQMREPRGSDIAGTTSTPQEQIGWMTGNPPIPVGDIYKRWIILGLNKIVRMYSPVSILDIKQGPKEPFRDYVDRFFKTLRAEQASQDVKNWMTETLLIQNANPDCKSILRALGAGATLEEMMTACQGVGGPGHKARVLAEAMSQVQHPNIMMQRGNFRGQKRIKCFNCGKEGHLARNCRAPRKKGCWKCGKEGHQMKDCTERQANFLGRIWPSSKGRPGNFPQSRLEPTAPPAEIFGMREEIASPPKQEQKGQDPPLVSLKSLFGNDLLSQ
-AF069671.1	feature	exon	22	1509	.	+	0	ID=gag_exon0;Parent=gag;
-AF069671.1	feature	CDS	22	1509	.	+	0	ID=gag_cds0;Parent=gag_mrna0;
-AF069671.1	feature	gene	1308	4313	.	+	.	ID=pol;
-AF069671.1	feature	mRNA	1308	4313	.	+	0	ID=pol_mrna0;Parent=pol;product=pol protein;protein_id=AAC69298.1;translation=FFRENLAFQQGEAGKFSSEQTGANSPTSRDLWNEGRDSLPSEAGAEGTRPTFSFPQITLWQRPLVTVKIEGQLKEALLDTGADDTVLEDINLPGKWKPKMIGGIGGFIKVKQYDQVLIEICGKKAIGTVLVGPTPVNIIGRNMLTQIGCTLNFPISPIETVPVKLKPGMDGPKVKQWPLTEEKIKALTEICTEMEKEGKISKIGPENPYNTPIFAIKKKDSTKWRKLVDFRELNKRTQDFWEVQLGIPHPAGLKKKKSVTVLDLGDAYFSVPLHEGFRKYTAFTIPSTNNATPGIRYQYNVLPQGWKGSPAIFQSSMTKILEPFRERNPEVIIYQYMDDLYVGSDLEIGQHRTKIEELREHLLSWGFTTPDKKHQKEPPFLWMGYEVHPDKWTVQPIVLPEKESWTVNDIQKLVGKLNWASQIYAGIKVRQLCKLLRGAKALTDIVTLTEEAELELAENREILKDPVHGAYYDPSKDLIVEIQKQGQDQWTYQIYQETFKNLKTGKYARKRSAHTNDVKQLAEVVQKVAMESIVIWGKTPRSKLPIQKETWETWWIDYWQATWIPEWEFVNTPPLVKLWYQLEKDPIVGAETFYVDGAANRETKLGKAGYVTNRGRQKVVSLTETTNQKTELHAILLALQDSGSEVNIVTDSQYALGIIQAQPDRSESELVNQIIEKLIGKDKVYLSWVPAHKGIGGNEQVDKLVSSGIRKVLFLDGIDKAQEEHERYHSNWRTMASDFNLPPIVAKEIVASCDKCQLKGEAMHGQVDCSPGIWQLDCTHLEGKVILVAVHVASGYIEAEVIPAETGQETAYFILKLAGRWPVKVIHTDNGSNFTSAAVKAACWWANVKQEFGIPYNPQSQGVVESMNKELKKIIGQVREQAEHLKTAVQMAVFIHNFKRRGGIGGYSAGERIIDIIATDIQTKELQKQITKIQNFRVYYRDSRDPIWKGPAKLLWKGEGAVVIQDNSDIKVVPRRKVKIIRDYGKQMAGDDCVAGRQDED
-AF069671.1	feature	exon	1308	4313	.	+	0	ID=pol_exon0;Parent=pol;
-AF069671.1	feature	CDS	1308	4313	.	+	0	ID=pol_cds0;Parent=pol_mrna0;
-AF069671.1	feature	gene	4258	4836	.	+	.	ID=vif;
-AF069671.1	feature	mRNA	4258	4836	.	+	0	ID=vif_mrna0;Parent=vif;product=vif protein;protein_id=AAC69299.1;translation=MENRWQVMIVWQVDRMRIRTWNSLVKHHMCVSKKARNWFYRHHYESRHPKVSSEVHIPLGDARLVVRTYWGLQTGEKDWHLGHGVSIEWRLKRYSTQIDPDLADQLIHLYYLDCFSDSAIRKALLGQVVSPSCEYHTGHNQVGSLQYLALKALVTPKKTRPPLPSVRILAEDRWNKSRKTRGPRGSHTMNGC
-AF069671.1	feature	exon	4258	4836	.	+	0	ID=vif_exon0;Parent=vif;
-AF069671.1	feature	CDS	4258	4836	.	+	0	ID=vif_cds0;Parent=vif_mrna0;
-AF069671.1	feature	gene	4776	5066	.	+	.	ID=vpr;
-AF069671.1	feature	mRNA	4776	5066	.	+	.	ID=vpr_mrna0;Parent=vpr;product=vpr protein;protein_id=AAC69300.1;translation=MEQVPEDQGPQREPYNEWMLELLEDLKQEAVRHFPRPWLHGLGQHIYDTYGDTWEGVEAIIRTLQQLLFVHFRIGCQHSRIGIIRGRRVRNGPGRS
-AF069671.1	feature	exon	4776	5066	.	+	0	ID=vpr_exon0;Parent=vpr;
-AF069671.1	feature	CDS	4776	5066	.	+	0	ID=vpr_cds0;Parent=vpr_mrna0;
-AF069671.1	feature	gene	5047	7710	.	+	.	ID=tat;
-AF069671.1	feature	mRNA	5047	7710	.	+	.	ID=tat_mrna0;Parent=tat;
-AF069671.1	feature	exon	5047	5261	.	+	0	ID=tat_exon0;Parent=tat;
-AF069671.1	feature	CDS	5047	5261	.	+	0	ID=tat_cds0;Parent=tat_mrna0;
-AF069671.1	feature	exon	7620	7710	.	+	0	ID=tat_exon1;Parent=tat;
-AF069671.1	feature	CDS	7620	7710	.	+	0	ID=tat_cds1;Parent=tat_mrna0;
-AF069671.1	feature	gene	5186	7915	.	+	.	ID=rev;
-AF069671.1	feature	mRNA	5186	7915	.	+	0	ID=rev_mrna0;Parent=rev;product=rev protein;protein_id=AAC69302.1;translation=MAGRSGNSDEELLRAIRIIKILYNSNPYPKPKGSRQARKNRRRRWRARQRQIDSISERILNACLGGSTEPVPLQLPPLERLNLDCREDCGTSGTQQSQGIETGVGRPQVSVESPVILGSGTKE
-AF069671.1	feature	exon	5186	5261	.	+	0	ID=rev_exon0;Parent=rev;
-AF069671.1	feature	CDS	5186	5261	.	+	0	ID=rev_cds0;Parent=rev_mrna0;
-AF069671.1	feature	exon	7620	7915	.	+	0	ID=rev_exon1;Parent=rev;
-AF069671.1	feature	CDS	7620	7915	.	+	0	ID=rev_cds1;Parent=rev_mrna0;
-AF069671.1	feature	gene	5288	5533	.	+	.	ID=vpu;
-AF069671.1	feature	mRNA	5288	5533	.	+	.	ID=vpu_mrna0;Parent=vpu;product=vpu protein;protein_id=AAC69303.1;translation=MIPLQIWAIAGLIVALILAIIAWTIVGIEYEKLLKQKEIDGLVERIAERAEDSGNESDGDTEELSTLIEMGNYDLGVGNNL
-AF069671.1	feature	exon	5288	5533	.	+	0	ID=vpu_exon0;Parent=vpu;
-AF069671.1	feature	CDS	5288	5533	.	+	0	ID=vpu_cds0;Parent=vpu_mrna0;
-AF069671.1	feature	gene	5451	8057	.	+	.	ID=env;
-AF069671.1	feature	mRNA	5451	8057	.	+	.	ID=env_mrna0;Parent=env;
-AF069671.1	feature	exon	5451	8057	.	+	0	ID=env_exon0;Parent=env;
-AF069671.1	feature	CDS	5451	8057	.	+	0	ID=env_cds0;Parent=env_mrna0;
-AF069671.1	feature	gene	8059	8673	.	+	.	ID=nef;
-AF069671.1	feature	mRNA	8059	8673	.	+	.	ID=nef_mrna0;Parent=nef;product=nef protein;protein_id=AAC69305.1;translation=MGGRWSKSRIVGWPEVRERIRRAPPAATGVGAVSQDLDKYGAITSSNINHPSCVWLEAQEDEGVGFPVRPQVPLRPMTYKGALDLSHFLKEKGGLDGLVYSKKRQEILDLWVHHTQGYFPDWQNYTPGPGIRYPLTFGWCFKLVPVDPDEVKKDTEGENNSLLHPMCQHGMDDEEREVLKWKFDSRLALKHRAQELHPEFYKDC
-AF069671.1	feature	exon	8059	8673	.	+	0	ID=nef_exon0;Parent=nef;
-AF069671.1	feature	CDS	8059	8673	.	+	0	ID=nef_cds0;Parent=nef_mrna0;
+#!gff-spec-version 1.21
+#!processor NCBI annotwriter
+#!genome-build ViralProj15476
+#!genome-build-accession NCBI_Assembly:GCF_000864765.1
+##sequence-region NC_001802.1 1 9181
+##species https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=11676
+NC_001802.1	RefSeq	region	1	9181	.	+	.	ID=id0;Dbxref=taxon:11676;gb-acronym=HIV-1;gbkey=Src;genome=genomic;mol_type=genomic RNA;note=strain for reference annotation
+NC_001802.1	RefSeq	gene	336	4642	.	+	.	ID=gene0;Dbxref=GeneID:155348;Name=gag-pol;gbkey=Gene;gene=gag-pol;gene_biotype=protein_coding;locus_tag=HIV1gp1
+NC_001802.1	RefSeq	CDS	336	1637	.	+	0	ID=cds0;Parent=gene0;Dbxref=Genbank:NP_057849.4,GeneID:155348;Name=NP_057849.4;Note=Pr160;exception=ribosomal slippage;gbkey=CDS;gene=gag-pol;product=Gag-Pol;protein_id=NP_057849.4
+NC_001802.1	RefSeq	CDS	1637	4642	.	+	0	ID=cds0;Parent=gene0;Dbxref=Genbank:NP_057849.4,GeneID:155348;Name=NP_057849.4;Note=Pr160;exception=ribosomal slippage;gbkey=CDS;gene=gag-pol;product=Gag-Pol;protein_id=NP_057849.4
+NC_001802.1	RefSeq	gene	336	1838	.	+	.	ID=gene1;Dbxref=GeneID:155030;Name=gag;gbkey=Gene;gene=gag;gene_biotype=protein_coding;locus_tag=HIV1gp2
+NC_001802.1	RefSeq	CDS	336	1838	.	+	0	ID=cds1;Parent=gene1;Dbxref=Genbank:NP_057850.1,GeneID:155030;Name=NP_057850.1;gbkey=CDS;gene=gag;product=Pr55(Gag);protein_id=NP_057850.1
+NC_001802.1	RefSeq	gene	4587	5165	.	+	.	ID=gene2;Dbxref=GeneID:155459;Name=vif;gbkey=Gene;gene=vif;gene_biotype=protein_coding;locus_tag=HIV1gp3
+NC_001802.1	RefSeq	CDS	4587	5165	.	+	0	ID=cds2;Parent=gene2;Dbxref=Genbank:NP_057851.1,GeneID:155459;Name=NP_057851.1;gbkey=CDS;gene=vif;product=Vif;protein_id=NP_057851.1
+NC_001802.1	RefSeq	gene	5105	5396	.	+	.	ID=gene3;Dbxref=GeneID:155807;Name=vpr;gbkey=Gene;gene=vpr;gene_biotype=protein_coding;locus_tag=HIV1gp4
+NC_001802.1	RefSeq	CDS	5105	5319	.	+	0	ID=cds3;Parent=gene3;Dbxref=Genbank:NP_057852.2,GeneID:155807;Name=NP_057852.2;Note=An artificial frameshift eliminating the orf-disrupting nucleotide at position 5320 is introduced to obtain the typical HIV-1 Vpr protein sequence. For this particular HIV-1 strain%2C HXB2%2C only a short (78 amino acid long) variant of the Vpr sequence can be obtained by translation of nucleotides 5105 through 5341 without the frameshift;exception=artificial frameshift;gbkey=CDS;gene=vpr;product=Vpr;protein_id=NP_057852.2
+NC_001802.1	RefSeq	CDS	5321	5396	.	+	1	ID=cds3;Parent=gene3;Dbxref=Genbank:NP_057852.2,GeneID:155807;Name=NP_057852.2;Note=An artificial frameshift eliminating the orf-disrupting nucleotide at position 5320 is introduced to obtain the typical HIV-1 Vpr protein sequence. For this particular HIV-1 strain%2C HXB2%2C only a short (78 amino acid long) variant of the Vpr sequence can be obtained by translation of nucleotides 5105 through 5341 without the frameshift;exception=artificial frameshift;gbkey=CDS;gene=vpr;product=Vpr;protein_id=NP_057852.2
+NC_001802.1	RefSeq	gene	5377	7970	.	+	.	ID=gene4;Dbxref=GeneID:155871;Name=tat;gbkey=Gene;gene=tat;gene_biotype=protein_coding;locus_tag=HIV1gp5
+NC_001802.1	RefSeq	CDS	5377	5591	.	+	0	ID=cds4;Parent=gene4;Dbxref=Genbank:NP_057853.1,GeneID:155871;Name=NP_057853.1;Note=the length of Tat varies depending on virus strain or clade;gbkey=CDS;gene=tat;product=Tat;protein_id=NP_057853.1
+NC_001802.1	RefSeq	CDS	7925	7970	.	+	1	ID=cds4;Parent=gene4;Dbxref=Genbank:NP_057853.1,GeneID:155871;Name=NP_057853.1;Note=the length of Tat varies depending on virus strain or clade;gbkey=CDS;gene=tat;product=Tat;protein_id=NP_057853.1
+NC_001802.1	RefSeq	gene	5516	8199	.	+	.	ID=gene5;Dbxref=GeneID:155908;Name=rev;gbkey=Gene;gene=rev;gene_biotype=protein_coding;locus_tag=HIV1gp6
+NC_001802.1	RefSeq	CDS	5516	5591	.	+	0	ID=cds5;Parent=gene5;Dbxref=Genbank:NP_057854.1,GeneID:155908;Name=NP_057854.1;gbkey=CDS;gene=rev;product=Rev;protein_id=NP_057854.1
+NC_001802.1	RefSeq	CDS	7925	8199	.	+	2	ID=cds5;Parent=gene5;Dbxref=Genbank:NP_057854.1,GeneID:155908;Name=NP_057854.1;gbkey=CDS;gene=rev;product=Rev;protein_id=NP_057854.1
+NC_001802.1	RefSeq	gene	5608	5856	.	+	.	ID=gene6;Dbxref=GeneID:155945;Name=vpu;gbkey=Gene;gene=vpu;gene_biotype=protein_coding;locus_tag=HIV1gp7
+NC_001802.1	RefSeq	CDS	5608	5856	.	+	0	ID=cds6;Parent=gene6;Dbxref=Genbank:NP_057855.1,GeneID:155945;Name=NP_057855.1;Note=Vpu and gp160 are translated from different reading frames of the same bicistronic mRNA;gbkey=CDS;gene=vpu;product=Vpu;protein_id=NP_057855.1
+NC_001802.1	RefSeq	gene	5771	8341	.	+	.	ID=gene7;Dbxref=GeneID:155971;Name=env;gbkey=Gene;gene=env;gene_biotype=protein_coding;locus_tag=HIV1gp8
+NC_001802.1	RefSeq	CDS	5771	8341	.	+	0	ID=cds7;Parent=gene7;Dbxref=Genbank:NP_057856.1,GeneID:155971;Name=NP_057856.1;gbkey=CDS;gene=env;product=Envelope surface glycoprotein gp160%2C precursor;protein_id=NP_057856.1
+NC_001802.1	RefSeq	gene	6919	7488	.	-	.	ID=gene8;Dbxref=GeneID:19424028;Name=asp;gbkey=Gene;gene=asp;gene_biotype=protein_coding;locus_tag=HIV1gp10
+NC_001802.1	RefSeq	CDS	6919	7488	.	-	0	ID=cds8;Parent=gene8;Dbxref=Genbank:YP_009028572.1,GeneID:19424028;Name=YP_009028572.1;gbkey=CDS;gene=asp;product=Asp;protein_id=YP_009028572.1
+NC_001802.1	RefSeq	gene	8343	8963	.	+	.	ID=gene9;Dbxref=GeneID:156110;Name=nef;gbkey=Gene;gene=nef;gene_biotype=protein_coding;locus_tag=HIV1gp9
+NC_001802.1	RefSeq	CDS	8343	8963	.	+	0	ID=cds9;Parent=gene9;Dbxref=Genbank:NP_057857.2,GeneID:156110;Name=NP_057857.2;Note=This particular nucleotide sequence has a premature stop codon in place of a well-conserved tryptophan codon at position 8712-8714 that truncates the HIV1 Nef protein sequence to a 123 amino acids-long N-terminal portion (not shown).;gbkey=CDS;gene=nef;product=Nef;protein_id=NP_057857.2;transl_except=(pos:8712..8714%2Caa:Trp)
+NC_001802.1	RefSeq	polyA_signal_sequence	73	78	.	+	.	ID=id1;Note=both 5' and 3' poly A signals are transcribed into RNA%2C but the 5' one is suppressed;gbkey=polyA_signal
+NC_001802.1	RefSeq	polyA_signal_sequence	9158	9163	.	+	.	ID=id2;Note=both 5' and 3' poly A signals are transcribed into RNA%2C but the 5' one is suppressed;gbkey=polyA_signal
+NC_001802.1	RefSeq	primer_binding_site	182	199	.	+	.	ID=id3;gbkey=primer_bind
+NC_001802.1	RefSeq	three_prime_UTR	8631	9085	.	+	.	ID=id4;gbkey=3'UTR
+NC_001802.1	RefSeq	five_prime_UTR	97	181	.	+	.	ID=id5;gbkey=5'UTR
+NC_001802.1	RefSeq	region	1	96	.	+	.	ID=id6;Note=repeat%3B positions of RNA transcription initialization and polyadenylation;gbkey=Region
+NC_001802.1	RefSeq	region	9086	9181	.	+	.	ID=id7;Note=repeat%3B positions of RNA transcription initialization and polyadenylation;gbkey=Region
+###

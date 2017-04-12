@@ -53,6 +53,9 @@ public class Pantools {
     public static Label tRNA_label = DynamicLabel.label("tRNA");
     public static Label rRNA_label = DynamicLabel.label("rRNA");
     public static Label CDS_label = DynamicLabel.label("CDS");
+    public static Label exon_label = DynamicLabel.label("exon");
+    public static Label intron_label = DynamicLabel.label("intron");
+    public static Label feature_label = DynamicLabel.label("feature");
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
     public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
     public static Label homology_group_lable = DynamicLabel.label("homology_group");
@@ -67,7 +70,7 @@ public class Pantools {
         has_homolog, // for pointing to gene nodes from the homology group
         has_ortholog, // for pointing to gene nodes from the orthology group
         codes_for,// for connecting genes to mRNAs
-        represents,
+        is_parent_of,
         contributes_to,// for connecting CDSs to mRNA
         branches, //to connect tree nodes
         crosses, // between crossing genes
@@ -99,13 +102,6 @@ public class Pantools {
         annLayer = new AnnotationLayer();
         System.out.println("------------------------------- PanTools -------------------------------");
         switch (args[0]) {
-            case "reconstruct":
-                if (args.length < 3) {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                seqLayer.reconstruct_genomes(args[1],args[2]);
-                break;
             case "build":
                 try{
                     switch (args.length) {
@@ -131,18 +127,18 @@ public class Pantools {
                 }
                 break;
             case "add":
-                if (args.length < 3) {
+                if (args.length < 4) {
                     print_help_comment();
                     System.exit(1);
                 }
-                seqLayer.add(args[2],args[1]);
-                break;
-            case "annotate":
-                if (args.length < 3) {
+                if (args[1].equals("genomes"))
+                    seqLayer.add_genomes(args[3],args[2]);
+                else if (args[1].equals("annotations"))
+                    annLayer.add_annotaions(args[3],args[2]);
+                else {
                     print_help_comment();
                     System.exit(1);
                 }
-                annLayer.annotate(args[2],args[1]);
                 break;
             case "group":
                 if (args.length < 2) {
@@ -160,7 +156,9 @@ public class Pantools {
                     seqLayer.retrieve_genes(args[3],args[2]);
                 else if (args[1].equals("regions"))
                     seqLayer.retrieve_regions(args[3],args[2]);
-                else {
+                else if (args[1].equals("genomes"))
+                    seqLayer.retrieve_genomes(args[3],args[2]);
+                        else {
                     print_help_comment();
                     System.exit(1);
                 }
@@ -189,8 +187,10 @@ public class Pantools {
 "- KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).\n" +
 "        You need to unzipd kmc.zip file provided in this release of PanTools and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.\n" +
 "\n" +
-"- Java Virtual Machine version 1.7 or higher: Add the path to the java executable to your OS path environment variable.\n" +
+"- Java Virtual Machine version 1.8 or higher: Add the path to the java executable to your OS path environment variable.\n" +
 "\n" +
+"- MCL: The Markov Cluster Algorithm, is a fast and scalable unsupervised cluster algorithm for graphs which is needed for group functionality of PanTools.\n" +
+"       You need to download and compile it using the instruction provided by the publishers in http://micans.org/mcl, and also add the path to the mcl executable to your path environment variable.\n" +
 "\n" +
 "How to run the program \n" +
 "----------------------\n" +
@@ -202,97 +202,63 @@ public class Pantools {
 "1. build:\n" +
 "   To build a pan-genome out of a set of genomes.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE  K_VALUE\n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE K_VALUE\n" +
 "\n" +
 "   PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files (genomes); each in a seperated line.\n" +
 "   PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored.  \n" +
-"   K_VALUE :   size of K for construction of the de Bruijn graph.\n" +
+"   K_VALUE :   size of K for construction of the de Bruijn graph which should be 6 <= K <= 255.\n" +
 "\n" +
 "   Example: \n" +
 "   \n" +
-"   java  -Xmx4g  -jar  /home/pantools/dist/pantools.jar build  31  /home/two_hiv_pangenome_database  /home/pantools/example/sample_genomes_path.txt\n" +
+"   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt 15\n" +
 "             \n" +
-"2. annotate:\n" +
-"   To add annotations to a pan-genome. This function also produce a FASTA file containing all the protein sequences in PATH_TO_THE_PANGENOME_DATABASE.\n" +
+"2. add:\n" +
+"   To add new genomes and annotations to an available pan-genome. \n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  annotate  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_PATH_FILE\n" +
-"\n" +
-"   PATH_TO_THE_ANNOTATION_PATH_FILE : a text file containing paths to the GFF files corresponding to the genomes in the same order as they apear in PATH_TO_THE_GENOMES_PATH_FILE.\n" +
-"                                      Missing annotations are indicated by an empty line.\n" +
-"\n" +
-"   Example: \n" +
-"\n" +
-"   java  -jar  /home/pantools/dist/pantools.jar  annotate  /home/two_hiv_pangenome_database  /home/pantools/example/sample_annotations_path.txt\n" +
-"\n" +
-"3. add:\n" +
-"   To add new genomes to an available pan-genome.\n" +
-"\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  add  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_NEW_GENOMES_PATH_FILE\n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  add  genomes [or annotaions] PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_NEW_GENOMES_PATH_FILE [or PATH_TO_THE_ANNOTATION_PATH_FILE]\n" +
 "   \n" +
 "   PATH_TO_THE_NEW_GENOMES_PATH_FILE : a text file containing paths to FASTA files of the new genomes to be added to the pangeome; each in a seperated line.\n" +
-"                                       New genomes could also be annotated later in the same way; however, there should be an empty lines in the annotations path file for existing genomes.\n" +
+"                                       New genomes could also be annotated later in the same way; however, there should be empty lines in the annotations path file for pre-existing genomes.\n" +
 "\n" +
-"4. retrieve genes:\n" +
-"   To extract sequence of some annotated genes. \n" +
+"   PATH_TO_THE_ANNOTATION_PATH_FILE : a text file each line of which contains genome number and path to the corresponding GFF file seperated by one space.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  genes  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_RECORDS_FILE\n" +
+"   Example: \n" +
+"\n" +
+"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  add annotations /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotations_path.txt\n" +
+"\n" +
+"3. retrieve:\n" +
+"   To retrieve the sequence of annotated genes, genomic regios or constituent genomes. \n" +
+"\n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  genes [or regions or genomes]  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_RECORDS_FILE [or PATH_TO_THE_GENOMIC_REGIONS_FILE or PATH_TO_THE_GENOME_NUMBERS_FILE]\n" +
 "\n" +
 "   PATH_TO_THE_ANNOTATION_RECORDS_FILE : a text file containing records of annotated genes, as they appear in GFF file, to be retrieved.\n" +
 "                                         The resulting FASTA file would have the same name as the PATH_TO_THE_ANNOTATION_RECORDS_FILE with an additional .fasta extention.\n" +
 "\n" +
-"   Example: \n" +
-"\n" +
-"   java  -jar  /home/pantools/dist/pantools.jar  retrieve  genes  /home/two_hiv_pangenome_database  /home/pantools/example/sample_annotaion_records.txt\n" +
-"\n" +
-"5. retrieve regions:\n" +
-"   To extract sequence of some genomic regios.\n" +
-"\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  regions  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMIC_REGIONS_FILE\n" +
-"\n" +
 "   PATH_TO_THE_GENOMIC_REGIONS_FILE : a text file containing records with genome_number, sequence_number, begin and end positions seperated by one space for each region.\n" +
 "                                      The resulting FASTA file would have the same name as the PATH_TO_THE_GENOMIC_REGIONS_FILE with an additional .fasta extention.\n" +
 "\n" +
-"   Example: \n" +
+"   PATH_TO_THE_GENOME_NUMBERS_FILE : a text file containing genome_numbers to be retrieved in each line. The resulting FASTA files are named as genome_X.fasta where X determines the number of the genome in the pangenome.\n" +
 "\n" +
-"   java  -jar  /home/pantools/dist/pantools.jar  retrieve  regions  /home/two_hiv_pangenome_database  /home/pantools/example/sample_genomic_regions.txt\n" +
+"   Examples: \n" +
 "\n" +
-"6. reconstruct:\n" +
-"   To reconstruct all or a set of genomes out of the pan-genome.\n" +
+"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotaion_records.txt\n" +
+"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  regions  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomic_regions.txt\n" +
+"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genomes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genome_numbers.txt\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  reconstruct all [or PATH_TO_THE_GENOME_NAMES_FILE]  PATH_TO_THE_PANGENOME_DATABASE\n" +
-"\n" +
-"   PATH_TO_THE_GENOME_NAMES_FILE : a text file containing genome_number and a given name for that genome seperated by a single space in each line. \n" +
-"                                   The resulting FASTA files are named as genome_X.fasta where X determines the number of the genome in the pangenome.\n" +
-"\n" +
-"   Example: \n" +
-"\n" +
-"   java  -jar  /home/pantools/dist/pantools.jar  reconstruct  all  /home/two_hiv_pangenome_database\n" +
-"\n" +
-"7. group:\n" +
-"   To group homologous genes by adding group nodes pointing to them.\n" +
+"4. group:\n" +
+"   To add homology and orthology nodes which point to a groups of homologous or orthologous genes. This functionality needs MCL to be installed on your machine.\n" +
 "\n" +
 "   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE \n" +
 "\n" +
 "   Example: \n" +
 "\n" +
-"   java  -jar  /home/pantools/dist/pantools.jar  group  /home/two_hiv_pangenome_database\n" +
-"\n" +
-"8. compare:\n" +
-"   To compare topology of two pan-genomes.\n" +
-"\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  compare  PATH_TO_THE_PANGENOME_DATABASE_1  PATH_TO_THE_PANGENOME_DATABASE_2\n" +
-"\n" +
-"9. query\n" +
-"   To run Cypher queries.\n" +
-"\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  query  PATH_TO_THE_PANGENOME_DATABASE\n" +
-"   \n" +
+"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database\n" +
 "\n" +
 "Visualization in the Neo4j browser\n" +
 "----------------------------------\n" +
 "Neo4j browser allows you to run Cypher queries and receive the results in a Tabular or a graph-representation mode. To do that, you need to download the appropriate version of Neo4j from their website. \n" +
 "There you will find an article demonstrating how to use the Neo4j browser for querying, visualization and data interaction. It is quite simple. \n" +
-"For example, to visualize the pangenome of two HIV strains provided as a sample data, after download I needed to take this actions, on my linux machine :\n" +
+"For example, to visualize the pangenome of two HIV strains provided as a sample data, after downloading Neo4j I needed to take this actions, on my linux machine :\n" +
 "\n" +
 "1. Add the path to the Neo4j /bin directory to the path environment variable.\n" +
 "\n" +
@@ -311,13 +277,7 @@ public class Pantools {
 "   neo4j stop\n" +
 "\n" +
 "- Windows users could also download a Neo4j desktop application for starting and stopping a server instead of doing it on the commandline.\n" +
-"   \n" +
-"   \n" +
-"\n" +
-" \n" +
-""
-                
-);
+"");
     }
 
     /**
