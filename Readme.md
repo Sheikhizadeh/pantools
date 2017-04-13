@@ -63,7 +63,7 @@ List of commands and examples for the provided sample data :
 
    Examples: 
 
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotaion_records.txt
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotation_records.txt
    java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  regions  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomic_regions.txt
    java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genomes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genome_numbers.txt
 

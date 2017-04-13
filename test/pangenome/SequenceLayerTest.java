@@ -82,20 +82,7 @@ public class SequenceLayerTest {
         print_peak_memory();
         System.out.println("-----------------------------------------------------------------------");
     }
-
-    /**
-     * Test of compare_pangenomes method, of class SequenceLayer.
-    */ 
-    @Test
-    public void test3_Compare_pangenomes() {
-        System.out.println("Testing compare_pangenomes:");
-        String path1 = output_path + "/03_cumulative";
-        String path2 = output_path + "/03";
-        SequenceLayer instance = new SequenceLayer();
-        instance.compare_pangenomes(path1, path2);
-        print_peak_memory();
-        System.out.println("-----------------------------------------------------------------------");
-    }    
+  
 
     /**
      * Test of retrieve_regions method, of class SequenceLayer.
@@ -120,7 +107,7 @@ public class SequenceLayerTest {
     public void test5_Reconstruct_genomes() {
         System.out.println("reconstruct_genomes");
         SequenceLayer instance = new SequenceLayer();
-        instance.reconstruct_genomes("all",output_path + "/03");
+        instance.retrieve_genomes("all",output_path + "/03");
         String genome_file;
         try {
             BufferedReader in = new BufferedReader(new FileReader(input_path + "/03.txt"));

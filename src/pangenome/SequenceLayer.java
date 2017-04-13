@@ -89,7 +89,7 @@ public class SequenceLayer {
      * @param genome_paths_file Path to the FASTA genome files. 
      * @param pangenome_path Path to the database folder
      */  
-    public void build_nucleotide_layer(String genome_paths_file, String pangenome_path) {
+    public void initialize_pangenome(String genome_paths_file, String pangenome_path) {
     // If a database folder is already exist in the specified path, removes all the content of it.    
         File theDir = new File(pangenome_path);
         if (theDir.exists()) {
@@ -661,12 +661,12 @@ public class SequenceLayer {
             node_start_pos = anchor_positions[mid];
             node_len = (int) node.getProperty("length");
         // Traverse the pangenome from the anchor node until reach to the target
-            while (node_start_pos + node_len - K + 1 <= genomic_pos) 
+            while (node_start_pos + node_len <= genomic_pos) 
             {
                 address[2] = node_start_pos + node_len - K + 1;
                 rel = get_outgoing_edge(node, address);
-                if (rel == null && address[2] + node_len >= genomic_pos){
-                    System.out.println("Failed to locate address : " + address[0] + " " + address[1] + " "+ address[2]);
+                if (rel == null){
+                    //System.out.println("Failed to locate address : " + address[0] + " " + address[1] + " "+ address[2]);
                     break;
                 }
                 neighbor = rel.getEndNode();

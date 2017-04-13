@@ -106,7 +106,7 @@ public class Pantools {
                 try{
                     switch (args.length) {
                         case 3:
-                            annLayer.build_protein_graph(args[2],args[1]);
+                            annLayer.initialize_panproteome(args[2],args[1]);
                             break;
                         case 4:
                             K = Integer.parseInt(args[3]);
@@ -114,7 +114,7 @@ public class Pantools {
                                 System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
                                 System.exit(1);
                             }
-                            seqLayer.build_nucleotide_layer(args[2],args[1]);
+                            seqLayer.initialize_pangenome(args[2],args[1]);
                             break;
                         default:                    
                             print_help_comment();
@@ -241,7 +241,7 @@ public class Pantools {
 "\n" +
 "   Examples: \n" +
 "\n" +
-"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotaion_records.txt\n" +
+"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotation_records.txt\n" +
 "   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  regions  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomic_regions.txt\n" +
 "   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genomes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genome_numbers.txt\n" +
 "\n" +

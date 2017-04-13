@@ -85,10 +85,11 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
-    public double THRESHOLD = 75;
-    public int MAX_LENGTH  = 1000;
-    ProteinAlignment pro_aligner;
-    SequenceAlignment seq_aligner;
+    private int K = 5;
+    private double THRESHOLD = 75;
+    private int MAX_LENGTH  = 1000;
+    private ProteinAlignment pro_aligner;
+    private SequenceAlignment seq_aligner;
     
     /**
      * Implements a comparator for integer arrays of size two
@@ -109,7 +110,7 @@ public class AnnotationLayer {
         }
     }
 
-    public void build_protein_graph(String protein_paths_file, String pangenome_path){
+    public void initialize_panproteome(String protein_paths_file, String pangenome_path){
         String file_path, line, protein_number = "";
         StringBuilder protein = new StringBuilder();
         Node mrna, pangenome;
@@ -608,7 +609,7 @@ public class AnnotationLayer {
     }
     
     public void find_crossing_proteins(){
-        long[] penta_mer_node_ids;
+        long[] kmer_node_ids;
         int[] code = new int[256];
         char[] aminoacids = new char[]
         {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
@@ -626,12 +627,13 @@ public class AnnotationLayer {
         int i, p, count, start, trsc;
         long crossing_protein_id, p_id;
         System.out.println("Finding crossing proteins...");
+        K = 7;
         try (Transaction tx = graphDb.beginTx()) {
             db_node = graphDb.findNodes(pangenome_label).next();
-            if (db_node.hasProperty("penta_mer_node_ids"))
-                penta_mer_node_ids = (long[])db_node.getProperty("penta_mer_node_ids");
+            if (db_node.hasProperty("kmer_node_ids"))
+                kmer_node_ids = (long[])db_node.getProperty("kmer_node_ids");
             else
-                penta_mer_node_ids = new long[3200000]; //20 ^ 5 
+                kmer_node_ids = new long[(int)Math.pow(20,K)]; 
             proteins_iterator = graphDb.findNodes(mRNA_label);
             while (proteins_iterator.hasNext())
                 proteins.add(proteins_iterator.next());
@@ -648,24 +650,24 @@ public class AnnotationLayer {
                         ++p;
                         protein = (String)protein_node.getProperty("protein");
                         protein_length = protein.length();
-                        if (protein_length > 5 ){
-                            for (i = 0; i < 4; ++i)
+                        if (protein_length > K ){
+                            for (i = 0; i < K-1; ++i)
                                 seed[i] = protein.charAt(i);
-                            for (start = 0; start < protein_length - 5; ++start){// for each penta-mer of the protein
-                                seed[(start + 4) % 5] = protein.charAt(start + 4);
+                            for (start = 0; start < protein_length - K; ++start){// for each penta-mer of the protein
+                                seed[(start + K - 1) % K] = protein.charAt(start + K - 1);
                                 pentamer_index = 0;
                                 //pentamer.setLength(0);
-                                for (i = 0; i < 5; ++i){
-                                    pentamer_index = pentamer_index * 20 + code[seed[(start + i) % 5]];
+                                for (i = 0; i < K; ++i){
+                                    pentamer_index = pentamer_index * 20 + code[seed[(start + i) % K]];
                                     //pentamer.append((char)seed[(start + i) % 5]);
                                 }
-                                if (penta_mer_node_ids[pentamer_index] == 0){
+                                if (kmer_node_ids[pentamer_index] == 0){
                                     pentamer_node = graphDb.createNode(pentamer_lable);
                                     //pentamer_node.setProperty("index", pentamer_index);
                                     //pentamer_node.setProperty("peptide", pentamer.toString());
-                                    penta_mer_node_ids[pentamer_index] = pentamer_node.getId();
+                                    kmer_node_ids[pentamer_index] = pentamer_node.getId();
                                 } else {
-                                    pentamer_node = graphDb.getNodeById(penta_mer_node_ids[pentamer_index]);
+                                    pentamer_node = graphDb.getNodeById(kmer_node_ids[pentamer_index]);
                                     for (Relationship rel: pentamer_node.getRelationships()){
                                         other_node_id = rel.getStartNode().getId();
                                         if (other_node_id != protein_node_id)
@@ -678,7 +680,7 @@ public class AnnotationLayer {
                                 for (count = 0, crossing_protein_id = crossing_protein_ids.peek(); !crossing_protein_ids.isEmpty();){
                                     p_id = crossing_protein_ids.remove();
                                     if (crossing_protein_id != p_id){
-                                        if (count > protein_length/20 + 1)
+                                        if (count > protein_length / 20 + 1)
                                             protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
                                         crossing_protein_id = p_id;
                                         count = 1;
@@ -686,7 +688,7 @@ public class AnnotationLayer {
                                     else
                                         ++count;
                                 }
-                                if (count > protein_length/20 + 1) // for the last range of IDs in the queue
+                                if (count > protein_length / 20 + 1) // for the last range of IDs in the queue
                                     protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
                             }
                         }
@@ -698,7 +700,7 @@ public class AnnotationLayer {
             }
         } // for protein
         try (Transaction tx = graphDb.beginTx()) {
-            db_node.setProperty("penta_mer_node_ids", penta_mer_node_ids);
+            db_node.setProperty("penta_mer_node_ids", kmer_node_ids);
             tx.success();
         }
         System.out.println("\r" + p + "/" + total_proteins);
