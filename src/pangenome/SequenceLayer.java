@@ -666,7 +666,7 @@ public class SequenceLayer {
                 address[2] = node_start_pos + node_len - K + 1;
                 rel = get_outgoing_edge(node, address);
                 if (rel == null){
-                    //System.out.println("Failed to locate address : " + address[0] + " " + address[1] + " "+ address[2]);
+                    System.out.println("Failed to locate address : " + address[0] + " " + address[1] + " "+ address[2]);
                     break;
                 }
                 neighbor = rel.getEndNode();

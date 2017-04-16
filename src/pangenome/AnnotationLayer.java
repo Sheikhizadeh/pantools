@@ -85,7 +85,7 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
-    private int K = 5;
+    private int L = 5;
     private double THRESHOLD = 75;
     private int MAX_LENGTH  = 1000;
     private ProteinAlignment pro_aligner;
@@ -222,7 +222,8 @@ public class AnnotationLayer {
         }*/
         try (BufferedReader gff_paths = new BufferedReader(new FileReader(gff_paths_file))) {
             log_file = new BufferedWriter(new FileWriter(pangenome_path + "/annotation.log"));
-            Files.createDirectory(Paths.get(pangenome_path + "/proteins"));
+            if (! new File(pangenome_path + "/proteins").exists())
+                Files.createDirectory(Paths.get(pangenome_path + "/proteins"));
             System.out.println("genome\tgenes\tmRNAs\ttRNAs\trRNAs");
             while (gff_paths.ready() && address[0] <= genomeDb.num_genomes) // for each gff file
             {
@@ -627,13 +628,13 @@ public class AnnotationLayer {
         int i, p, count, start, trsc;
         long crossing_protein_id, p_id;
         System.out.println("Finding crossing proteins...");
-        K = 7;
+        L = 5;
         try (Transaction tx = graphDb.beginTx()) {
             db_node = graphDb.findNodes(pangenome_label).next();
             if (db_node.hasProperty("kmer_node_ids"))
                 kmer_node_ids = (long[])db_node.getProperty("kmer_node_ids");
             else
-                kmer_node_ids = new long[(int)Math.pow(20,K)]; 
+                kmer_node_ids = new long[(int)Math.pow(20,L)]; 
             proteins_iterator = graphDb.findNodes(mRNA_label);
             while (proteins_iterator.hasNext())
                 proteins.add(proteins_iterator.next());
@@ -650,15 +651,15 @@ public class AnnotationLayer {
                         ++p;
                         protein = (String)protein_node.getProperty("protein");
                         protein_length = protein.length();
-                        if (protein_length > K ){
-                            for (i = 0; i < K-1; ++i)
+                        if (protein_length > L ){
+                            for (i = 0; i < L-1; ++i)
                                 seed[i] = protein.charAt(i);
-                            for (start = 0; start < protein_length - K; ++start){// for each penta-mer of the protein
-                                seed[(start + K - 1) % K] = protein.charAt(start + K - 1);
+                            for (start = 0; start < protein_length - L; ++start){// for each penta-mer of the protein
+                                seed[(start + L - 1) % L] = protein.charAt(start + L - 1);
                                 pentamer_index = 0;
                                 //pentamer.setLength(0);
-                                for (i = 0; i < K; ++i){
-                                    pentamer_index = pentamer_index * 20 + code[seed[(start + i) % K]];
+                                for (i = 0; i < L; ++i){
+                                    pentamer_index = pentamer_index * 20 + code[seed[(start + i) % L]];
                                     //pentamer.append((char)seed[(start + i) % 5]);
                                 }
                                 if (kmer_node_ids[pentamer_index] == 0){
