@@ -354,6 +354,7 @@ public class SequenceLayer {
                         }
                     }//for i
                     System.out.println(j + " out of " + i + " genes found and retrieved successfully.");
+                    System.out.println("See " + annotation_records_file + ".fasta");
                     out.close();
                 } catch (IOException ioe) {
                     System.out.println("Failed to read file names!");
@@ -381,7 +382,7 @@ public class SequenceLayer {
             String line;
             IndexPointer start_ptr;
             StringBuilder seq;
-            int c, num_regions;
+            int c, num_regions = 0, proper_regions = 0;
             int[] address = new int[4];
             graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                     .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
@@ -391,7 +392,6 @@ public class SequenceLayer {
                 tx.success();
             }
             seq = new StringBuilder();
-            num_regions = 0;
             try {
                 BufferedReader in = new BufferedReader(new FileReader(region_records_file));
                 while (in.ready()) {
@@ -399,7 +399,7 @@ public class SequenceLayer {
                     if (line.equals("")) {
                         continue;
                     }
-                    num_regions++;
+                    ++num_regions;
                 }
                 in.close();
             } catch (IOException e) {
@@ -407,6 +407,7 @@ public class SequenceLayer {
                 System.exit(1);
             }
             startTime = System.currentTimeMillis();
+            genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
             try (Transaction tx = graphDb.beginTx()) {
                 try (BufferedReader in = new BufferedReader(new FileReader(region_records_file))) {
                     BufferedWriter out = new BufferedWriter(new FileWriter(region_records_file + ".fasta"));
@@ -415,23 +416,29 @@ public class SequenceLayer {
                         if (line.equals("")) {
                             continue;
                         }
-                        fields = line.split("\\s");
+                        fields = line.trim().split("\\s");
                         address[0] = Integer.parseInt(fields[0]);
                         address[1] = Integer.parseInt(fields[1]);
                         address[2] = Integer.parseInt(fields[2]);
                         address[3] = Integer.parseInt(fields[3]);
-                        start_ptr = locate(address);
-                        out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
-                        extract_sequence(seq, start_ptr, address);
-                        write_fasta(out, seq, 70);
-                        seq.setLength(0);
-                        ++c;
-                        if (c % (num_regions / 100 + 1) == 0) {
-                            System.out.print((long) c * 100 / num_regions + 1 + "%\r");
-                        }
+                        if (address[0] <= genomeDb.num_genomes && address[1] <= genomeDb.num_sequences[address[0]] && address[2] >= 1 && address[3] <= genomeDb.sequence_length[address[0]][address[1]]){
+                            start_ptr = locate(address);
+                            proper_regions++;
+                            extract_sequence(seq, start_ptr, address);
+                            out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
+                            write_fasta(out, seq, 70);
+                            seq.setLength(0);
+                            ++c;
+                            if (c % (num_regions / 100 + 1) == 0) {
+                                System.out.print((long) c * 100 / num_regions + 1 + "%\r");
+                            }
+                        } else
+                            System.out.println(line + "is not a proper coordiate!");
                     }
                     in.close();
                     out.close();
+                    System.out.println(proper_regions + " out of " + num_regions + " genomic regions found and retrieved successfully.");
+                    System.out.println("See " + region_records_file + ".fasta");
                 } catch (IOException ioe) {
                     System.out.println("Failed to read file names!");
                     System.exit(1);
@@ -474,6 +481,8 @@ public class SequenceLayer {
                     in = new BufferedReader(new FileReader(genome_numbers_file));
                     while (in.ready()) {
                         genome_number = in.readLine().trim();
+                        if (genome_number.equals(""))
+                            continue;
                         try{
                             address[0] = Integer.parseInt(genome_number);
                         }catch(NumberFormatException e){
@@ -528,7 +537,8 @@ public class SequenceLayer {
     public static void extract_sequence(StringBuilder seq, IndexPointer start_ptr, int[] address) {
         Relationship rel;
         Node neighbor, node;
-        int begin = address[2] - 1, end = address[3] - 1;
+        int[] addr = new int[]{address[0],address[1],address[2],address[3]};
+        int begin = addr[2] - 1, end = addr[3] - 1;
         int loc, node_len, neighbor_len, seq_len, position;
         String rel_name;
         seq_len = end - begin + 1;
@@ -553,8 +563,8 @@ public class SequenceLayer {
         }
     //  traverse the path of the region   
         while (seq.length() < seq_len ) {
-            address[2] = loc - K + 1;
-            rel = get_outgoing_edge(node, address);
+            addr[2] = loc - K + 1;
+            rel = get_outgoing_edge(node, addr);
             neighbor = rel.getEndNode();
             rel_name = rel.getType().name();
             neighbor_len = (int) neighbor.getProperty("length");
