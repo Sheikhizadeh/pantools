@@ -433,7 +433,7 @@ public class SequenceLayer {
                                 System.out.print((long) c * 100 / num_regions + 1 + "%\r");
                             }
                         } else
-                            System.out.println(line + "is not a proper coordiate!");
+                            System.out.println(line + "is not a proper coordinate!");
                     }
                     in.close();
                     out.close();

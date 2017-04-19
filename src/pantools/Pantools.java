@@ -185,12 +185,12 @@ public class Pantools {
 "Requirements\n" +
 "------------\n" +
 "- KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).\n" +
-"        You need to unzipd kmc.zip file provided in this release of PanTools and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.\n" +
+"        You need to unzip the provided kmc.zip and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.\n" +
 "\n" +
 "- Java Virtual Machine version 1.8 or higher: Add the path to the java executable to your OS path environment variable.\n" +
 "\n" +
-"- MCL: The Markov Cluster Algorithm, is a fast and scalable unsupervised cluster algorithm for graphs which is needed for group functionality of PanTools.\n" +
-"       You need to download and compile it using the instruction provided by the publishers in http://micans.org/mcl, and also add the path to the mcl executable to your path environment variable.\n" +
+"- MCL: The Markov Cluster Algorithm, is a fast and scalable unsupervised cluster algorithm for graphs ( http://micans.org/mcl ) which is needed for group functionality of PanTools.\n" +
+"       You need to unzip the provided mcl-latest.tar.gz, compile it (see README), and add the path to the mcl executable to your path environment variable.\n" +
 "\n" +
 "How to run the program \n" +
 "----------------------\n" +
@@ -276,8 +276,7 @@ public class Pantools {
 "6. To stop the Neo4j server type :\n" +
 "   neo4j stop\n" +
 "\n" +
-"- Windows users could also download a Neo4j desktop application for starting and stopping a server instead of doing it on the commandline.\n" +
-"");
+"- Windows users could also download a Neo4j desktop application for starting and stopping a server instead of doing it on the commandline.\n");
     }
 
     /**

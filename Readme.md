@@ -7,12 +7,12 @@ Wageningen university and research center, the Netherlands.
 Requirements
 ------------
 - KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).
-        You need to unzipd kmc.zip file provided in this release of PanTools and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.
+        You need to unzip the provided kmc.zip and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.
 
 - Java Virtual Machine version 1.8 or higher: Add the path to the java executable to your OS path environment variable.
 
-- MCL: The Markov Cluster Algorithm, is a fast and scalable unsupervised cluster algorithm for graphs which is needed for group functionality of PanTools.
-       You need to download and compile it using the instruction provided by the publishers in http://micans.org/mcl, and also add the path to the mcl executable to your path environment variable.
+- MCL: The Markov Cluster Algorithm, is a fast and scalable unsupervised cluster algorithm for graphs ( http://micans.org/mcl ) which is needed for group functionality of PanTools.
+       You need to unzip the provided mcl-latest.tar.gz, compile it (see README), and add the path to the mcl executable to your path environment variable.
 
 How to run the program 
 ----------------------
