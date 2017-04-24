@@ -56,7 +56,10 @@ public class kmer {
         value = 0;
         canonical=false;
     }
-
+    public void adjust(int s_len){
+        suf_len = s_len;
+        pre_len = K - s_len;
+    }
     /**
      * Compares the suffices of two kmers
      * @param k_mer The second kmer
@@ -66,8 +69,9 @@ public class kmer {
     {
         int i;
         long given_suffix = 0, my_suffix = get_suffix();
-        for(i = 0; i < suf_len / 4; ++i)
-            given_suffix = ((given_suffix << 8) | (0x00000000000000ff & suf[i]));
+        for(i = 0; i < suf_len / 4; ++i){
+            given_suffix = (given_suffix << 8) | (0x00000000000000ff & suf[i]);
+        }
         if(given_suffix == my_suffix)
             return 0;
         else if(my_suffix < given_suffix)

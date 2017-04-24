@@ -279,13 +279,13 @@ public final class IndexDatabase {
      */
     public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb, GraphDatabaseService graphDb, int previous_num_genomes) {
         int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
-        int i, k, p;
+        int k, p;
         long new_kmers_num;
         IndexPointer null_pointer = new IndexPointer();
         long c_index,p_index,l;
         Node node;
         ResourceIterator<Node> nodes;
-
+        kmer k_mer;
         // move current index files to directory old_index
         try {
             if (! new File(index_path+"/old_index").exists())
@@ -367,13 +367,17 @@ public final class IndexDatabase {
             {
                 node=nodes.next();
                 l=(long)node.getProperty("first_kmer");
-                p_index=find(old_index.get_kmer(l));
+                k_mer = old_index.get_kmer(l);
+                k_mer.adjust(suf_len);
+                p_index=find(k_mer);
                 old_index.get_pointer(ptr,l);
                 put_pointer(ptr,p_index);
                 node.setProperty("first_kmer", p_index);
                 for(l=old_index.get_next_index(l);l!=-1L;l=old_index.get_next_index(l))
                 {
-                    c_index=find(old_index.get_kmer(l));
+                    k_mer = old_index.get_kmer(l);
+                    k_mer.adjust(suf_len);
+                    c_index=find(k_mer);
                     old_index.get_pointer(ptr,l);
                     put_pointer(ptr,c_index);
                     put_next_index(c_index,p_index);
@@ -518,8 +522,8 @@ public final class IndexDatabase {
         suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].position((int) (number * suf_rec_size % suf_parts_size[0]));
         suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].get(suffix, 0, suf_len / 4);
         for(int i = 0; i < suf_len / 4; ++i)
-            suff = (suff << 8) + suffix[i];
-        k_mer.value = (pref << (2 * suf_len)) + suff;
+            suff = (suff << 8) | (0x00000000000000ff & suffix[i]);
+        k_mer.value = (pref << (2 * suf_len)) | suff;
         return k_mer;
     }
 
@@ -532,7 +536,7 @@ public final class IndexDatabase {
         poniter.node_id = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]));
         poniter.canonical = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].get((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8)) == 0;
         poniter.offset = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9));
-        poniter.next_index=ptr_buff[(int)(number*POINTER_LENGTH/ptr_parts_size[0])].getLong((int)(number*POINTER_LENGTH%ptr_parts_size[0]+13));
+        poniter.next_index=ptr_buff[(int)(number* POINTER_LENGTH / ptr_parts_size[0])].getLong((int)(number * POINTER_LENGTH % ptr_parts_size[0] + 13));
     }
 
     /**
@@ -616,13 +620,14 @@ public final class IndexDatabase {
      * @return The number of kmer
      */
     public long find(kmer k_mer) {
-        long low, mid, high;
+        long low, mid, high, prefix;
         int j, comp;
-        low = prefix_ptr[(int)k_mer.get_prefix()];
-        if (k_mer.get_prefix() == prefix_ptr.length - 1) {
+        prefix = k_mer.get_prefix();
+        low = prefix_ptr[(int)prefix];
+        if (prefix == prefix_ptr.length - 1) {
             high = kmers_num - 1;
         } else {
-            high = prefix_ptr[(int)k_mer.get_prefix() + 1] - 1;
+            high = prefix_ptr[(int)prefix + 1] - 1;
         }
         while (low <= high) {
             mid = (low + high) / 2;
