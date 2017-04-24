@@ -37,7 +37,6 @@ public class SequenceLayerTest {
     
     @BeforeClass
     public static void setUpClass() {
-        Pantools.K = 31;
         input_path = "/home/sheik005/yeast";
         output_path = "/dev/shm/sheik005/yeast";
         region_records_file = "/03.regions";

@@ -7,12 +7,12 @@ Wageningen university and research center, the Netherlands.
 Requirements
 ------------
 - KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).
-        You need to unzip the provided kmc.zip and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.
+        You need to download it and add the path to the appropriate version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.
 
 - Java Virtual Machine version 1.8 or higher: Add the path to the java executable to your OS path environment variable.
 
 - MCL: The Markov Cluster Algorithm, is a fast and scalable unsupervised cluster algorithm for graphs ( http://micans.org/mcl ) which is needed for group functionality of PanTools.
-       You need to unzip the provided mcl-latest.tar.gz, compile it (see README), and add the path to the mcl executable to your path environment variable.
+       You need to download, unzip and compile it (see README), and add the path to the mcl executable to your path environment variable.
 
 How to run the program 
 ----------------------
@@ -22,17 +22,17 @@ java  [-server] [-XX:+UseConcMarkSweepGC]  [-Xmx(a number followed by g or m)] -
 List of commands and examples for the provided sample data :
 
 1. build:
-   To build a pan-genome out of a set of genomes.
+   To build a pan-genome out of a set of genomes or a pan-proteome out of a set of proteins.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE K_VALUE
+   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  pangenome [or panproteome] PATH_TO_THE_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE [or PATH_TO_THE_PROTEOMES_PATH_FILE]
 
-   PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files (genomes); each in a seperated line.
+   PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files of genomes; each in a seperated line.
+   PATH_TO_THE_PROTEOMES_PATH_FILE : a text file containing paths to FASTA files of proteomes; each in a seperated line.
    PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored.  
-   K_VALUE :   size of K for construction of the de Bruijn graph which should be 6 <= K <= 255.
 
    Example: 
    
-   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt 15
+   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  pangenome /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt
              
 2. add:
    To add new genomes and annotations to an available pan-genome. 

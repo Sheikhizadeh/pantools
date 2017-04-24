@@ -15,10 +15,7 @@ public class kmer {
     public int K;
     public int pre_len;
     public int suf_len;
-    public int mask;
-    public int shift;
-    public int prefix;
-    public byte[] suffix;
+    public long value; 
     public boolean canonical;
     
     /**
@@ -33,9 +30,8 @@ public class kmer {
         K=k;
         pre_len=p;
         suf_len=s;
-        mask=(1<<(2*pre_len))-1;
-        shift=2*(pre_len-1);
-        suffix=new byte[suf_len/4];
+        value = 0;
+        canonical=false;
     }
 
     /**
@@ -48,10 +44,7 @@ public class kmer {
         K=k_mer.K;
         pre_len=k_mer.pre_len;
         suf_len=k_mer.suf_len;
-        mask=k_mer.mask;
-        shift=k_mer.shift;
-        prefix=k_mer.prefix;
-        suffix=k_mer.suffix;
+        value=k_mer.value;
         canonical=k_mer.canonical;
     }
 
@@ -60,9 +53,7 @@ public class kmer {
      */
     public void reset()
     {
-        prefix=0;
-        for(int i=0;i<suffix.length;++i)
-            suffix[i]=0;
+        value = 0;
         canonical=false;
     }
 
@@ -71,15 +62,15 @@ public class kmer {
      * @param k_mer The second kmer
      * @return -1 if the first suffix is smaller, 0 if they are equal and 1 if the second suffix is smaller
      */
-    public int compare_suffix(kmer k_mer)
+    public int compare_suffix(byte[] suf)
     {
         int i;
-        for(i=0;i<suffix.length;++i)
-            if(suffix[i]!=k_mer.suffix[i])
-                break;
-        if(i==suffix.length)
+        long given_suffix = 0, my_suffix = get_suffix();
+        for(i = 0; i < suf_len / 4; ++i)
+            given_suffix = ((given_suffix << 8) | (0x00000000000000ff & suf[i]));
+        if(given_suffix == my_suffix)
             return 0;
-        else if((suffix[i] & 0x0ff) < (k_mer.suffix[i] & 0x0ff) )
+        else if(my_suffix < given_suffix)
             return -1;
         else
             return 1;
@@ -92,12 +83,12 @@ public class kmer {
      */
     public int compare(kmer k_mer)
     {
-        if(prefix<k_mer.prefix)
+        if(value < k_mer.value)
             return -1;
-        else if(prefix>k_mer.prefix)
+        else if(value > k_mer.value)
             return 1;
         else
-            return compare_suffix(k_mer);
+            return 0;
 
     }
 
@@ -105,28 +96,27 @@ public class kmer {
      * Gives the next forward kmer
      * @param base_code The binary code of the nucleotide at the end of the kmer
      */
-    public void next_up_kmer(int base_code)
+    public void next_up_kmer(long base_code)
     {
-        int i;
-        prefix=((prefix<<2) & mask) | ((suffix[0]>>6) & 0x03 );
-        for(i=0;i<suffix.length-1;++i)
-           suffix[i]=(byte)((suffix[i]<<2) | (( suffix[i+1]>>6) & 0x03)); 
-        suffix[i]=(byte)((suffix[i]<<2) | base_code); 
+        value = ((value & ((1L << (2 * (K-1))) - 1) ) << 2) | base_code;
     }
 
     /**
      * Gives the next reverse kmer
      * @param base_code The binary code of the nucleotide at the end of the kmer
      */
-    public void next_down_kmer(int base_code)
+    public void next_down_kmer(long base_code)
     {
-        int i;
-        for(i=suffix.length-1;i>0;--i)
-            suffix[i]=(byte)(((suffix[i]>>2) & 0x03f) | ((suffix[i-1] & 0x03 )<<6)); 
-        suffix[i]=(byte)(((suffix[i]>>2) & 0x03f) | ((prefix & 0x03 )<<6)); 
-        prefix=(prefix>>2) | (base_code<<shift); 
+        value = (value >> 2) | (base_code << (2 * (K - 1)));
     }
-
+    
+    public long get_prefix(){
+        return value >> (2 * suf_len);
+    }
+    
+    public long get_suffix(){
+        return value & ((1L << (2 * suf_len)) - 1);
+    }
     /**
      * Represents a kmer in the form of a string.
      * @return The string representing the kmer
@@ -136,9 +126,7 @@ public class kmer {
     {
         char[] sym=new char[]{ 'A', 'C', 'G' , 'T', 'M','R','W','S','Y','K','V','H','D','B','N'};
         StringBuilder seq=new StringBuilder(K);
-        append_word(sym, prefix, pre_len,seq);
-        for(int i=0;i<suffix.length;++i)
-            append_word(sym, suffix[i],4,seq);
+        append_word(sym, value,K,seq);
         return seq.toString();
     }  
 
@@ -149,12 +137,12 @@ public class kmer {
      * @param k Size of the K
      * @param seq The string builder containing the decoded kmer
      */
-    private void append_word(char[] sym, int word,int k, StringBuilder seq )
+    private void append_word(char[] sym, long value,int k, StringBuilder seq )
     {
         if(k>0)
         {
-            append_word(sym, word>>2,k-1,seq);
-            seq.append(sym[word & 0x00000003]);
+            append_word(sym, value>>2,k-1,seq);
+            seq.append(sym[(int)(value & 3l)]);
         }
     } 
 }

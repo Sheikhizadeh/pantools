@@ -46,6 +46,9 @@ public class Pantools {
     public static Label sequence_label = DynamicLabel.label("sequence");
     public static Label node_label = DynamicLabel.label("node");
     public static Label degenerate_label = DynamicLabel.label("degenerate");
+    public static Label proteome_label = DynamicLabel.label("proteome");
+    public static Label annotation_label = DynamicLabel.label("annotation");
+    public static Label variation_label = DynamicLabel.label("variation");
     public static Label gene_label = DynamicLabel.label("gene");
     public static Label coding_gene_label = DynamicLabel.label("coding_gene");
     public static Label RNA_label = DynamicLabel.label("RNA");
@@ -75,12 +78,11 @@ public class Pantools {
         branches, //to connect tree nodes
         crosses, // between crossing genes
         visits,
-        next
+        precedes
     }
 
     public static long startTime;
     public static long phaseTime;
-    public static int K;
     public static int num_nodes;
     public static int num_degenerates;
     public static int num_edges;
@@ -103,25 +105,15 @@ public class Pantools {
         System.out.println("------------------------------- PanTools -------------------------------");
         switch (args[0]) {
             case "build":
-                try{
-                    switch (args.length) {
-                        case 3:
-                            annLayer.initialize_panproteome(args[2],args[1]);
-                            break;
-                        case 4:
-                            K = Integer.parseInt(args[3]);
-                            if (K < 6 || K > 256) {
-                                System.out.println("Please enter a proper K value ( 6 <= K <= 256 ).");
-                                System.exit(1);
-                            }
-                            seqLayer.initialize_pangenome(args[2],args[1]);
-                            break;
-                        default:                    
-                            print_help_comment();
-                            System.exit(1);
-                    }
-                } catch(Exception ex) {
-                    System.err.println(ex.getMessage());
+                if (args.length < 4) {
+                    print_help_comment();
+                    System.exit(1);
+                }
+                if (args[1].equals("pangenome"))
+                    seqLayer.initialize_pangenome(args[3],args[2]);
+                else if (args[1].equals("panproteome"))
+                    annLayer.initialize_panproteome(args[3],args[2]);
+                else {
                     print_help_comment();
                     System.exit(1);
                 }
@@ -135,6 +127,8 @@ public class Pantools {
                     seqLayer.add_genomes(args[3],args[2]);
                 else if (args[1].equals("annotations"))
                     annLayer.add_annotaions(args[3],args[2]);
+                else if (args[1].equals("variations"))
+                    seqLayer.add_variations(args[3],args[2]);
                 else {
                     print_help_comment();
                     System.exit(1);
@@ -185,12 +179,12 @@ public class Pantools {
 "Requirements\n" +
 "------------\n" +
 "- KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).\n" +
-"        You need to unzip the provided kmc.zip and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.\n" +
+"        You need to download it and add the path to the appropriate version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.\n" +
 "\n" +
 "- Java Virtual Machine version 1.8 or higher: Add the path to the java executable to your OS path environment variable.\n" +
 "\n" +
 "- MCL: The Markov Cluster Algorithm, is a fast and scalable unsupervised cluster algorithm for graphs ( http://micans.org/mcl ) which is needed for group functionality of PanTools.\n" +
-"       You need to unzip the provided mcl-latest.tar.gz, compile it (see README), and add the path to the mcl executable to your path environment variable.\n" +
+"       You need to download, unzip and compile it (see README), and add the path to the mcl executable to your path environment variable.\n" +
 "\n" +
 "How to run the program \n" +
 "----------------------\n" +
@@ -200,17 +194,17 @@ public class Pantools {
 "List of commands and examples for the provided sample data :\n" +
 "\n" +
 "1. build:\n" +
-"   To build a pan-genome out of a set of genomes.\n" +
+"   To build a pan-genome out of a set of genomes or a pan-proteome out of a set of proteins.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE K_VALUE\n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  pangenome [or panproteome] PATH_TO_THE_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE [or PATH_TO_THE_PROTEOMES_PATH_FILE]\n" +
 "\n" +
-"   PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files (genomes); each in a seperated line.\n" +
+"   PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files of genomes; each in a seperated line.\n" +
+"   PATH_TO_THE_PROTEOMES_PATH_FILE : a text file containing paths to FASTA files of proteomes; each in a seperated line.\n" +
 "   PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored.  \n" +
-"   K_VALUE :   size of K for construction of the de Bruijn graph which should be 6 <= K <= 255.\n" +
 "\n" +
 "   Example: \n" +
 "   \n" +
-"   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt 15\n" +
+"   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  pangenome /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt\n" +
 "             \n" +
 "2. add:\n" +
 "   To add new genomes and annotations to an available pan-genome. \n" +
@@ -276,7 +270,8 @@ public class Pantools {
 "6. To stop the Neo4j server type :\n" +
 "   neo4j stop\n" +
 "\n" +
-"- Windows users could also download a Neo4j desktop application for starting and stopping a server instead of doing it on the commandline.\n");
+"- Windows users could also download a Neo4j desktop application for starting and stopping a server instead of doing it on the commandline.\n" +
+"");
     }
 
     /**
