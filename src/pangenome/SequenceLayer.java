@@ -362,7 +362,6 @@ public class SequenceLayer {
         }
     }
     
-    
     /**
      * Retrieves sequence of the genes sequence from the pangenome and stores them in a FASTA file. 
      * 
@@ -534,7 +533,7 @@ public class SequenceLayer {
                         address[2] = Integer.parseInt(fields[2]);
                         address[3] = Integer.parseInt(fields[3]);
                         if (address[0] <= genomeDb.num_genomes && address[1] <= genomeDb.num_sequences[address[0]] && address[2] >= 1 && address[3] <= genomeDb.sequence_length[address[0]][address[1]]){
-                            start_ptr = locate(address);
+                            start_ptr = locate(address, K);
                             proper_regions++;
                             extract_sequence(seq, start_ptr, address);
                             out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
@@ -611,7 +610,7 @@ public class SequenceLayer {
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                                 address[2] = 1;
                                 address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
-                                start = locate(address);
+                                start = locate(address, K);
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 extract_sequence(seq, start, address);
                                 write_fasta(out, seq, 80);
@@ -750,7 +749,7 @@ public class SequenceLayer {
      * @param address An integer array lile {genome_number, sequence_number, begin_position, end_position}
      * @return A pointer to the genomic position in the pangenome
      */
-    public static IndexPointer locate(int[] addr) {
+    public static IndexPointer locate(int[] addr, int K) {
         int node_start_pos, low, high, mid , node_len, genomic_pos;
         boolean forward;
         Node node, neighbor, seq_node;

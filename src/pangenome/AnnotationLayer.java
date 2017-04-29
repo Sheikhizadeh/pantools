@@ -89,12 +89,11 @@ import static pantools.Pantools.write_fasta;
  */
 public class AnnotationLayer {
     private static int K;
-    private int L = 5;
-    private double THRESHOLD = 75;
+    private int L = 7;
+    private double THRESHOLD = 55;
     private int MAX_LENGTH  = 1000;
     private ProteinAlignment pro_aligner;
     private SequenceAlignment seq_aligner;
-    
     /**
      * Implements a comparator for integer arrays of size two
      */
@@ -115,20 +114,28 @@ public class AnnotationLayer {
     }
 
     public void initialize_panproteome(String protein_paths_file, String pangenome_path){
-        String file_path, line, protein_number = "";
+        String file_path, line, protein_ID = "";
         StringBuilder protein = new StringBuilder();
-        Node mrna, panproteome;
-        int g, trsc, num_proteins = 0;
-        int[] address = new int[3];
+        Node panproteome, protein_node = null;
+        int i,trsc, num_proteins = 1, genome;
+        long[] kmer_node_ids = new long[(int)Math.pow(20,L)];
+        int[] code = new int[256];
+        char[] aminoacids = new char[]
+        {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
+        for (i = 0; i < 20; ++i)
+            code[aminoacids[i]] = i;
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
         try(BufferedReader protein_paths = new BufferedReader(new FileReader(protein_paths_file))) {
-            for (g = 1; protein_paths.ready(); ++g){
+            for (genome = 1; protein_paths.ready(); ++genome){
                 file_path = protein_paths.readLine().trim();
+                if (file_path.equals("")) // if line is empty
+                    continue;
                 BufferedReader in = new BufferedReader(new FileReader(file_path));
-                address[0] = g;
+                protein_ID = in.readLine().trim().substring(1);
+                ++num_proteins;
                 while (in.ready()) {
                     try (Transaction tx = graphDb.beginTx()) {
                         for (trsc = 0; in.ready() && trsc < MAX_TRANSACTION_SIZE; ++trsc){
@@ -138,15 +145,17 @@ public class AnnotationLayer {
                             else if (line.charAt(0) == '>'){
                                 if (protein.length() > 0){
                                     ++num_proteins;
-                                    mrna = graphDb.createNode(mRNA_label);
-                                    mrna.setProperty("protein_number", protein_number);
-                                    mrna.setProperty("protein", protein.toString());
-                                    mrna.setProperty("protein_length", protein.length());
-                                    mrna.setProperty("address",address);
+                                    protein_node = graphDb.createNode(mRNA_label);
+                                    protein_node.setProperty("protein_ID", protein_ID);
+                                    protein_node.setProperty("protein", protein.toString());
+                                    protein_node.setProperty("protein_length", protein.length());
+                                    protein_node.setProperty("genome",genome);
+                                    kmerize_protein(protein_node, protein, kmer_node_ids, code);
                                     protein.setLength(0);
                                 }
-                                protein_number = line.substring(1);
-                            } else
+                                protein_ID = line.substring(1);
+                            }
+                            else
                                 protein.append(line);
                             if (num_proteins % 11 == 1)
                                 System.out.print("\rnum_proteins : " + num_proteins);
@@ -154,27 +163,60 @@ public class AnnotationLayer {
                         tx.success();
                     }
                 }
-                ++num_proteins;
-                try (Transaction tx = graphDb.beginTx()) {
-                    mrna = graphDb.createNode(mRNA_label);
-                    mrna.setProperty("protein_number", protein_number);
-                    mrna.setProperty("protein", protein.toString());
-                    mrna.setProperty("protein_length", protein.length());
-                    mrna.setProperty("address",address);
-                    protein.setLength(0);
-                    tx.success();
-                }
             }
-            System.out.println("\rnum_proteins : " + num_proteins);
             try (Transaction tx = graphDb.beginTx()) {
+                if (protein.length() > 0){
+                    protein_node = graphDb.createNode(mRNA_label);
+                    protein_node.setProperty("protein_ID", protein_ID);
+                    protein_node.setProperty("protein", protein.toString());
+                    protein_node.setProperty("protein_length", protein.length());
+                    protein_node.setProperty("genome",genome - 1);
+                    kmerize_protein(protein_node, protein, kmer_node_ids, code);
+                }
                 panproteome = graphDb.createNode(pangenome_label);
-                panproteome.setProperty("num_genomes", g - 1);
+                panproteome.setProperty("num_genomes", genome - 1);
                 panproteome.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
+                System.out.println("\rnum_proteins : " + num_proteins);
                 tx.success();
             }
         } catch (IOException ex){
             System.out.print(ex.getMessage());
         }        
+    }
+    
+    private void kmerize_protein(Node protein_node, StringBuilder protein, long[] kmer_node_ids, int[] code){
+        Node pentamer_node, current_node;
+        Relationship rel;
+        int i,start, protein_length, pentamer_index, caa;
+        protein_length = protein.length();
+        current_node = protein_node;
+        char[] pentamer = new char[L];
+        int[] seed = new int[L];
+        for (i = 0; i < L - 1; ++i)
+            seed[i] = protein.charAt(i);
+        for (start = 0; start < protein_length - L; ++start){// for each penta-mer of the protein
+            seed[(start + L - 1) % L] = protein.charAt(start + L - 1);
+            pentamer_index = 0;
+            for (i = 0; i < L; ++i){
+                caa = seed[(start + i) % L];
+                pentamer_index = pentamer_index * 20 + code[caa];
+                pentamer[i] = (char)caa;
+            }
+            if (kmer_node_ids[pentamer_index] == 0){
+                pentamer_node = graphDb.createNode(pentamer_lable);
+                pentamer_node.setProperty("sequence", pentamer);
+                pentamer_node.setProperty("count", 1);
+                kmer_node_ids[pentamer_index] = pentamer_node.getId();
+            } else {
+                pentamer_node = graphDb.getNodeById(kmer_node_ids[pentamer_index]);
+                pentamer_node.setProperty("count", (int)pentamer_node.getProperty("count") + 1);
+            }
+            if ((rel = get_edge(current_node,pentamer_node, RelTypes.precedes)) == null)
+                current_node.createRelationshipTo(pentamer_node, RelTypes.precedes).setProperty("proteins",protein_node.getId()+"_"+(start+1));
+            else
+                rel.setProperty("proteins",(String)rel.getProperty("proteins") + ","+ protein_node.getId()+"_"+(start+1));
+            current_node = pentamer_node;
+        }
     }
     
     /**
@@ -189,7 +231,7 @@ public class AnnotationLayer {
             System.out.println("No database found in " + pangenome_path);
             System.exit(1);
         }
-        Node db_node;
+        Node db_node, annotation_node;
         String[] fields;
         String gff_file, line;
         int[] address = new int[4];
@@ -211,19 +253,12 @@ public class AnnotationLayer {
         }
         startTime = System.currentTimeMillis();
         genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
-        /*genes_list = new ArrayList[genomeDb.num_genomes + 1][];
-        for (i = 1; i <= genomeDb.num_genomes; ++i) {
-            genes_list[i] = new ArrayList[genomeDb.num_sequences[i] + 1];
-            for (j = 1; j <= genomeDb.num_sequences[i]; ++j) {
-                genes_list[i][j] = new ArrayList();
-            }
-        }*/
         try (BufferedReader gff_paths = new BufferedReader(new FileReader(gff_paths_file))) {
             log_file = new BufferedWriter(new FileWriter(pangenome_path + "/annotation.log"));
             if (! new File(pangenome_path + "/proteins").exists())
                 Files.createDirectory(Paths.get(pangenome_path + "/proteins"));
             System.out.println("genome\tgenes\tmRNAs\ttRNAs\trRNAs");
-            while (gff_paths.ready() && address[0] <= genomeDb.num_genomes) // for each gff file
+            while (gff_paths.ready()) // for each gff file
             {
                 line = gff_paths.readLine();
                 if (line.trim().equals(""))
@@ -235,7 +270,14 @@ public class AnnotationLayer {
                     log_file.write("Annotaion file for genome " + address[0]+" not found.");
                     continue;
                 }
-                parse_gff(address[0], log_file, gff_file, pangenome_path);
+                try (Transaction tx = graphDb.beginTx()) {
+                    annotation_node = graphDb.createNode(annotation_label);
+                    annotation_node.setProperty("genome", address[0]);
+                    annotation_node.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
+                    graphDb.findNodes(genome_label,"number",address[0]).next().createRelationshipTo(annotation_node, RelTypes.has);
+                    tx.success();
+                }
+                parse_gff(address, annotation_node.getId(), log_file, gff_file, pangenome_path);
             } // for genomes
             gff_paths.close();
             log_file.close();
@@ -243,21 +285,6 @@ public class AnnotationLayer {
             System.out.println(ioe.getMessage());
             System.out.println("Could not open " + gff_paths_file);
         }
-    // setting the genes property of sequence nodes    
-        /*try (Transaction tx4 = graphDb.beginTx()) {
-            for (i = 1; i <= genomeDb.num_genomes; ++i) {
-                for (j = 1; j <= genomeDb.num_sequences[i]; ++j) {
-                    genes_array = new long[genes_list[i][j].size()];
-                    Iterator<Long> genesIterator = genes_list[i][j].iterator();
-                    for (int k = 0; genesIterator.hasNext(); ++k) {
-                        genes_array[k] = genesIterator.next();
-                    }
-                    graphDb.findNode(sequence_label, "number", i + "_" + j).setProperty("genes", genes_array);
-                }
-            }
-            db_node.setProperty("num_genes",total_genes);
-            tx4.success();
-        }*/
         graphDb.shutdown();
         genomeDb.close();
         // delete the database transaction files
@@ -269,23 +296,16 @@ public class AnnotationLayer {
         System.out.println("Annotated proteins available in "+pangenome_path + "/proteins");
     }
 
-    private void parse_gff(int genome, BufferedWriter log_file, String gff_file, String pangenome_path){
-        int i, trsc, num_genes, num_mRNAs, num_tRNAs, num_rRNAs, feature_len, offset, node_len;
+    private void parse_gff(int[] address, long annotation_node_id, BufferedWriter log_file, String gff_file, String pangenome_path){
+        int i, trsc, num_genes, num_mRNAs, num_tRNAs, num_rRNAs, feature_len, offset;
         String sequence_id, current_sequence_id=null, attribute;
-        Node node, gene_node, rna_node, annotation_node, feature_node, parent_node = null;
+        Node node, gene_node, rna_node, feature_node, parent_node = null;
         Relationship rel;
         String[] fields,parent_ids;
         String strand, line;
-        int[] address = new int[4];
-        long annotation_node_id;
         LinkedList<Node> gene_nodes = new LinkedList();
         LinkedList<Node> rna_nodes = new LinkedList();
         IndexPointer start_ptr, stop_ptr;
-        annotation_node = graphDb.createNode(annotation_label);
-        annotation_node.setProperty("genome", genome);
-        annotation_node.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
-        graphDb.findNodes(genome_label,"number",address[0]).next().createRelationshipTo(annotation_node, RelTypes.has);
-        annotation_node_id = annotation_node.getId();
         num_genes = num_mRNAs = num_tRNAs = num_rRNAs = 0;
         try (BufferedReader in = new BufferedReader(new FileReader(gff_file))) {
             // for each record of gff file
@@ -314,6 +334,7 @@ public class AnnotationLayer {
                         feature_node.setProperty("type", fields[2]);
                         feature_node.setProperty("name", get_property(attribute,"Name"));
                         feature_node.setProperty("annotation_node_id", annotation_node_id);
+                        feature_node.setProperty("genome",address[0]);
                         parent_node = get_node_by_id(gene_nodes,get_property(attribute,"Parent"));
                         if (parent_node != null)
                             parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
@@ -325,15 +346,14 @@ public class AnnotationLayer {
                         }
                         // if sequence is uniquely determined
                         if (address[1] > 0) {
-                            start_ptr = locate(address);
+                            start_ptr = locate(address, K);
                             offset = start_ptr.offset;
                             node = graphDb.getNodeById(start_ptr.node_id);
-                            node_len = (int) node.getProperty("length");
                             rel = feature_node.createRelationshipTo(node, RelTypes.starts);
                             rel.setProperty("offset", offset);
                             rel.setProperty("genomic_position", address[2]);
                             rel.setProperty("forward", start_ptr.canonical);
-                            stop_ptr = locate(new int[]{address[0], address[1], address[3]});
+                            stop_ptr = locate(new int[]{address[0], address[1], address[3]}, K);
                             rel = feature_node.createRelationshipTo(graphDb.getNodeById(stop_ptr.node_id), RelTypes.stops);
                             rel.setProperty("offset", stop_ptr.offset);
                             rel.setProperty("genomic_position", address[2] + feature_len - 1);
@@ -380,6 +400,8 @@ public class AnnotationLayer {
                                                         rna_node.setProperty("attribute", gene_node.getProperty("attribute"));
                                                         rna_node.setProperty("type", gene_node.getProperty("type"));
                                                         rna_node.setProperty("name", gene_node.getProperty("name"));
+                                                        rna_node.setProperty("annotation_node_id", annotation_node_id);
+                                                        rna_node.setProperty("genome",address[0]);
                                                         ++num_mRNAs;
                                                         rna_nodes.addFirst(rna_node);                                           
                                                         gene_node.createRelationshipTo(rna_node, RelTypes.is_parent_of);
@@ -446,6 +468,7 @@ public class AnnotationLayer {
         protein_builder pb = new protein_builder();
         Node cds_node, mrna_node, gene_node;
         int trsc, isoforms_num, gene_start_pos, protein_num = 0;
+        long annotaion;
         int[] address, begin_end;
         StringBuilder rna_builder = new StringBuilder();
         StringBuilder gene_builder = new StringBuilder(), protein;
@@ -489,10 +512,11 @@ public class AnnotationLayer {
                                     ++protein_num;
                                     if (protein_num % 11 == 1)
                                         System.out.print("\rAdding protein sequences... " + protein_num);
-                                    out.write(">" + genome + "_" + protein_num + ":" + gene_node.getProperty("name") + "\n");
+                                    annotaion = (long)mrna_node.getProperty("annotation_node_id");
+                                    out.write(">G" + genome + "A" + annotaion + "P" + protein_num + "\n");
                                     write_fasta(out, protein, 70);
                                     mrna_node.setProperty("protein", protein.toString());
-                                    mrna_node.setProperty("protein_number", genome + "_" + protein_num);
+                                    mrna_node.setProperty("protein_ID", "G" + genome + "A" + annotaion + "P" + protein_num);
                                     mrna_node.setProperty("protein_length", protein.length());
                                     if (protein.charAt(0) != 'M'  || protein.charAt(protein.length() - 1) != '*'){
                                         log_file.write("Protein ID = " + mrna_node.getProperty("ID")+" miss-annotated!\n");
@@ -616,7 +640,7 @@ public class AnnotationLayer {
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
-        seq_aligner = new SequenceAlignment(-5,-0.1,4.0,-2.0,MAX_LENGTH);
+        //seq_aligner = new SequenceAlignment(-5,-0.1,4.0,-2.0,MAX_LENGTH);
         pro_aligner = new ProteinAlignment(-10,-0.2,MAX_LENGTH);
         if (args.length > 2)
             THRESHOLD = Double.parseDouble(args[2]);
@@ -627,29 +651,18 @@ public class AnnotationLayer {
     }
     
     public void find_crossing_proteins(){
-        long[] kmer_node_ids;
-        int[] code = new int[256];
-        char[] aminoacids = new char[]
-        {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
-        for (int i = 0; i < 20; ++i)
-            code[aminoacids[i]] = i;
         LinkedList<Node> proteins = new LinkedList();
         ResourceIterator<Node> proteins_iterator;
-        PriorityQueue<Long> crossing_protein_ids = new PriorityQueue();
-        Node protein_node, pentamer_node, db_node, current_node;
-        long other_node_id, protein_node_id;
-        int protein_length, total_proteins, pentamer_index, mask = (1 << 25) - 1;
-        String protein;
-        //StringBuilder pentamer = new StringBuilder();
+        PriorityQueue<String> crossing_protein_ids = new PriorityQueue();
+        Node protein_node, current_node, node;
+        long node_id, protein_node_id;
+        int protein_length, total_proteins;
+        String protein, proteins_array;
+        String[] fields;
         int i, p, count, start, trsc;
-        long crossing_protein_id, p_id;
+        String crossing_protein_id, p_id;
         System.out.println("Finding crossing proteins...");
         try (Transaction tx = graphDb.beginTx()) {
-            db_node = graphDb.findNodes(pangenome_label).next();
-            if (db_node.hasProperty("kmer_node_ids"))
-                kmer_node_ids = (long[])db_node.getProperty("kmer_node_ids");
-            else
-                kmer_node_ids = new long[(int)Math.pow(2,26)]; 
             proteins_iterator = graphDb.findNodes(mRNA_label);
             while (proteins_iterator.hasNext())
                 proteins.add(proteins_iterator.next());
@@ -661,63 +674,58 @@ public class AnnotationLayer {
             try (Transaction tx = graphDb.beginTx()) {
                 for (trsc = 0; !proteins.isEmpty()&& trsc < 2 * MAX_TRANSACTION_SIZE; ++trsc){
                     current_node = protein_node = proteins.remove();
-                    if (protein_node.hasProperty("protein")){
-                        protein_node_id = protein_node.getId();
-                        ++p;
-                        protein = (String)protein_node.getProperty("protein");
-                        protein_length = protein.length();
-                        pentamer_index = 0;
-                        if (protein_length > L){
-                            for (i = 0; i < L; ++i)
-                                pentamer_index = (pentamer_index << 5) | code[protein.charAt(i)];
-                            for (start = L; start < protein_length ; ++start){// for each penta-mer of the protein
-                                if (kmer_node_ids[pentamer_index] == 0){
-                                    pentamer_node = graphDb.createNode(pentamer_lable);
-                                    //pentamer_node.setProperty("index", pentamer_index);
-                                    //pentamer_node.setProperty("peptide", pentamer.toString());
-                                    kmer_node_ids[pentamer_index] = pentamer_node.getId();
-                                } else {
-                                    pentamer_node = graphDb.getNodeById(kmer_node_ids[pentamer_index]);
-                                    for (Relationship rel: pentamer_node.getRelationships(Direction.INCOMING)){
-                                        //other_node_id = (long)rel.getProperty("protein_node_id");
-                                        other_node_id = rel.getStartNode().getId();
-                                        if (other_node_id != protein_node_id)
-                                            crossing_protein_ids.add(other_node_id);
-                                    }
+                    protein_node_id = protein_node.getId();
+                    ++p;
+                    protein = (String)protein_node.getProperty("protein");
+                    protein_length = protein.length();
+                    if (protein_length > L){
+                    // Traverse path of the protein    
+                        for (start = 1; start < protein_length - L + 1; ++start){// for each penta-mer of the protein
+                            for (Relationship rel: current_node.getRelationships(Direction.OUTGOING)){
+                                proteins_array = (String)rel.getProperty("proteins");
+                                if(proteins_array.contains(protein_node_id+"_"+start)){
+                                    current_node = rel.getEndNode();
+                                    fields = proteins_array.split(",");
+                                    for (i = 0; i < fields.length; ++i)
+                                        crossing_protein_ids.add(fields[i].split("_")[0]);
+                                    break;
                                 }
-                                //current_node.createRelationshipTo(pentamer_node, RelTypes.precedes).setProperty("protein_node_id",protein_node_id);
-                                protein_node.createRelationshipTo(pentamer_node, RelTypes.visits);
-                                //current_node = pentamer_node;
-                                pentamer_index = ((pentamer_index << 5) & mask) | code[protein.charAt(start)];
-                            }
-                            //current_node.createRelationshipTo(protein_node, RelTypes.precedes).setProperty(String.valueOf(protein_node_id), start - L);
-                            if (!crossing_protein_ids.isEmpty()){
-                                for (count = 0, crossing_protein_id = crossing_protein_ids.peek(); !crossing_protein_ids.isEmpty();){
-                                    p_id = crossing_protein_ids.remove();
-                                    if (crossing_protein_id != p_id){
-                                        if (count > protein_length / 20 + 1)
-                                            protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
-                                        crossing_protein_id = p_id;
-                                        count = 1;
-                                    }
-                                    else
-                                        ++count;
-                                }
-                                if (count > protein_length / 20 + 1) // for the last range of IDs in the queue
-                                    protein_node.createRelationshipTo(graphDb.getNodeById(crossing_protein_id), RelTypes.crosses);
                             }
                         }
-                    }  
+                        if (!crossing_protein_ids.isEmpty()){
+                            for (count = 0, crossing_protein_id = crossing_protein_ids.peek(); !crossing_protein_ids.isEmpty();){
+                                p_id = crossing_protein_ids.remove();
+                                if (!crossing_protein_id.equals(p_id)){
+                                    if(count > 0.01 * protein_length){
+                                        node_id = Long.parseLong(crossing_protein_id);
+                                        node = graphDb.getNodeById(node_id);
+                                        if (node_id != protein_node_id && get_edge(protein_node,node, RelTypes.crosses) == null)
+                                            protein_node.createRelationshipTo(node, RelTypes.crosses).setProperty("count",count);
+                                    }
+                                    crossing_protein_id = p_id;
+                                    count = 1;
+                                }
+                                else
+                                    ++count;
+                            }
+                            if(count > protein_length/20 + 1){
+                                node_id = Long.parseLong(crossing_protein_id);
+                                node = graphDb.getNodeById(node_id);
+                                if (node_id != protein_node_id && get_edge(protein_node,node, RelTypes.crosses) == null)
+                                    protein_node.createRelationshipTo(node, RelTypes.crosses).setProperty("count",count);
+                            }
+                        }
+                    }
                     if (p % 11 == 1)
                         System.out.print("\r" + p + "/" + total_proteins);
                 }
                 tx.success();
             }
         } // for protein
-        try (Transaction tx = graphDb.beginTx()) {
+        /*try (Transaction tx = graphDb.beginTx()) {
             db_node.setProperty("penta_mer_node_ids", kmer_node_ids);
             tx.success();
-        }
+        }*/
         System.out.println("\r" + p + "/" + total_proteins);
     }
     
@@ -754,7 +762,7 @@ public class AnnotationLayer {
      * @return The value by which the number of groups have been increased. (Could be a negative value if some groups get merged) 
      */
     private int breadth_first_search(Node start_protein){
-        int num_members = 0;
+        int num_members = 0, count, protein_length;
         double similarity;
         Node homology_group_node, crossing_protein;
         Relationship crossing_edge;
@@ -777,6 +785,8 @@ public class AnnotationLayer {
                                 crossing_edge = itr.next();
                                 crossing_protein = crossing_edge.getOtherNode(start_protein);
                                 if(!crossing_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING) && crossing_protein.hasProperty("protein")){
+                                    count = (int)crossing_edge.getProperty("count");
+                                    protein_length = (int)start_protein.getProperty("protein_length");
                                     similarity = protein_similarity((String)start_protein.getProperty("protein"), (String)crossing_protein.getProperty("protein"));
                                     if ( similarity > THRESHOLD ) {
                                         crossing_edge.setProperty("similarity", similarity);
@@ -862,6 +872,7 @@ public class AnnotationLayer {
                                 orthology_group_nodes.add(orthology_group_node);
                                 ++num_groups;
                                 make_group(clusters_file, orthology_group_node);
+                                homology_group_node.createRelationshipTo(orthology_group_node, RelTypes.splits_into);
                             }
                             clusters_file.close();
                             new File(clusters_path).delete();
@@ -883,12 +894,8 @@ public class AnnotationLayer {
                 try (Transaction tx = graphDb.beginTx()) {
                     for (trsc = 0; !orthology_group_nodes.isEmpty() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
                         orthology_group_node = orthology_group_nodes.remove();
-                        groups_file.write(Long.toString(orthology_group_node.getId()));
-                        //degree = orthology_group_node.getDegree();
-                        //if (degree > 0)
-                            set_and_write_orthology_groups(orthology_group_node, copy_number, groups_file);
-                        //else
-                        //    orthology_group_node.delete();   
+                        groups_file.write(Long.toString(orthology_group_node.getId()) + ":");
+                        set_and_write_orthology_groups(orthology_group_node, copy_number, groups_file);
                     }
                     tx.success();
                 }
@@ -983,14 +990,13 @@ public class AnnotationLayer {
      */
     void set_and_write_orthology_groups(Node orthology_group_node, int[] copy_number, BufferedWriter groups_file) throws IOException {
         int i, num_members;
-        Node protein_node, gene_node;
+        Node protein_node;
         num_members = 0;
         for (Relationship rel: orthology_group_node.getRelationships(Direction.OUTGOING)){
             ++num_members;
             protein_node = rel.getEndNode();
-            ++copy_number[((int[])protein_node.getProperty("address"))[0]];
-            gene_node = protein_node.getSingleRelationship(RelTypes.codes_for, Direction.INCOMING).getStartNode();
-            groups_file.write("\t" + protein_node.getProperty("protein_number") + ":" + gene_node.getProperty("name"));
+            ++copy_number[(int)protein_node.getProperty("genome")];
+            groups_file.write(" " + protein_node.getProperty("protein_ID"));
         }
         groups_file.write("\n");
         orthology_group_node.setProperty("copy_number_variation", copy_number);

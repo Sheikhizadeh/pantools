@@ -154,7 +154,7 @@ public final class IndexDatabase {
                 previous_num_digits = num_digits;
                 K += 2;
             }
-            System.out.println("K value set to " + K + ". Sorting Kmers...                      ");
+            System.out.println("K = " + K + "\nSorting Kmers...                      ");
             output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
         // Small databases are usually sorted already    
             if (output.startsWith("This database contains sorted k-mers already!")) {

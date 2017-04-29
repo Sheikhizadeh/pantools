@@ -46,7 +46,8 @@ public class Pantools {
     public static Label sequence_label = DynamicLabel.label("sequence");
     public static Label node_label = DynamicLabel.label("node");
     public static Label degenerate_label = DynamicLabel.label("degenerate");
-    public static Label proteome_label = DynamicLabel.label("proteome");
+//    public static Label panproteome_label = DynamicLabel.label("panproteome");
+//    public static Label proteome_label = DynamicLabel.label("proteome");
     public static Label annotation_label = DynamicLabel.label("annotation");
     public static Label variation_label = DynamicLabel.label("variation");
     public static Label gene_label = DynamicLabel.label("gene");
@@ -72,6 +73,7 @@ public class Pantools {
         stops,
         has_homolog, // for pointing to gene nodes from the homology group
         has_ortholog, // for pointing to gene nodes from the orthology group
+        splits_into,
         codes_for,// for connecting genes to mRNAs
         is_parent_of,
         contributes_to,// for connecting CDSs to mRNA
