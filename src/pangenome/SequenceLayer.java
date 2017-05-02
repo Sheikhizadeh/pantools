@@ -704,7 +704,7 @@ public class SequenceLayer {
         String origin;
         int[] occurrence;
         int genome = address[0], sequence = address[1];
-        origin = genome + "_" + sequence;
+        origin = "a" + genome + "_" + sequence;
         for (Relationship r_out : current_node.getRelationships(Direction.OUTGOING)) {
             occurrence = (int[])r_out.getProperty(origin, null);
             if (occurrence != null) {
@@ -1413,7 +1413,7 @@ public class SequenceLayer {
                                         || (is_degenerate && Arrays.equals(addr, address))) {
                                     //System.out.println("found "+address[2]+" "+neighbor.getId());
                                     found = true;
-                                    positions = (int[]) r.getProperty(origin, null);
+                                    positions = (int[]) r.getProperty("a" + origin, null);
                                     if (positions != null) {
                                         len = positions.length;
                                         new_positions = new int[len + 1];
@@ -1421,10 +1421,10 @@ public class SequenceLayer {
                                             new_positions[i] = positions[i];
                                         }
                                         new_positions[i] = address[2];
-                                        r.setProperty(origin, new_positions);
+                                        r.setProperty("a" + origin, new_positions);
                                     } else {
                                         initial_coordinate[0] = address[2];
-                                        r.setProperty(origin, initial_coordinate);
+                                        r.setProperty("a" + origin, initial_coordinate);
                                     }
                                     if (count % ANCHOR_DISTANCES == 0) {
                                         nds.append(neighbor.getId()).append(" ");

@@ -8,14 +8,14 @@ package alignment;
  */
 public class ProteinAlignment {
 
-    private double match[][];
-    private double matrix[][];
-    private double up[][];
-    private double left[][];
+    public int match[][];
+    private long matrix[][];
+    private long up[][];
+    private long left[][];
     public int alignment_length;
     public int MAX_LENGTH;
-    public double GAP_OPEN;
-    public double GAP_EXT;
+    public int GAP_OPEN;
+    public int GAP_EXT;
     
     /**
      * The constructor of the class
@@ -23,16 +23,16 @@ public class ProteinAlignment {
      * @param gap_ext
      * @param max_length
      */
-    public ProteinAlignment(double gap_open, double gap_ext, int max_length) {
+    public ProteinAlignment(int gap_open, int gap_ext, int max_length) {
         MAX_LENGTH = max_length;
         GAP_OPEN = gap_open;
         GAP_EXT = gap_ext;
     // initialize matrixes
-        matrix = new double[MAX_LENGTH+1][MAX_LENGTH+1];
-        up = new double[MAX_LENGTH+1][MAX_LENGTH+1];
-        left = new double[MAX_LENGTH+1][MAX_LENGTH+1];
+        matrix = new long[MAX_LENGTH+1][MAX_LENGTH+1];
+        up = new long[MAX_LENGTH+1][MAX_LENGTH+1];
+        left = new long[MAX_LENGTH+1][MAX_LENGTH+1];
     // initialize similarity matrix BLOSUM62
-        match = new double[256][256];
+        match = new int[256][256];
         match['A']['A'] = 4;
         match['A']['R'] = -1;
         match['A']['N'] = -2;
@@ -696,17 +696,17 @@ public class ProteinAlignment {
      * @param s2 Second sequence
      * @return The similarity score
      */
-    public double get_similarity(String s1, String s2) {
+    public long get_similarity(String s1, String s2) {
         int i, j;
         double match_score = 0, max_score = 0, match_length = 0;
         int m = s1.length(), n = s2.length();
         //return Math.random()*80;
         for (i = 1; i <= m; i++) {
-            left[i][0] = Double.NEGATIVE_INFINITY;
+            left[i][0] = Integer.MIN_VALUE;
             matrix[i][0] = GAP_OPEN + i*GAP_EXT;
         }        
         for (j = 1; j <= n; j++) {
-            up[0][j] = Double.NEGATIVE_INFINITY;
+            up[0][j] = Integer.MIN_VALUE;
             matrix[0][j] = GAP_OPEN + j*GAP_EXT;
         }   
         for (i = 1; i <= m; i++) {
@@ -731,7 +731,7 @@ public class ProteinAlignment {
                 j = j - 1;
             }
         }      
-        return 100 * (match_score / max_score) * Math.sqrt(match_length / Math.max(m, n));
-        //return matrix[m][n] / max_score;
+        //return 100 * (match_score / max_score) * Math.sqrt(match_length / Math.max(m, n));
+        return matrix[m][n];
     }
 }

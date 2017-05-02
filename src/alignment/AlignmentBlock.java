@@ -15,7 +15,7 @@ public class AlignmentBlock {
 
     public StringBuilder one;
     public StringBuilder two;
-    public double score;
+    public long score;
 
     /**
      * The constructor.
