@@ -120,16 +120,9 @@ public class Pantools {
                         } else
                            K = -1;
                     seqLayer.initialize_pangenome(args[3],args[2], K);
-                } else if (args[1].equals("panproteome")){
-                        if (args.length > 4){
-                            L = Integer.parseInt(args[4]);
-                            if (L < 4 || L > 6)
-                                L = 5;
-                        } else
-                           L = 5;
-                        System.out.println("Kmer size set to " + L);
-                        annLayer.initialize_panproteome(args[3], args[2], L);
-                } else {
+                } else if (args[1].equals("panproteome"))
+                        annLayer.initialize_panproteome(args[3], args[2]);
+                else {
                     print_help_comment();
                     System.exit(1);
                 }
