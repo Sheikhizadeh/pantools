@@ -3,5 +3,5 @@
 <properties>
 <comment/>
 <entry key="PROFILING_POINTS">false</entry>
-<entry key="ACTIVATED_FEATURES">#org.netbeans.modules.profiler.v2.features.MonitorFeature@</entry>
+<entry key="ACTIVATED_FEATURES">#org.netbeans.modules.profiler.v2.features.MethodsFeature@</entry>
 </properties>

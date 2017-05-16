@@ -698,7 +698,7 @@ public class ProteinAlignment {
      */
     public long get_similarity(String s1, String s2) {
         int i, j;
-        double match_score = 0, max_score = 0, match_length = 0;
+        //double match_score = 0, max_score = 0, match_length = 0;
         int m = s1.length(), n = s2.length();
         //return Math.random()*80;
         for (i = 1; i <= m; i++) {
@@ -716,7 +716,7 @@ public class ProteinAlignment {
                 matrix[i][j] = Math.max( match[s1.charAt(i-1)][s2.charAt(j-1)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
             }
         }
-        i = m;
+        /*i = m;
         j = n;
         while (i > 0 && j > 0) {
             if (matrix[i][j] == up[i][j]) {
@@ -731,7 +731,7 @@ public class ProteinAlignment {
                 j = j - 1;
             }
         }      
-        //return 100 * (match_score / max_score) * Math.sqrt(match_length / Math.max(m, n));
+        return 100 * (match_score / max_score) * Math.sqrt(match_length / Math.max(m, n));*/
         return matrix[m][n];
     }
 }

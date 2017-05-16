@@ -63,7 +63,7 @@ public class Pantools {
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
     public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
     public static Label homology_group_lable = DynamicLabel.label("homology_group");
-    public static Label pentamer_lable = DynamicLabel.label("pentamer");
+    public static Label kmer_lable = DynamicLabel.label("kmer");
 
     
     public static enum RelTypes implements RelationshipType {
@@ -78,9 +78,9 @@ public class Pantools {
         is_parent_of,
         contributes_to,// for connecting CDSs to mRNA
         branches, //to connect tree nodes
-        crosses, // between crossing genes
         visits,
-        precedes
+        precedes, 
+        is_homolog_to
     }
 
     public static long startTime;
@@ -114,7 +114,13 @@ public class Pantools {
                 if (args[1].equals("pangenome"))
                     seqLayer.initialize_pangenome(args[3],args[2]);
                 else if (args[1].equals("panproteome")){
-                        int L= args.length > 4 ? Integer.parseInt(args[4]) : 6;
+                        int L;
+                        if (args.length > 4){
+                            L = Integer.parseInt(args[4]);
+                            if (L > 3 && L < 7)
+                                L = 5;
+                        } else
+                           L = 5;
                         System.out.println("Kmer size = " + L);
                         annLayer.initialize_panproteome(args[3], args[2], L);
                 } else {

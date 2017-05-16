@@ -681,13 +681,17 @@ public class SequenceLayer {
             neighbor_len = (int) neighbor.getProperty("length");
             if (rel_name.charAt(1) == 'F') // Enterring forward side
                 if (seq.length() + neighbor_len - K + 1 > seq_len) // neighbor is the last node of the path
+                    //loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), 0, seq_len - seq.length() + K - 2);
                     loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), K - 1, seq_len - seq.length() + K - 2);
                 else 
+                    //loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - 1);
                     loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), K - 1, neighbor_len - 1);
             else // Enterring reverse side
                 if (seq.length() + neighbor_len - K + 1 > seq_len) // neighbor is the last node of the pat
+                    //loc += append_rev(seq, (String) neighbor.getProperty("sequence"), neighbor_len - (seq_len - seq.length()), neighbor_len - 1);
                     loc += append_rev(seq, (String) neighbor.getProperty("sequence"), neighbor_len - K - (seq_len - seq.length()) + 1, neighbor_len - K);
                 else 
+                    //loc += append_rev(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - 1);
                     loc += append_rev(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
             node = neighbor;
         } // while
@@ -834,7 +838,6 @@ public class SequenceLayer {
         seq = address[1];
         loc = address[2];
         node_len = (int) node.getProperty("length");
-        num_bases += (K - 1);
         ++num_nodes;
         split_node = graphDb.createNode(node_label);
         //System.out.println("split "+node.getId()+" at "+pos+" in "+split_node.getId());
@@ -960,7 +963,6 @@ public class SequenceLayer {
                 indexDb.put_next_index(curr_index,last_kmer);
                 ++len;
                 //node.setProperty("length",(int)node.getProperty("length")+1);
-                ++num_bases;
                 pointer.node_id = id;
                 pointer.canonical = fwd_kmer.canonical;
                 pointer.offset = len - K;//(int)node.getProperty("length")-K;
@@ -988,7 +990,6 @@ public class SequenceLayer {
     private void create() {
         int[] address;
         address= new int[]{genome,sequence,position - K + 1};
-        num_bases += K;
         ++num_nodes;
         new_node = graphDb.createNode(node_label);
         //System.out.println("create "+new_node.getId());
@@ -1237,7 +1238,6 @@ public class SequenceLayer {
         //System.out.println("create_degenerate:"+degenerate_node.getId()+" position:"+position+" begin:"+address[2]);
         degenerate_node.setProperty("address", address);
         degenerate_node.setProperty("length", position - address[2]);
-        num_bases += (position - address[2]);
         if (!finish) {
             curr_index = indexDb.find(k_mer);
             indexDb.get_pointer(pointer, curr_index);
@@ -1484,12 +1484,15 @@ public class SequenceLayer {
             nodes_iterator = graphDb.findNodes(node_label);
             tx.success();
         }
+        num_bases = K - 1; // for the missed overlapped of the last node of each sequence which will not be stored 
         while (nodes_iterator.hasNext()){
             try (Transaction tx = graphDb.beginTx()) {
                 for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && nodes_iterator.hasNext() ; ++trsc) {
                     node = nodes_iterator.next();
                     addr = (int[]) node.getProperty("address");
                     node_length = (int) node.getProperty("length");
+                    num_bases += node_length - K + 1;
+                    //node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length - K + 1, true).toString());
                     node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
                 }
                 tx.success();
@@ -1506,6 +1509,8 @@ public class SequenceLayer {
                     node = nodes_iterator.next();
                     addr = (int[]) node.getProperty("address");
                     node_length = (int) node.getProperty("length");
+                    num_bases += node_length - K + 1;
+                    //node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length - K + 1, true).toString());
                     node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
                 }
                 tx.success();
