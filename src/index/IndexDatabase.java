@@ -128,33 +128,36 @@ public final class IndexDatabase {
      * @param K_size Size of K
      * @param genomeDb The genome database
      */
-    public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb) {
+    public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb, int k) {
         long p;
         IndexPointer null_pointer = new IndexPointer();
-        int k, previous_num_digits = 0, num_digits;
+        int i, previous_num_digits = 0, num_digits;
         long num, prev_num = 0;
         String output, cmd;
         try {
             Files.createDirectory(Paths.get(index_path));
             System.out.println("Running KMC2...                      ");
-            K = Math.round((float)(Math.log(genomeDb.num_bytes*2)/Math.log(4)));
-            K = K%2==0 ? K+1 : K;
-            while(true){
-            // -m<size> - max amount of RAM in GB (from 1 to 1024); default: 12
-            // -ci<value> - exclude k-mers occurring less than <value> times (default: 2)
-                cmd = "kmc -r -k" + K + " -t" + cores + " -m" + 
-                (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
-                (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path;
-                output = executeCommand(cmd);        
-                num = Long.parseLong(output.substring(output.lastIndexOf("unique")).split("\\s+")[4]);
-                num_digits = (int)Math.log10(num-prev_num+1)+1;
-                if (num_digits < previous_num_digits)
-                    break;
-                prev_num = num;
-                previous_num_digits = num_digits;
-                K += 2;
-            }
-            System.out.println("K = " + K + "\nSorting Kmers...                      ");
+            if (k == -1){
+                K = Math.round((float)(Math.log(genomeDb.num_bytes*2)/Math.log(4)));
+                K = K%2==0 ? K+1 : K;
+                while(true){
+                // -m<size> - max amount of RAM in GB (from 1 to 1024); default: 12
+                // -ci<value> - exclude k-mers occurring less than <value> times (default: 2)
+                    cmd = "kmc -r -k" + K + " -t" + cores + " -m" + 
+                    (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
+                    (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path;
+                    output = executeCommand(cmd);        
+                    num = Long.parseLong(output.substring(output.lastIndexOf("unique")).split("\\s+")[4]);
+                    num_digits = (int)Math.log10(num-prev_num+1)+1;
+                    if (num_digits < previous_num_digits)
+                        break;
+                    prev_num = num;
+                    previous_num_digits = num_digits;
+                    K += 2;
+                }
+            } else
+                K = k;
+            System.out.println("K set to " + K + "\nSorting Kmers...                      ");
             output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
         // Small databases are usually sorted already    
             if (output.startsWith("This database contains sorted k-mers already!")) {
@@ -231,7 +234,7 @@ public final class IndexDatabase {
             MappedByteBuffer pre_buff;
             for (q = 0, p = 0; p < 8; ++p) {
                 pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
-                for (k = 0; k < len / 8; ++k, ++q) {
+                for (i = 0; i < len / 8; ++i, ++q) {
                     prefix_ptr[q] = read_long(pre_buff);
                 }
                 pre_buff = null;
@@ -245,9 +248,9 @@ public final class IndexDatabase {
             suf_parts_size = new long[suf_parts_num];
             suf_file = new RandomAccessFile(index_path + "/sorted.kmc_suf", "r");
             suf_buff = new MappedByteBuffer[suf_parts_num];
-            for (k = 0; k < suf_parts_num; ++k) {
-                suf_parts_size[k] = (int) (k == suf_parts_num - 1 ? (kmers_num * suf_rec_size) % MAX_BYTE_COUNT : MAX_BYTE_COUNT);
-                suf_buff[k] = suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + k * suf_parts_size[0], suf_parts_size[k]);
+            for (i = 0; i < suf_parts_num; ++i) {
+                suf_parts_size[i] = (int) (i == suf_parts_num - 1 ? (kmers_num * suf_rec_size) % MAX_BYTE_COUNT : MAX_BYTE_COUNT);
+                suf_buff[i] = suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + i * suf_parts_size[0], suf_parts_size[i]);
             }
             // mapping pointers file into the memory
             MAX_BYTE_COUNT = MAX_BYTE_COUNT / POINTER_LENGTH * POINTER_LENGTH;
@@ -255,9 +258,9 @@ public final class IndexDatabase {
             ptr_parts_size = new long[ptr_parts_num];
             ptr_file = new RandomAccessFile(index_path + "/pointers.db", "rw");
             ptr_buff = new MappedByteBuffer[ptr_parts_num];
-            for (k = 0; k < ptr_parts_num; ++k) {
-                ptr_parts_size[k] = (int) (k == ptr_parts_num - 1 ? (kmers_num * POINTER_LENGTH) % MAX_BYTE_COUNT : MAX_BYTE_COUNT);
-                ptr_buff[k] = ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, k * ptr_parts_size[0], ptr_parts_size[k]);
+            for (i = 0; i < ptr_parts_num; ++i) {
+                ptr_parts_size[i] = (int) (i == ptr_parts_num - 1 ? (kmers_num * POINTER_LENGTH) % MAX_BYTE_COUNT : MAX_BYTE_COUNT);
+                ptr_buff[i] = ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, i * ptr_parts_size[0], ptr_parts_size[i]);
             }
             for (p = 0; p < kmers_num; ++p) {
                 put_pointer(null_pointer, p);

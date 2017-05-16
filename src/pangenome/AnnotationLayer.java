@@ -117,7 +117,7 @@ public class AnnotationLayer {
         StringBuilder protein = new StringBuilder();
         ResourceIterator<Node> kmers;
         Node kmer, panproteome, protein_node = null;
-        int i,trsc, num_proteins = 1, genome;
+        int i,trsc, num_proteins = 0, genome, num_kmers = 0;
         L = k_size;
         long[] kmer_node_ids = new long[(int)Math.pow(20,L)];
         int[] code = new int[256];
@@ -151,7 +151,7 @@ public class AnnotationLayer {
                                     protein_node.setProperty("protein", protein.toString());
                                     protein_node.setProperty("protein_length", protein.length());
                                     protein_node.setProperty("genome",genome);
-                                    kmerize_protein(protein_node, protein, kmer_node_ids, code);
+                                    num_kmers += kmerize_protein(protein_node, protein, kmer_node_ids, code);
                                     protein.setLength(0);
                                 }
                                 protein_ID = line.substring(1);
@@ -159,7 +159,7 @@ public class AnnotationLayer {
                             else
                                 protein.append(line);
                             if (num_proteins % 11 == 1)
-                                System.out.print("\rnum_proteins : " + num_proteins);
+                                System.out.print("\r" + num_proteins + " proteins " + num_kmers + " kmers: ");
                         }
                         tx.success();
                     }
@@ -172,24 +172,29 @@ public class AnnotationLayer {
                         protein_node.setProperty("protein", protein.toString());
                         protein_node.setProperty("protein_length", protein.length());
                         protein_node.setProperty("genome",genome - 1);
-                        kmerize_protein(protein_node, protein, kmer_node_ids, code);
+                        num_kmers += kmerize_protein(protein_node, protein, kmer_node_ids, code);
                         protein.setLength(0);
                         tx.success();
                     }
                 }
             }
-            try (Transaction tx = graphDb.beginTx()) {
+            System.out.println("\r" + num_proteins + " proteins " + num_kmers + " kmers: ");
+            try (Transaction tx1 = graphDb.beginTx()) {
                 panproteome = graphDb.createNode(pangenome_label);
-                panproteome.setProperty("kmer_size", L);
+                panproteome.setProperty("k_mer_size", L);
                 panproteome.setProperty("num_genomes", genome - 1);
                 panproteome.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
-                System.out.println("\rnum_proteins : " + num_proteins);
                 kmers = graphDb.findNodes(kmer_lable);
                 while (kmers.hasNext()){
-                    kmer = kmers.next(); 
-                    kmer.setProperty("degree", kmer.getDegree());
+                    try (Transaction tx2 = graphDb.beginTx()) {
+                        for (trsc = 0; kmers.hasNext() && trsc < 100 * MAX_TRANSACTION_SIZE; ++trsc){
+                            kmer = kmers.next(); 
+                            kmer.setProperty("degree", kmer.getDegree());
+                        }
+                        tx2.success();
+                    }
                 }
-                tx.success();
+                tx1.success();
             }
             protein_paths.close();
         } catch (IOException ex){
@@ -197,9 +202,9 @@ public class AnnotationLayer {
         }        
     }
     
-    private void kmerize_protein(Node protein_node, StringBuilder protein, long[] kmer_node_ids, int[] code){
+    private int kmerize_protein(Node protein_node, StringBuilder protein, long[] kmer_node_ids, int[] code){
         Node kmer_node;
-        int i,start, protein_length, kmer_index, caa;
+        int i,start, protein_length, kmer_index, caa, num = 0;
         protein_length = protein.length();
         //char[] kmer = new char[L];
         int[] seed = new int[L];
@@ -215,12 +220,14 @@ public class AnnotationLayer {
             }
             if (kmer_node_ids[kmer_index] == 0){
                 kmer_node = graphDb.createNode(kmer_lable);
+                ++num;
                 //kmer_node.setProperty("sequence", kmer);
                 kmer_node_ids[kmer_index] = kmer_node.getId();
             } else 
                 kmer_node = graphDb.getNodeById(kmer_node_ids[kmer_index]);
             protein_node.createRelationshipTo(kmer_node, RelTypes.visits);//.setProperty("position",String.valueOf(start+1));
         }
+        return num;
     }
     
     /**
@@ -645,7 +652,7 @@ public class AnnotationLayer {
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
         try (Transaction tx = graphDb.beginTx()) {
-            L = (int)graphDb.findNodes(pangenome_label).next().getProperty("kmer_size");
+            L = (int)graphDb.findNodes(pangenome_label).next().getProperty("k_mer_size");
             tx.success();
         }
         pro_aligner = new ProteinAlignment(-10,-1,MAX_LENGTH);

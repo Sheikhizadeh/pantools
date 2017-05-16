@@ -94,7 +94,7 @@ public class SequenceLayer {
      * @param genome_paths_file Path to the FASTA genome files. 
      * @param pangenome_path Path to the database folder
      */  
-    public void initialize_pangenome(String genome_paths_file, String pangenome_path) {
+    public void initialize_pangenome(String genome_paths_file, String pangenome_path, int k) {
     // If a database folder is already exist in the specified path, removes all the content of it.    
         File theDir = new File(pangenome_path);
         if (theDir.exists()) {
@@ -119,7 +119,7 @@ public class SequenceLayer {
         num_nodes = 0;
         num_edges = 0;
         genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH, genome_paths_file);
-        indexDb = new IndexDatabase(pangenome_path + INDEX_DATABASE_PATH, genome_paths_file, genomeDb);
+        indexDb = new IndexDatabase(pangenome_path + INDEX_DATABASE_PATH, genome_paths_file, genomeDb, k);
         K = get_K();
         try (Transaction tx = graphDb.beginTx()) {
             db_node = graphDb.createNode(pangenome_label);

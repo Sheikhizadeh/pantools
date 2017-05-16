@@ -24,11 +24,13 @@ List of commands and examples for the provided sample data :
 1. build:
    To build a pan-genome out of a set of genomes or a pan-proteome out of a set of proteins.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  pangenome [or panproteome] PATH_TO_THE_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE [or PATH_TO_THE_PROTEOMES_PATH_FILE]
+   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  pangenome [or panproteome] PATH_TO_THE_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE [or PATH_TO_THE_PROTEOMES_PATH_FILE] [K_SIZE]
 
    PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files of genomes; each in a seperated line.
    PATH_TO_THE_PROTEOMES_PATH_FILE : a text file containing paths to FASTA files of proteomes; each in a seperated line.
-   PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored.  
+   PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored. 
+   K_SIZE : If it is not given or is out of range ( 6 <= K <= 255 for a pangenome, 4 <= K <= 6 for a panproteome) it would be chosen by default. 
+            Default value for a pangenome is calculated automatically and for a panproteome it is 5.    
 
    Example: 
    
