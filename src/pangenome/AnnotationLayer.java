@@ -112,13 +112,13 @@ public class AnnotationLayer {
         }
     }
 
-    public void initialize_panproteome(String protein_paths_file, String pangenome_path, int k_size){
+    public void initialize_panproteome(String protein_paths_file, String pangenome_path, int l_size){
         String file_path, line, protein_ID = "";
         StringBuilder protein = new StringBuilder();
         ResourceIterator<Node> kmers;
         Node kmer, panproteome, protein_node = null;
         int i,trsc, num_proteins = 0, genome, num_kmers = 0;
-        L = k_size;
+        L = l_size;
         long[] kmer_node_ids = new long[(int)Math.pow(20,L)];
         int[] code = new int[256];
         char[] aminoacids = new char[]
@@ -181,7 +181,7 @@ public class AnnotationLayer {
             System.out.println("\r" + num_proteins + " proteins " + num_kmers + " kmers: ");
             try (Transaction tx1 = graphDb.beginTx()) {
                 panproteome = graphDb.createNode(pangenome_label);
-                panproteome.setProperty("k_mer_size", L);
+                panproteome.setProperty("l_mer_size", L);
                 panproteome.setProperty("num_genomes", genome - 1);
                 panproteome.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
                 kmers = graphDb.findNodes(kmer_lable);
@@ -647,12 +647,16 @@ public class AnnotationLayer {
      */
     public void group(String[] args) {
         String pangenome_path = args[1];
+        Node db_node;
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
         try (Transaction tx = graphDb.beginTx()) {
-            L = (int)graphDb.findNodes(pangenome_label).next().getProperty("k_mer_size");
+            db_node = graphDb.findNodes(pangenome_label).next();
+            L = (int)db_node.getProperty("l_mer_size", -1);
+            if (L == -1)
+                L = 5;
             tx.success();
         }
         pro_aligner = new ProteinAlignment(-10,-1,MAX_LENGTH);

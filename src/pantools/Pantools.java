@@ -98,7 +98,7 @@ public class Pantools {
      * @param args Command line arguments
      */
     public static void main(String[] args) {
-        int K;
+        int K, L;
         if (args.length < 2 || args[1].equals("--help") || args[1].equals("-h")) {
             print_help_comment();
             System.exit(1);
@@ -122,13 +122,13 @@ public class Pantools {
                     seqLayer.initialize_pangenome(args[3],args[2], K);
                 } else if (args[1].equals("panproteome")){
                         if (args.length > 4){
-                            K = Integer.parseInt(args[4]);
-                            if (K < 4 || K > 6)
-                                K = 5;
+                            L = Integer.parseInt(args[4]);
+                            if (L < 4 || L > 6)
+                                L = 5;
                         } else
-                           K = 5;
-                        System.out.println("Kmer size set to " + K);
-                        annLayer.initialize_panproteome(args[3], args[2], K);
+                           L = 5;
+                        System.out.println("Kmer size set to " + L);
+                        annLayer.initialize_panproteome(args[3], args[2], L);
                 } else {
                     print_help_comment();
                     System.exit(1);
