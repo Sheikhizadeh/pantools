@@ -155,8 +155,12 @@ public final class IndexDatabase {
                     previous_num_digits = num_digits;
                     K += 2;
                 }
-            } else
+            } else {
                 K = k;
+                executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
+                    (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
+                    (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);            
+            }
             System.out.println("K set to " + K + "\nSorting Kmers...                      ");
             output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
         // Small databases are usually sorted already    
