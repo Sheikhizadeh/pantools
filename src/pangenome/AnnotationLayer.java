@@ -177,34 +177,6 @@ public class AnnotationLayer {
         }        
     }
     
-    private int kmerize_protein(Node protein_node, String protein, long[] kmer_node_ids, int[] code){
-        Node kmer_node;
-        int i,start, protein_length, kmer_index, caa, num = 0;
-        protein_length = protein.length();
-        //char[] kmer = new char[L];
-        int[] seed = new int[L];
-        for (i = 0; i < L - 1; ++i)
-            seed[i] = protein.charAt(i);
-        for (start = 0; start < protein_length - L; ++start){// for each penta-mer of the protein
-            seed[(start + L - 1) % L] = protein.charAt(start + L - 1);
-            kmer_index = 0;
-            for (i = 0; i < L; ++i){
-                caa = seed[(start + i) % L];
-                kmer_index = kmer_index * 20 + code[caa];
-               //kmer[i] = (char)caa;
-            }
-            if (kmer_node_ids[kmer_index] == 0){
-                kmer_node = graphDb.createNode(kmer_lable);
-                ++num;
-                //kmer_node.setProperty("sequence", kmer);
-                kmer_node_ids[kmer_index] = kmer_node.getId();
-            } else 
-                kmer_node = graphDb.getNodeById(kmer_node_ids[kmer_index]);
-            protein_node.createRelationshipTo(kmer_node, RelTypes.visits);//.setProperty("position",String.valueOf(start+1));
-        }
-        return num;
-    }
-    
     /**
      * Adds nodes related to different genomic features to the pangenome.
      * 
@@ -621,6 +593,7 @@ public class AnnotationLayer {
      * args[3] LEN_FACTOR to be replaced by the default value, if given
      */
     public void group(String[] args) {
+        LinkedList<Node> proteins = new LinkedList();
         String pangenome_path = args[1];
         THRESHOLD = Double.parseDouble(args[2]);
         if (args.length > 3){
@@ -636,27 +609,20 @@ public class AnnotationLayer {
         startTime = System.currentTimeMillis();
         pro_aligner = new ProteinAlignment(-10,-1,MAX_LENGTH);
         System.out.println("Threshold set to " + THRESHOLD);
-        find_crossing_proteins();
-        build_homology_groups();
+        kmerize_proteins(proteins);
+        find_crossing_proteins(proteins);
+        build_homology_groups(proteins);
         build_orthology_groups(pangenome_path);
     }
     
-    public void find_crossing_proteins(){
-        int i, degree, p, count, trsc, num_ids, num_kmers = 0;
-        double similarity, max_kmer_freq;
-        LinkedList<Node> proteins = new LinkedList();
+    private void kmerize_proteins(LinkedList<Node> proteins){
+        Node kmer_node, protein_node, db_node;
+        int i, trsc, start, protein_length, kmer_index, caa, num_proteins = 0, num_kmers = 0;
+        String protein;
+        int[] seed = new int[L];
+        long[] kmer_node_ids = new long[(int)Math.pow(20,L)];
         ResourceIterator<Node> proteins_iterator;
         ResourceIterator<Node> kmers;
-        long[] crossing_protein_ids= new long[10000000];
-        Node db_node, protein_node, kmer_node, crossing_protein_node;
-        Relationship r;
-        long other_node_id, protein_node_id;
-        double fraction = (10.0 - L) / 100.0;
-        int protein_length, crossing_protein_length, shorter_len, num_proteins = 0, longer_len;
-        char match;
-        String protein, crossing_protein, shorter_protein;
-        long perfect_score, crossing_protein_id, p_id;
-        long[] kmer_node_ids = new long[(int)Math.pow(20,L)];
         int[] code = new int[256];
         char[] aminoacids = new char[]
         {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
@@ -672,12 +638,31 @@ public class AnnotationLayer {
                         protein_node = proteins_iterator.next();
                         protein = (String)protein_node.getProperty("protein", null);
                         if (protein != null){
-                            num_kmers += kmerize_protein(protein_node, protein, kmer_node_ids, code);
+                            protein_length = protein.length();
+                            for (i = 0; i < L - 1; ++i)
+                                seed[i] = protein.charAt(i);
+                            for (start = 0; start < protein_length - L; ++start){// for each penta-mer of the protein
+                                seed[(start + L - 1) % L] = protein.charAt(start + L - 1);
+                                kmer_index = 0;
+                                for (i = 0; i < L; ++i){
+                                    caa = seed[(start + i) % L];
+                                    kmer_index = kmer_index * 20 + code[caa];
+                                   //kmer[i] = (char)caa;
+                                }
+                                if (kmer_node_ids[kmer_index] == 0){
+                                    kmer_node = graphDb.createNode(kmer_lable);
+                                    ++num_kmers;
+                                    //kmer_node.setProperty("sequence", kmer);
+                                    kmer_node_ids[kmer_index] = kmer_node.getId();
+                                } else 
+                                    kmer_node = graphDb.getNodeById(kmer_node_ids[kmer_index]);
+                                protein_node.createRelationshipTo(kmer_node, RelTypes.visits);//.setProperty("position",String.valueOf(start+1));
+                            }                            
                             ++num_proteins;
                             proteins.add(protein_node);
                         }
                         if (num_proteins % 11 == 0)
-                            System.out.print("\rNumber of proteins : " + num_proteins);
+                            System.out.print("\r" + num_proteins + " proteins, " + num_kmers + " kmers" );
                     }
                     tx2.success();
                 }
@@ -685,7 +670,7 @@ public class AnnotationLayer {
             tx1.success();
             proteins_iterator.close();
         }
-        System.out.println("\rNumber of proteins : " + num_proteins);
+        System.out.println("\r" + num_proteins + " proteins, " + num_kmers + " kmers" );
         try (Transaction tx1 = graphDb.beginTx()) {
             db_node = graphDb.findNodes(pangenome_label).next();
             db_node.setProperty("l_mer_size", L);
@@ -701,13 +686,27 @@ public class AnnotationLayer {
             }
             tx1.success();
         }
-        System.out.println("Number of kmers : " + num_kmers);
+    }
+    
+    public void find_crossing_proteins(LinkedList<Node> proteins){
+        int i, degree, p, count, trsc, num_ids;
+        double similarity, max_kmer_freq;
+        long[] crossing_protein_ids= new long[10000000];
+        Node protein_node, kmer_node, crossing_protein_node;
+        Relationship r;
+        Iterator<Node> proteins_itr = proteins.iterator();
+        long other_node_id, protein_node_id;
+        double fraction = (10.0 - L) / 100.0;
+        int protein_length, crossing_protein_length, shorter_len, num_proteins = proteins.size(), longer_len;
+        char match;
+        String protein, crossing_protein, shorter_protein;
+        long perfect_score, crossing_protein_id, p_id;
         System.out.println("Finding intersecting proteins...");
-        max_kmer_freq = 0.01 * num_proteins;
-        for (p = 0; !proteins.isEmpty(); ) {
+        max_kmer_freq = 0.03 * num_proteins;
+        for (p = 0; proteins_itr.hasNext(); ) {
             try (Transaction tx = graphDb.beginTx()) {
-                for (trsc = 0; !proteins.isEmpty()&& trsc < 2 * MAX_TRANSACTION_SIZE; ++trsc){
-                    protein_node = proteins.remove();
+                for (trsc = 0; proteins_itr.hasNext() && trsc < 2 * MAX_TRANSACTION_SIZE; ++trsc){
+                    protein_node = proteins_itr.next();
                     protein = (String)protein_node.getProperty("protein", null);
                     if (protein != null ){
                         ++p;
@@ -800,18 +799,9 @@ public class AnnotationLayer {
     /**
      * Creates homology nodes which connect the homologous coding genes
      */
-    private void build_homology_groups(){
+    private void build_homology_groups(LinkedList<Node> proteins){
         int num_groups = 0, num_grouped_proteins;
         Node protein_node;
-        LinkedList<Node> proteins = new LinkedList();
-        ResourceIterator<Node> proteins_iterator;
-        try (Transaction tx = graphDb.beginTx()) {
-            proteins_iterator = graphDb.findNodes(mRNA_label);
-            while (proteins_iterator.hasNext())
-                proteins.add(proteins_iterator.next());
-            tx.success();
-            proteins_iterator.close();
-        } 
         while (!proteins.isEmpty()) {
             protein_node = proteins.remove();
             num_grouped_proteins = breadth_first_search(protein_node);

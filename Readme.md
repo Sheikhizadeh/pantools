@@ -29,7 +29,7 @@ List of commands and examples for the provided sample data :
    PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files of genomes; each in a seperated line.
    PATH_TO_THE_PROTEOMES_PATH_FILE : a text file containing paths to FASTA files of proteomes; each in a seperated line.
    PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored. 
-   K_SIZE : If it is not given or is out of range ( 6 <= K <= 255 ), an optimal value would be calculated automatically.    
+   K_SIZE : If it is not given or is out of range ( 6 <= K_SIZE <= 255 ), an optimal value would be calculated automatically.    
 
    Example: 
    
@@ -74,7 +74,7 @@ List of commands and examples for the provided sample data :
    java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE THRESHOLD [K_SIZE] 
 
    THRESHOLD : The minimum similarity needed to call two proteins homologous. ( 0 <= THRESHOLD <= 100) 
-   K_SIZE : If it is not given or is out of range ( 4 <= K <= 6 ), it would be set to 5.    
+   K_SIZE : If it is not given or is out of range ( 4 <= K_SIZE <= 6 ), it would be set to 5.    
    
 Example: 
 

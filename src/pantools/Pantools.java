@@ -205,11 +205,12 @@ public class Pantools {
 "1. build:\n" +
 "   To build a pan-genome out of a set of genomes or a pan-proteome out of a set of proteins.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  pangenome [or panproteome] PATH_TO_THE_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE [or PATH_TO_THE_PROTEOMES_PATH_FILE]\n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  pangenome [or panproteome] PATH_TO_THE_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE [or PATH_TO_THE_PROTEOMES_PATH_FILE] [K_SIZE]\n" +
 "\n" +
 "   PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files of genomes; each in a seperated line.\n" +
 "   PATH_TO_THE_PROTEOMES_PATH_FILE : a text file containing paths to FASTA files of proteomes; each in a seperated line.\n" +
-"   PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored.  \n" +
+"   PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored. \n" +
+"   K_SIZE : If it is not given or is out of range ( 6 <= K_SIZE <= 255 ), an optimal value would be calculated automatically.    \n" +
 "\n" +
 "   Example: \n" +
 "   \n" +
@@ -251,11 +252,14 @@ public class Pantools {
 "4. group:\n" +
 "   To add homology and orthology nodes which point to a groups of homologous or orthologous genes. This functionality needs MCL to be installed on your machine.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE \n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE THRESHOLD [K_SIZE] \n" +
 "\n" +
-"   Example: \n" +
+"   THRESHOLD : The minimum similarity needed to call two proteins homologous. ( 0 <= THRESHOLD <= 100) \n" +
+"   K_SIZE : If it is not given or is out of range ( 4 <= K_SIZE <= 6 ), it would be set to 5.    \n" +
+"   \n" +
+"Example: \n" +
 "\n" +
-"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database\n" +
+"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database 75 5\n" +
 "\n" +
 "Visualization in the Neo4j browser\n" +
 "----------------------------------\n" +
