@@ -46,6 +46,7 @@ import org.neo4j.graphdb.schema.IndexDefinition;
 import org.neo4j.graphdb.schema.Schema;
 import static pangenome.SequenceLayer.append_fwd;
 import static pangenome.SequenceLayer.append_rev;
+import static pangenome.SequenceLayer.getFolderSize;
 
 import static pantools.Pantools.GENOME_DATABASE_PATH;
 import static pantools.Pantools.GRAPH_DATABASE_PATH;
@@ -613,6 +614,13 @@ public class AnnotationLayer {
         find_intersecting_proteins(proteins);
         build_homology_groups(proteins);
         build_orthology_groups(pangenome_path);
+        File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
+        for (File f : directory.listFiles()) {
+            if (f.getName().startsWith("neostore.transaction.db.")) {
+                f.delete();
+            }
+        }
+        System.out.println("graph.db size: " + getFolderSize(new File(pangenome_path + GRAPH_DATABASE_PATH)) + " MB");        
     }
     
     private void kmerize_proteins(LinkedList<Node> proteins){
@@ -893,15 +901,16 @@ public class AnnotationLayer {
      * divides the pre-calculated homology groups into orthology groups using MCL algorithm 
      */   
     void build_orthology_groups(String pangenome_path) {
-        int num_groups = 0, trsc;
+        int i, num_groups = 0, trsc;
         int[] copy_number;
         ResourceIterator<Node> nodes;
         LinkedList<Node> homology_group_nodes = new LinkedList();
         LinkedList<Node> orthology_group_nodes = new LinkedList();
         LinkedList<Node> members = new LinkedList();
         Node homology_group_node, orthology_group_node, single_protein;
-        String graph_path, clusters_path;
-        FileReader clusters_file;
+        String graph_path, clusters_path, line;
+        String[] fields;
+        BufferedReader clusters_file;
         BufferedWriter groups_file;
         try (Transaction tx = graphDb.beginTx()) {
             copy_number = new int[(int)graphDb.findNodes(pangenome_label).next().getProperty("num_genomes")+1];                
@@ -925,12 +934,15 @@ public class AnnotationLayer {
                             write_similaity_matrix(members, graph_path);
                             executeCommand("mcl " + graph_path + " --abc -I 5 -o " + clusters_path);
                             new File(graph_path).delete();
-                            clusters_file = new FileReader(clusters_path);
+                            clusters_file = new BufferedReader(new FileReader(clusters_path));
                             while (clusters_file.ready()){
+                                line = clusters_file.readLine();
+                                fields = line.split("\\s");
                                 orthology_group_node = graphDb.createNode(orthology_group_lable);
                                 orthology_group_nodes.add(orthology_group_node);
                                 ++num_groups;
-                                make_group(clusters_file, orthology_group_node);
+                                for (i = 0; i < fields.length; ++i)
+                                    orthology_group_node.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[i])), RelTypes.has_ortholog);
                                 homology_group_node.createRelationshipTo(orthology_group_node, RelTypes.splits_into);
                             }
                             clusters_file.close();
@@ -965,27 +977,6 @@ public class AnnotationLayer {
         }
     }   
     
-    private void make_group(FileReader clusters_file, Node orthology_group_node){
-        char ch;
-        long id = 0;
-        Node protein_node;
-        try{
-            while ((ch = (char)clusters_file.read()) != '\n'){
-                if (ch == '\t'){
-                    protein_node = graphDb.getNodeById(id);
-                    orthology_group_node.createRelationshipTo(protein_node, RelTypes.has_ortholog);
-                    id = 0;
-                }
-                else
-                    id = id *10 + Character.getNumericValue(ch);
-            }
-            protein_node = graphDb.getNodeById(id);
-            orthology_group_node.createRelationshipTo(protein_node, RelTypes.has_ortholog);
-        } catch (IOException ex){
-
-        }
-    }
-    
     /**
      * Given a homology group complete all the pairwise similarities between its members and 
      * writes the weighted edges of the graph in SIMILARITY_GRAPH_FILE_NAME to be used by MCL clustering algorithm.
@@ -996,7 +987,7 @@ public class AnnotationLayer {
         Node protein1_node, protein2_node;
         Relationship homology_edge;
         String protein1, protein2, shorter_protein;
-        int i, protein_len1, protein_len2, shorter_len, longer_len, genome1, genome2;
+        int i, protein_len1, protein_len2, shorter_len, longer_len;
         double similarity;
         long perfect_score;
         try (PrintWriter graph = new PrintWriter(graph_path)){
@@ -1009,10 +1000,7 @@ public class AnnotationLayer {
                             homology_edge = get_edge(protein1_node, protein2_node, RelTypes.is_homolog_to);
                             if (homology_edge != null){
                                 similarity = (double)homology_edge.getProperty("similarity");
-                                genome1 = (int)protein1_node.getProperty("genome");
-                                genome2 = (int)protein2_node.getProperty("genome");
-                            // to penalize paralogs
-                                graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity - THRESHOLD, genome1 != genome2 ? 1.2 : 1.0) +"\n");
+                                graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity - THRESHOLD / 2, 2) +"\n");
                             } else { // for detecting non_crossing homologs which are rare
                                 protein1 = (String)protein1_node.getProperty("protein");
                                 protein2 = (String)protein2_node.getProperty("protein");
@@ -1032,10 +1020,7 @@ public class AnnotationLayer {
                                         perfect_score += pro_aligner.match[shorter_protein.charAt(i)][shorter_protein.charAt(i)];
                                     similarity = (double)protein_similarity(protein1, protein2) / perfect_score * 100;
                                     if (similarity > THRESHOLD){
-                                        genome1 = (int)protein1_node.getProperty("genome");
-                                        genome2 = (int)protein2_node.getProperty("genome");
-                                    // to penalize paralogs
-                                        graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity - THRESHOLD, genome1 != genome2 ? 1.2 : 1.0) +"\n");
+                                        graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity - THRESHOLD / 2, 2) + "\n");
                                         protein1_node.createRelationshipTo(protein2_node, RelTypes.is_homolog_to).setProperty("similarity", similarity);
                                     }
                                 }

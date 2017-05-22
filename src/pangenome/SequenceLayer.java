@@ -1484,14 +1484,15 @@ public class SequenceLayer {
             nodes_iterator = graphDb.findNodes(node_label);
             tx.success();
         }
-        num_bases = K - 1; // for the missed overlapped of the last node of each sequence which will not be stored 
+        //num_bases = K - 1; // for the missed overlapped of the last node of each sequence which will not be stored 
         while (nodes_iterator.hasNext()){
             try (Transaction tx = graphDb.beginTx()) {
                 for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && nodes_iterator.hasNext() ; ++trsc) {
                     node = nodes_iterator.next();
                     addr = (int[]) node.getProperty("address");
                     node_length = (int) node.getProperty("length");
-                    num_bases += node_length - K + 1;
+                    num_bases += node_length;
+                    //num_bases += node_length - K + 1;
                     //node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length - K + 1, true).toString());
                     node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
                 }
@@ -1509,7 +1510,8 @@ public class SequenceLayer {
                     node = nodes_iterator.next();
                     addr = (int[]) node.getProperty("address");
                     node_length = (int) node.getProperty("length");
-                    num_bases += node_length - K + 1;
+                    num_bases += node_length;
+                    //num_bases += node_length - K + 1;
                     //node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length - K + 1, true).toString());
                     node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
                 }

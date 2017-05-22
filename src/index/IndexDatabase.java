@@ -137,7 +137,7 @@ public final class IndexDatabase {
         try {
             Files.createDirectory(Paths.get(index_path));
             System.out.println("Running KMC2...                      ");
-            if (k == -1){
+            if (k == -1){ // K is not given by the user, then calculate the optimal K
                 K = Math.round((float)(Math.log(genomeDb.num_bytes*2)/Math.log(4)));
                 K = K%2==0 ? K+1 : K;
                 while(true){
