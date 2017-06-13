@@ -80,7 +80,8 @@ public class Pantools {
         branches, //to connect tree nodes
         visits,
         precedes, 
-        is_homolog_to
+        is_homolog_to,
+        best_hits
     }
 
     public static long startTime;

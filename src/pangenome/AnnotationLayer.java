@@ -160,7 +160,7 @@ public class AnnotationLayer {
                     protein_node.setProperty("protein_ID", protein_ID);
                     protein_node.setProperty("protein", protein.toString());
                     protein_node.setProperty("protein_length", protein.length());
-                    protein_node.setProperty("genome",genome - 1);
+                    protein_node.setProperty("genome",genome);
                     protein.setLength(0);
                     tx.success();
                 }
@@ -603,13 +603,13 @@ public class AnnotationLayer {
                 L = 5;
         } else
            L = 5;
-        System.out.println("Kmer size set to " + L);        
+        System.out.println("Kmer size = " + L);        
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
         pro_aligner = new ProteinAlignment(-10,-1,MAX_LENGTH);
-        System.out.println("Threshold set to " + THRESHOLD);
+        System.out.println("Threshold = " + THRESHOLD);
         kmerize_proteins(proteins);
         find_intersecting_proteins(proteins);
         build_homology_groups(proteins);
@@ -901,17 +901,61 @@ public class AnnotationLayer {
      * divides the pre-calculated homology groups into orthology groups using MCL algorithm 
      */   
     void build_orthology_groups(String pangenome_path) {
-        int i, num_groups = 0, trsc;
+        int i, j, num_genomes, num_groups = 0, trsc, g1, g2;
         int[] copy_number;
+        double max_linkage;
+        double[][] phylogeny_distance;
+        int[][] count;
         ResourceIterator<Node> nodes;
         LinkedList<Node> homology_group_nodes = new LinkedList();
         LinkedList<Node> orthology_group_nodes = new LinkedList();
         LinkedList<Node> members = new LinkedList();
-        Node homology_group_node, orthology_group_node, single_protein;
+        Node homology_group_node, orthology_group_node, single_protein, p1, p2;
         String graph_path, clusters_path, line;
         String[] fields;
         BufferedReader clusters_file;
         BufferedWriter groups_file;
+        try (Transaction tx = graphDb.beginTx()) {
+            num_genomes = (int)graphDb.findNodes(pangenome_label).next().getProperty("num_genomes");
+            phylogeny_distance = new double[num_genomes + 1][];
+            count = new int[num_genomes + 1][];
+            for (i = 1; i < phylogeny_distance.length; ++i){
+                phylogeny_distance[i] = new double[num_genomes + 1];
+                count[i] = new int[num_genomes + 1];
+            }
+            nodes = graphDb.findNodes(mRNA_label);
+            while (nodes.hasNext()){
+                p1 = nodes.next();
+                g1 = (int)p1.getProperty("genome");
+                for (Relationship r: p1.getRelationships(Direction.OUTGOING, RelTypes.is_homolog_to)){
+                    p2 = r.getEndNode();
+                    g2 = (int)p2.getProperty("genome");
+                    phylogeny_distance[g1][g2] += (double)r.getProperty("similarity");
+                    phylogeny_distance[g2][g1] += (double)r.getProperty("similarity");
+                    ++count[g1][g2];
+                    ++count[g2][g1];
+                }
+            }
+            nodes.close();
+            for (max_linkage = 0, i = 1; i < phylogeny_distance.length; ++i)
+                for (j = 1; j < phylogeny_distance.length; ++j){
+                    phylogeny_distance[i][j] = phylogeny_distance[i][j]/count[i][j];
+                    if (phylogeny_distance[i][j] > max_linkage){
+                        max_linkage = phylogeny_distance[i][j];
+                    }
+                }
+            for (i = 1; i < phylogeny_distance.length; ++i){
+                for (j = 1; j < phylogeny_distance.length; ++j){
+                    if (i == j)
+                        phylogeny_distance[i][j] = 0;
+                    else
+                        phylogeny_distance[i][j] = max_linkage - phylogeny_distance[i][j];
+                    //System.out.printf("%.2f\t", phylogeny_distance[i][j]);
+                }
+                System.out.println();
+            }
+            tx.success();
+        }
         try (Transaction tx = graphDb.beginTx()) {
             copy_number = new int[(int)graphDb.findNodes(pangenome_label).next().getProperty("num_genomes")+1];                
             nodes = graphDb.findNodes(homology_group_lable);
@@ -931,7 +975,7 @@ public class AnnotationLayer {
                             clusters_path = pangenome_path + "/" + homology_group_node.getId() + ".clusters";
                             for (Relationship rel: homology_group_node.getRelationships(Direction.OUTGOING))
                                 members.add(rel.getEndNode());
-                            write_similaity_matrix(members, graph_path);
+                            write_similaity_matrix(members, graph_path, phylogeny_distance);
                             executeCommand("mcl " + graph_path + " --abc -I 5 -o " + clusters_path);
                             new File(graph_path).delete();
                             clusters_file = new BufferedReader(new FileReader(clusters_path));
@@ -982,49 +1026,28 @@ public class AnnotationLayer {
      * writes the weighted edges of the graph in SIMILARITY_GRAPH_FILE_NAME to be used by MCL clustering algorithm.
      * @param homology_group_node The homology group
      */
-    private void write_similaity_matrix(LinkedList<Node> members, String graph_path){
+    private void write_similaity_matrix(LinkedList<Node> members, String graph_path, double[][] phylogeny_distance){
         ListIterator<Node> itr1, itr2;
         Node protein1_node, protein2_node;
         Relationship homology_edge;
-        String protein1, protein2, shorter_protein;
-        int i, protein_len1, protein_len2, shorter_len, longer_len;
-        double similarity;
-        long perfect_score;
+        int num = 0, genome1, genome2;
+        double similarity, score;
         try (PrintWriter graph = new PrintWriter(graph_path)){
             for (itr1 = members.listIterator(); itr1.hasNext(); ){
                 protein1_node = itr1.next();
+                genome1 = (int)protein1_node.getProperty("genome");
                 for (itr2 = members.listIterator(itr1.nextIndex()); itr2.hasNext(); ){
                     try (Transaction tx = graphDb.beginTx()) {
                         for (int trsc = 0; itr2.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
                             protein2_node = itr2.next();
+                            genome2 = (int)protein2_node.getProperty("genome");
                             homology_edge = get_edge(protein1_node, protein2_node, RelTypes.is_homolog_to);
                             if (homology_edge != null){
                                 similarity = (double)homology_edge.getProperty("similarity");
-                                graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity - THRESHOLD / 2, 2) +"\n");
-                            } else { // for detecting non_crossing homologs which are rare
-                                protein1 = (String)protein1_node.getProperty("protein");
-                                protein2 = (String)protein2_node.getProperty("protein");
-                                protein_len1 = protein1.length();
-                                protein_len2 = protein2.length();
-                                if (protein_len1 < protein_len2){
-                                    shorter_protein =  protein1;
-                                    shorter_len = protein_len1;
-                                    longer_len = protein_len2;
-                                } else {
-                                    shorter_protein =  protein2;
-                                    shorter_len = protein_len2;
-                                    longer_len = protein_len1;
-                                }
-                                if (Math.abs(protein_len1 - protein_len2) <= (100 - THRESHOLD) / 100 * longer_len ){
-                                    for (perfect_score = 0, i = 0; i < shorter_len; ++i)
-                                        perfect_score += pro_aligner.match[shorter_protein.charAt(i)][shorter_protein.charAt(i)];
-                                    similarity = (double)protein_similarity(protein1, protein2) / perfect_score * 100;
-                                    if (similarity > THRESHOLD){
-                                        graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity - THRESHOLD / 2, 2) + "\n");
-                                        protein1_node.createRelationshipTo(protein2_node, RelTypes.is_homolog_to).setProperty("similarity", similarity);
-                                    }
-                                }
-                            }
+                                score = similarity + phylogeny_distance[genome1][genome2];
+                                //score = similarity - THRESHOLD + phylogeny_linkage[genome1][genome2];
+                                graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ score +"\n");
+                            }  
                         } 
                         tx.success();
                     }
@@ -1035,7 +1058,8 @@ public class AnnotationLayer {
         } catch (IOException ex){
         }
     }
-
+ 
+    
     /**
      * Retrieves the first random relationship of a specific type which connects two nodes in any direction. 
      * @param node1 The first node
