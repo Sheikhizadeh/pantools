@@ -915,11 +915,11 @@ public class SequenceLayer {
         {
             fwd_code=genomeDb.get_code(genome,sequence,position+j);
             rev_code=3-fwd_code;
-            fwd_kmer.next_up_kmer(fwd_code);
-            rev_kmer.next_down_kmer(rev_code);
+            fwd_kmer.next_fwd_kmer(fwd_code);
+            rev_kmer.next_rev_kmer(rev_code);
         }   
-        fwd_kmer.canonical=fwd_kmer.compare(rev_kmer)==-1;
-        return fwd_kmer.canonical?fwd_kmer:rev_kmer;             
+        fwd_kmer.set_canonical(fwd_kmer.compare(rev_kmer) == -1);
+        return fwd_kmer.get_canonical() ? fwd_kmer : rev_kmer;             
     }
     
     /**
@@ -964,7 +964,7 @@ public class SequenceLayer {
                 ++len;
                 //node.setProperty("length",(int)node.getProperty("length")+1);
                 pointer.node_id = id;
-                pointer.canonical = fwd_kmer.canonical;
+                pointer.canonical = fwd_kmer.get_canonical();
                 pointer.offset = len - K;//(int)node.getProperty("length")-K;
                 indexDb.put_pointer(pointer, curr_index);
                 last_kmer=curr_index;
@@ -999,7 +999,7 @@ public class SequenceLayer {
         new_node.setProperty("first_kmer",curr_index);
     // Set the pointer to the Kmer in the pointer database    
         pointer.node_id = new_node.getId();
-        pointer.canonical = fwd_kmer.canonical;
+        pointer.canonical = fwd_kmer.get_canonical();
         pointer.offset = 0;
         indexDb.put_pointer(pointer, curr_index);
         connect(curr_node ,new_node, RelTypes.values()[curr_side*2]);
@@ -1206,8 +1206,8 @@ public class SequenceLayer {
             }
             fwd_kmer.reset();
             rev_kmer.reset();
-            fwd_kmer.next_up_kmer(fwd_code);
-            rev_kmer.next_down_kmer(rev_code);
+            fwd_kmer.next_fwd_kmer(fwd_code);
+            rev_kmer.next_rev_kmer(rev_code);
             for (j = 0; j < K - 1 && position < seq_len - 1; ++j) {
                 ++position;
                 fwd_code = genomeDb.get_code(genome, sequence, position);
@@ -1215,12 +1215,12 @@ public class SequenceLayer {
                 if (fwd_code > 3) {
                     break;
                 }
-                fwd_kmer.next_up_kmer(fwd_code);
-                rev_kmer.next_down_kmer(rev_code);
+                fwd_kmer.next_fwd_kmer(fwd_code);
+                rev_kmer.next_rev_kmer(rev_code);
             }
             if (j == K - 1) {
-                fwd_kmer.canonical = fwd_kmer.compare(rev_kmer) == -1;
-                k_mer = fwd_kmer.canonical ? fwd_kmer : rev_kmer;
+                fwd_kmer.set_canonical ( fwd_kmer.compare(rev_kmer) == -1);
+                k_mer = fwd_kmer.get_canonical() ? fwd_kmer : rev_kmer;
             } else if (position == seq_len - 1) {
                 finish = true;
                 ++position; // to acheive the right length for the degenerate node
@@ -1252,10 +1252,10 @@ public class SequenceLayer {
         ++position;
         fwd_code = s_db.get_code(genome, sequence, position);
         rev_code = 3 - fwd_code;
-        fwd_kmer.next_up_kmer(fwd_code);
-        rev_kmer.next_down_kmer(rev_code);
-        fwd_kmer.canonical = fwd_kmer.compare(rev_kmer) == -1;
-        k_mer = fwd_kmer.canonical ? fwd_kmer : rev_kmer;
+        fwd_kmer.next_fwd_kmer(fwd_code);
+        rev_kmer.next_rev_kmer(rev_code);
+        fwd_kmer.set_canonical( fwd_kmer.compare(rev_kmer) == -1 );
+        k_mer = fwd_kmer.get_canonical() ? fwd_kmer : rev_kmer;
         //System.out.println(k_mer.toString());
     }
 
@@ -1281,8 +1281,8 @@ public class SequenceLayer {
             }
             next_kmer(s_db);
         }
-        fwd_kmer.canonical = fwd_kmer.compare(rev_kmer) == -1;
-        k_mer = fwd_kmer.canonical ? fwd_kmer : rev_kmer;
+        fwd_kmer.set_canonical( fwd_kmer.compare(rev_kmer) == -1 );
+        k_mer = fwd_kmer.get_canonical() ? fwd_kmer : rev_kmer;
         //System.out.println(k_mer.toString());
     }
 
@@ -1333,7 +1333,7 @@ public class SequenceLayer {
                             {
                                 create();
                                 extend(curr_node);
-                            } else if (fwd_kmer.canonical ^ pointer.canonical)// if sides don't agree
+                            } else if (fwd_kmer.get_canonical() ^ pointer.canonical)// if sides don't agree
                             {
                                 follow_reverse();
                             } else {

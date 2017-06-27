@@ -30,7 +30,7 @@ import static pantools.Pantools.executeCommand;
  */
 public final class IndexDatabase {
 
-    private byte[] suffix;
+    private kmer key;
     private long[] prefix_ptr;
     private int ptr_parts_num;
     private long[] ptr_parts_size;
@@ -78,7 +78,7 @@ public final class IndexDatabase {
             max_count = read_int(pre_file);
             kmers_num = read_long(pre_file);
             suf_len = K - pre_len;
-            suffix = new byte[suf_len];
+            key=new kmer(K,pre_len,suf_len);
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
         // load the prefix file into the memory    
             pre_file.seek(4);
@@ -229,7 +229,7 @@ public final class IndexDatabase {
             kmers_num = read_long(pre_file);
         // total number of k-mers in the database    
             suf_len = K - pre_len;
-            suffix = new byte[suf_len];
+            key=new kmer(K,pre_len,suf_len);
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
             // load the prefix file into the memory    
             pre_file.seek(4);
@@ -347,7 +347,7 @@ public final class IndexDatabase {
             suf_parts_size = new long[suf_parts_num];
             suf_file = new RandomAccessFile(index_path + "/sorted.kmc_suf", "r");
             suf_buff = new MappedByteBuffer[suf_parts_num];
-            suffix = new byte[suf_len];
+            key=new kmer(K,pre_len,suf_len);
             for (k = 0; k < suf_parts_num; ++k) {
                 suf_parts_size[k] = (int) (k == suf_parts_num - 1 ? (kmers_num * suf_rec_size) % MAX_BYTE_COUNT : MAX_BYTE_COUNT);
                 suf_buff[k] = suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + k * suf_parts_size[0], suf_parts_size[k]);
@@ -375,7 +375,7 @@ public final class IndexDatabase {
                 node=nodes.next();
                 l=(long)node.getProperty("first_kmer");
                 k_mer = old_index.get_kmer(l);
-                k_mer.adjust(suf_len);
+                k_mer.set_suffix(suf_len);
                 p_index=find(k_mer);
                 old_index.get_pointer(ptr,l);
                 put_pointer(ptr,p_index);
@@ -383,7 +383,7 @@ public final class IndexDatabase {
                 for(l=old_index.get_next_index(l);l!=-1L;l=old_index.get_next_index(l))
                 {
                     k_mer = old_index.get_kmer(l);
-                    k_mer.adjust(suf_len);
+                    k_mer.set_suffix(suf_len);
                     c_index=find(k_mer);
                     old_index.get_pointer(ptr,l);
                     put_pointer(ptr,c_index);
@@ -508,7 +508,6 @@ public final class IndexDatabase {
     public kmer get_kmer(long number) {
         kmer k_mer = new kmer(K, pre_len, suf_len);
         boolean found = false;
-        long suff = 0, pref;
         int low = 0, high = (1 << (2 * pre_len)) - 1, mid = 0;
         while (low <= high && !found) {
             mid = (low + high) / 2;
@@ -525,12 +524,9 @@ public final class IndexDatabase {
         } else {
             for (; mid < prefix_ptr.length - 1 && prefix_ptr[mid + 1] == prefix_ptr[mid]; ++mid);
         }
-        pref = mid;
+        k_mer.set_prefix(mid);
         suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].position((int) (number * suf_rec_size % suf_parts_size[0]));
-        suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].get(suffix, 0, suf_len / 4);
-        for(int i = 0; i < suf_len / 4; ++i)
-            suff = (suff << 8) | (0x00000000000000ff & suffix[i]);
-        k_mer.value = (pref << (2 * suf_len)) | suff;
+        suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].get(k_mer.get_suffix(), 0, suf_len / 4);
         return k_mer;
     }
 
@@ -627,8 +623,8 @@ public final class IndexDatabase {
      * @return The number of kmer
      */
     public long find(kmer k_mer) {
-        long low, mid, high, prefix;
-        int j, comp;
+        long low, mid, high;
+        int j, comp, prefix;
         prefix = k_mer.get_prefix();
         low = prefix_ptr[(int)prefix];
         if (prefix == prefix_ptr.length - 1) {
@@ -640,8 +636,8 @@ public final class IndexDatabase {
             mid = (low + high) / 2;
             j = (int) (mid * suf_rec_size / suf_parts_size[0]);
             suf_buff[j].position((int) (mid * suf_rec_size % suf_parts_size[0]));
-            suf_buff[j].get(suffix, 0, suf_len / 4);
-            comp = k_mer.compare_suffix(suffix);
+            suf_buff[j].get(key.get_suffix(), 0, suf_len / 4);
+            comp = k_mer.compare_suffix(key);
             if (comp == -1) {
                 high = mid - 1;
             } else if (comp == 1) {

@@ -77,11 +77,9 @@ public class Pantools {
         codes_for,// for connecting genes to mRNAs
         is_parent_of,
         contributes_to,// for connecting CDSs to mRNA
-        branches, //to connect tree nodes
         visits,
         precedes, 
         is_homolog_to,
-        best_hits
     }
 
     public static long startTime;
