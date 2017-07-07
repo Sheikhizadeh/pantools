@@ -17,6 +17,7 @@ import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryUsage;
+import java.util.concurrent.TimeUnit;
 import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
@@ -395,4 +396,15 @@ public class Pantools {
         }
         return exe_output.toString();
     }    
+    public static boolean executeCommand_for(String command, int seconds) {
+        Process p;
+        boolean success = false;
+        try {
+            p = Runtime.getRuntime().exec(command);
+            success = p.waitFor(seconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return success;
+    }
 }

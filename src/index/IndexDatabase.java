@@ -146,7 +146,7 @@ public final class IndexDatabase {
                     cmd = "kmc -r -k" + K + " -t" + cores + " -m" + 
                     (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
                     (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path;
-                    output = executeCommand(cmd);        
+                    output = executeCommand(cmd);      
                     num = Long.parseLong(output.substring(output.lastIndexOf("unique")).split("\\s+")[4]);
                     num_digits = (int)Math.log10(num-prev_num+1)+1;
                     if (num_digits < previous_num_digits)
