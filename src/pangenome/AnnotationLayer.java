@@ -82,11 +82,12 @@ import static pantools.Pantools.write_fasta;
 public class AnnotationLayer {
     private static int K;
     private int KMER_LENGTH = 5;
-    private double CONTRAST = 7;
-    private double INFLATION = 21;
-    private int THRESHOLD = 20;
+    private double CONTRAST = 2;
+    private double INFLATION = 11;
+    private int THRESHOLD = 70;
     private boolean PHYLOGENY = true;
-    private int MAX_ALIGNMENT_LENGTH  = 1000;
+    private final int MAX_ALIGNMENT_LENGTH  = 1000;
+    private final int MAX_INTERSECTIONS  = 50000000;
     private ProteinAlignment pro_aligner;
     private double[][] phylogeny_distance;
     private int[][] count;
@@ -281,19 +282,6 @@ public class AnnotationLayer {
                         feature_len = address[3] - address[2] + 1;
                         attribute = fields[fields.length - 1];
                         sequence_id = fields[0]; // sequence id
-                        feature_node = graphDb.createNode(feature_label);
-                        feature_node.setProperty("address", address);
-                        feature_node.setProperty("strand", strand);
-                        feature_node.setProperty("length", feature_len);
-                        feature_node.setProperty("ID", get_property(attribute,"ID"));
-                        feature_node.setProperty("attribute", attribute);
-                        feature_node.setProperty("type", fields[2]);
-                        feature_node.setProperty("name", get_property(attribute,"Name"));
-                        feature_node.setProperty("annotation_node_id", annotation_node_id);
-                        feature_node.setProperty("genome",address[0]);
-                        parent_node = get_node_by_id(gene_nodes,get_property(attribute,"Parent"));
-                        if (parent_node != null)
-                            parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
                         // if a feature belongs to a new sequence
                         // find the sequence number according to the sequence id in the gff file
                         if ( ! sequence_id.equals(current_sequence_id) ) {
@@ -302,6 +290,19 @@ public class AnnotationLayer {
                         }
                         // if sequence is uniquely determined
                         if (address[1] > 0) {
+                            feature_node = graphDb.createNode(feature_label);
+                            feature_node.setProperty("address", address);
+                            feature_node.setProperty("strand", strand);
+                            feature_node.setProperty("length", feature_len);
+                            feature_node.setProperty("ID", get_property(attribute,"ID"));
+                            feature_node.setProperty("attribute", attribute);
+                            feature_node.setProperty("type", fields[2]);
+                            feature_node.setProperty("name", get_property(attribute,"Name"));
+                            feature_node.setProperty("annotation_node_id", annotation_node_id);
+                            feature_node.setProperty("genome",address[0]);
+                            parent_node = get_node_by_id(gene_nodes,get_property(attribute,"Parent"));
+                            if (parent_node != null)
+                                parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
                             start_ptr = locate(address, K);
                             offset = start_ptr.offset;
                             node = graphDb.getNodeById(start_ptr.node_id);
@@ -610,11 +611,11 @@ public class AnnotationLayer {
                     break;
                 case "-t":
                     THRESHOLD = Integer.parseInt(args[i + 1]);
-                    THRESHOLD = THRESHOLD < 10 ? 10 : THRESHOLD;
-                    THRESHOLD = THRESHOLD > 90 ? 90 : THRESHOLD;
+                    THRESHOLD = THRESHOLD < 1 ? 1 : THRESHOLD;
+                    THRESHOLD = THRESHOLD > 99 ? 99 : THRESHOLD;
                     ++i;
                     break;
-                case "-l":
+                case "-c":
                     CONTRAST = Integer.parseInt(args[i + 1]);
                     CONTRAST = CONTRAST < 1 ? 1 : CONTRAST;
                     CONTRAST = CONTRAST > 8 ? 8 : CONTRAST;
@@ -624,10 +625,10 @@ public class AnnotationLayer {
                     d = Integer.parseInt(args[i + 1]);
                     d = d < 1 ? 1 : d;
                     d = d > 5 ? 5 : d;
-                    KMER_LENGTH = new int[] {0, 6,  5,  5,  4,   4   }[d];
-                    CONTRAST = new double[] {0, 8,  7,  3,  1,   1   }[d];
-                    INFLATION = new double[]{0, 25, 21, 6,  1.3, 1.1 }[d];
-                    THRESHOLD = new int[]   {0, 25, 20, 15, 10,  5   }[d];
+                    KMER_LENGTH = new int[] {0, 5,  5,  5,  5,  5   }[d];
+                    CONTRAST = new double[] {0, 2,  1.7,  1.4,  1.2,  1   }[d];
+                    INFLATION = new double[]{0, 11,  9,  6,  2,  1.3 }[d];
+                    THRESHOLD = new int[]   {0, 70, 60, 40, 20, 10   }[d];
                     ++i;
                     break;
                 case "-p":
@@ -752,17 +753,18 @@ public class AnnotationLayer {
     public void find_intersecting_proteins(LinkedList<Node> proteins){
         int i, frequency, p, counter, trsc, num_ids;
         double similarity, max_kmer_freq;
-        long[] crossing_protein_ids= new long[10000000];
+        long[] crossing_protein_ids= new long[MAX_INTERSECTIONS];
         Node protein_node, kmer_node, crossing_protein_node;
         Relationship r;
         Iterator<Node> proteins_itr = proteins.iterator();
         long other_node_id, protein_node_id;
-        double fraction = THRESHOLD / 400.0;//(7 - KMER_LENGTH) / 100.0; // increases sensitivity
+        double fraction = THRESHOLD / 1000.0; // otherwise are not similar enough 
         int protein_length, num_proteins = proteins.size();
         String protein, crossing_protein;
         long crossing_protein_id, p_id;
+        double []prb = new double[]{0,0,0,0,0.0062305,0.0003125,0.0000156}; // kmer occurance probabilities
         System.out.println("Finding intersecting proteins...");
-        max_kmer_freq = num_proteins * (7 - KMER_LENGTH) / 100.0 ; // increases sensitivity
+        max_kmer_freq = num_proteins * (prb[KMER_LENGTH] + (7 - KMER_LENGTH) / 100.0 ); // increases sensitivity
         for (p = 0; proteins_itr.hasNext(); ) {
             try (Transaction tx = graphDb.beginTx()) {
                 for (trsc = 0; proteins_itr.hasNext() && trsc < 2 * MAX_TRANSACTION_SIZE; ++trsc){
@@ -779,9 +781,13 @@ public class AnnotationLayer {
                             if (frequency < max_kmer_freq){ // halfs the run-time
                                 for (Relationship rel2: kmer_node.getRelationships(Direction.INCOMING)){
                                     other_node_id = rel2.getStartNode().getId();
+                                    if (num_ids >= MAX_INTERSECTIONS)
+                                        break;
                                     if (other_node_id != protein_node_id)
                                         crossing_protein_ids[num_ids++] = other_node_id;
                                 }
+                                if (num_ids >= MAX_INTERSECTIONS)
+                                    break;                                
                             }
                         }
                         if (num_ids > 0){
@@ -891,7 +897,7 @@ public class AnnotationLayer {
     private void calculate_phylogeny_distances(ListIterator<Node> proteins_itr){
         int i, j, g1, g2;
         Node p1, p2;
-        double max_linkage, similarity;
+        double similarity;
         phylogeny_distance = new double[num_genomes + 1][];
         count = new int[num_genomes + 1][];
         for (i = 1; i < phylogeny_distance.length; ++i){
@@ -911,22 +917,19 @@ public class AnnotationLayer {
                 ++count[g2][g1];
             }
         }
-        for (max_linkage = 0, i = 1; i < phylogeny_distance.length; ++i)
+        for (i = 1; i < phylogeny_distance.length; ++i)
             for (j = 1; j < phylogeny_distance.length; ++j){
                 if (count[i][j] > 0)
                     phylogeny_distance[i][j] = phylogeny_distance[i][j]/count[i][j];
                 else
                     phylogeny_distance[i][j] = THRESHOLD;
-                if (phylogeny_distance[i][j] > max_linkage){
-                    max_linkage = phylogeny_distance[i][j];
-                }
             }
         for (i = 1; i < phylogeny_distance.length; ++i){
             for (j = 1; j < phylogeny_distance.length; ++j){
                 if (i == j)
                     phylogeny_distance[i][j] = 0;
                 else
-                    phylogeny_distance[i][j] = max_linkage - phylogeny_distance[i][j];
+                    phylogeny_distance[i][j] = 100 - phylogeny_distance[i][j];
                 //System.out.printf("%.4f\t",phylogeny_distance[i][j]);
             }
             //System.out.println();
@@ -1019,6 +1022,7 @@ public class AnnotationLayer {
                 command = "mcl " + graph_path + " --abc -I " + infl + " -o " + clusters_path;
                 if(executeCommand_for(command, 20))
                     break;
+                System.err.println("MCL failed on I = "+infl+" . Trying "+ (infl -1) +"..."); 
                 if((tmp_file = new File(clusters_path)).exists())
                     tmp_file.delete();
             }
@@ -1031,12 +1035,15 @@ public class AnnotationLayer {
                     while (clusters_file.ready()){
                         line = clusters_file.readLine();
                         fields = line.split("\\s");
-                        homology_group_node = graphDb.createNode(homology_group_lable);
-                        homology_group_nodes.add(homology_group_node);
-                        ++num_groups;
-                        for (i = 0; i < fields.length; ++i)
-                            homology_group_node.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[i])), RelTypes.has_homolog);
-                        homology_group_node.setProperty("num_members", fields.length);
+                        if (fields.length > 1){
+                            homology_group_node = graphDb.createNode(homology_group_lable);
+                            homology_group_nodes.add(homology_group_node);
+                            ++num_groups;
+                            for (i = 0; i < fields.length; ++i)
+                                homology_group_node.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[i])), RelTypes.has_homolog);
+                            homology_group_node.setProperty("num_members", fields.length);
+                        } else 
+                            num_groups += group_singleton(homology_group_nodes, fields[0]);
                     }
                     clusters_file.close();
                 }catch (IOException ex){
@@ -1058,7 +1065,7 @@ public class AnnotationLayer {
         Node protein1_node, protein2_node;
         Relationship homology_edge;
         int genome1, genome2;
-        double similarity, score;
+        double similarity;
         try (PrintWriter graph = new PrintWriter(graph_path)){
             for (itr1 = group.listIterator(); itr1.hasNext(); ){
                 protein1_node = itr1.next();
@@ -1069,12 +1076,11 @@ public class AnnotationLayer {
                             protein2_node = itr2.next();
                             homology_edge = get_edge(protein1_node, protein2_node, RelTypes.is_similar_to);
                             if (homology_edge != null){
-                                similarity = (double)homology_edge.getProperty("similarity");
+                                similarity = (double)homology_edge.getProperty("similarity") - THRESHOLD;
                                 genome2 = (int)protein2_node.getProperty("genome");
-                                score = similarity - THRESHOLD;
                                 if (PHYLOGENY)
-                                    score += phylogeny_distance[genome1][genome2];
-                                graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(score/THRESHOLD, CONTRAST) + "\n");
+                                    similarity += phylogeny_distance[genome1][genome2];
+                                graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity, CONTRAST) + "\n");
                             }  
                         } 
                         tx.success();
@@ -1085,6 +1091,46 @@ public class AnnotationLayer {
         } catch (IOException ex){
         }
     }
+    
+    private int group_singleton(LinkedList<Node> homology_group_nodes, String singleton_id){
+        int num_groups = 0;
+        double best_score, similarity;
+        Node homology_group_node, single_protein, neighbor, best_hit;
+        single_protein = graphDb.getNodeById(Long.parseLong(singleton_id));
+        if (!single_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
+            best_score = 0;
+            best_hit = null;
+            for (Relationship r: single_protein.getRelationships(RelTypes.is_similar_to)){
+                neighbor = r.getOtherNode(single_protein);
+                similarity = (double)r.getProperty("similarity");
+                if (similarity > best_score){
+                    best_score = similarity;
+                    best_hit = neighbor;
+                }
+            }
+            if (best_score > 0){
+                if(best_hit.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
+                    homology_group_node = best_hit.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING).getStartNode();
+                    homology_group_node.createRelationshipTo(single_protein, RelTypes.has_homolog);
+                    homology_group_node.setProperty("num_members", (int)homology_group_node.getProperty("num_members") + 1);
+                } else {
+                    homology_group_node = graphDb.createNode(homology_group_lable);
+                    homology_group_nodes.add(homology_group_node);
+                    ++num_groups;
+                    homology_group_node.createRelationshipTo(single_protein, RelTypes.has_homolog);
+                    homology_group_node.createRelationshipTo(best_hit, RelTypes.has_homolog);
+                    homology_group_node.setProperty("num_members", 2);
+                }
+            } else {
+                    homology_group_node = graphDb.createNode(homology_group_lable);
+                    homology_group_nodes.add(homology_group_node);
+                    ++num_groups;
+                    homology_group_node.createRelationshipTo(single_protein, RelTypes.has_homolog);
+                    homology_group_node.setProperty("num_members", 1);
+            }
+        }
+        return num_groups;
+    }    
     
     /**
      * Retrieves the first random relationship of a specific type which connects two nodes in any direction. 
