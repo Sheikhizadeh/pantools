@@ -182,7 +182,6 @@ public class AnnotationLayer {
      * @param gff_paths_file A text file listing the paths to the annotation files
      * @param pangenome_path Path to the database folder
      */
-
     public void add_annotaions(String gff_paths_file, String pangenome_path) {
         if (! new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
             System.out.println("No database found in " + pangenome_path);
@@ -224,7 +223,7 @@ public class AnnotationLayer {
                 address[0] = Integer.parseInt(fields[0]);
                 gff_file = fields[1];
                 if (! new File(gff_file).exists()){
-                    log_file.write("Annotaion file for genome " + address[0]+" not found.");
+                    log_file.write("Genome "+address[0]+"'s GFF file not found.");
                     continue;
                 }
                 try (Transaction tx = graphDb.beginTx()) {
@@ -255,6 +254,7 @@ public class AnnotationLayer {
 
     private void parse_gff(int[] address, long annotation_node_id, BufferedWriter log_file, String gff_file, String pangenome_path){
         int i, trsc, num_genes, num_mRNAs, num_tRNAs, num_rRNAs, feature_len, offset;
+        long seq_len;
         String sequence_id, current_sequence_id=null, attribute;
         Node node, gene_node, rna_node, feature_node, parent_node = null;
         Relationship rel;
@@ -288,96 +288,105 @@ public class AnnotationLayer {
                             address[1] = find_sequence(sequence_id, address[0]);
                             current_sequence_id = sequence_id;
                         }
-                        // if sequence is uniquely determined
-                        if (address[1] > 0) {
-                            feature_node = graphDb.createNode(feature_label);
-                            feature_node.setProperty("address", address);
-                            feature_node.setProperty("strand", strand);
-                            feature_node.setProperty("length", feature_len);
-                            feature_node.setProperty("ID", get_property(attribute,"ID"));
-                            feature_node.setProperty("attribute", attribute);
-                            feature_node.setProperty("type", fields[2]);
-                            feature_node.setProperty("name", get_property(attribute,"Name"));
-                            feature_node.setProperty("annotation_node_id", annotation_node_id);
-                            feature_node.setProperty("genome",address[0]);
-                            parent_node = get_node_by_id(gene_nodes,get_property(attribute,"Parent"));
-                            if (parent_node != null)
-                                parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
-                            start_ptr = locate(address, K);
-                            offset = start_ptr.offset;
-                            node = graphDb.getNodeById(start_ptr.node_id);
-                            rel = feature_node.createRelationshipTo(node, RelTypes.starts);
-                            rel.setProperty("offset", offset);
-                            rel.setProperty("genomic_position", address[2]);
-                            rel.setProperty("forward", start_ptr.canonical);
-                            stop_ptr = locate(new int[]{address[0], address[1], address[3]}, K);
-                            rel = feature_node.createRelationshipTo(graphDb.getNodeById(stop_ptr.node_id), RelTypes.stops);
-                            rel.setProperty("offset", stop_ptr.offset);
-                            rel.setProperty("genomic_position", address[2] + feature_len - 1);
-                            rel.setProperty("forward", stop_ptr.canonical);
-                            if (fields[2].endsWith("gene")) {
-                                // create new gene node
-                                feature_node.addLabel(gene_label);
-                                gene_nodes.add(feature_node);
-                                // adding gene_node id to the sequence node
-                                //genes_list[address[0]][address[1]].add(gene_node.getId());
-                                ++num_genes;
-                            } else  switch(fields[2]) {
-                                        case "mRNA":
-                                            ++num_mRNAs;
-                                            feature_node.addLabel(mRNA_label);
-                                            if (parent_node != null)
-                                                parent_node.createRelationshipTo(feature_node, RelTypes.codes_for);
-                                            rna_nodes.addFirst(feature_node);
-                                            break;
-                                        case "tRNA":
-                                            ++num_tRNAs;
-                                            feature_node.addLabel(tRNA_label);
-                                            break;
-                                        case "rRNA":
-                                            ++num_rRNAs;
-                                            feature_node.addLabel(rRNA_label);
-                                            break;
-                                        case "CDS": 
-                                            feature_node.addLabel(CDS_label);
-                                            parent_ids = get_property(attribute,"Parent").split(",");
-                                            // connect CDS to its parent RNAs    
-                                            for (i=0;i<parent_ids.length;++i){
-                                                rna_node = get_node_by_id(rna_nodes,parent_ids[i]);
-                                                // for CDSs with a parent of type gene    
-                                                if (rna_node == null){
-                                                    gene_node = get_node_by_id(gene_nodes,parent_ids[i]);
-                                                    if (gene_node != null){
-                                                        rna_node = graphDb.createNode(feature_label);
-                                                        rna_node.addLabel(mRNA_label);
-                                                        rna_node.setProperty("address", gene_node.getProperty("address"));
-                                                        rna_node.setProperty("strand", gene_node.getProperty("strand"));
-                                                        rna_node.setProperty("length", gene_node.getProperty("length"));
-                                                        rna_node.setProperty("ID", gene_node.getProperty("ID"));
-                                                        rna_node.setProperty("attribute", gene_node.getProperty("attribute"));
-                                                        rna_node.setProperty("type", gene_node.getProperty("type"));
-                                                        rna_node.setProperty("name", gene_node.getProperty("name"));
-                                                        rna_node.setProperty("annotation_node_id", annotation_node_id);
-                                                        rna_node.setProperty("genome",address[0]);
-                                                        ++num_mRNAs;
-                                                        rna_nodes.addFirst(rna_node);                                           
-                                                        gene_node.createRelationshipTo(rna_node, RelTypes.is_parent_of);
-                                                        gene_node.createRelationshipTo(rna_node, RelTypes.codes_for);
-                                                        feature_node.createRelationshipTo(rna_node, RelTypes.contributes_to);
-                                                    }
-                                                } else
-                                                    feature_node.createRelationshipTo(rna_node, RelTypes.contributes_to);
-                                            }
-                                            break;
-                                        case "exon":
-                                            feature_node.addLabel(exon_label);
-                                            break;
-                                        case "intron":
-                                            feature_node.addLabel(intron_label);
-                                            break;
-                            }
-                        } else // if sequence not found
+                        if (address[1] == -1){// if sequence is not uniquely determined
                             log_file.write("Sequence ID = "+sequence_id+" missed in genome "+address[0]+"\n"); // usually organal genes
+                            continue;
+                        }
+                        seq_len = genomeDb.sequence_length[address[0]][address[1]];
+                        if(address[2] > seq_len) {
+                            log_file.write("Position "+address[2] + " is out of range 1-"+seq_len+".\n");
+                            continue;
+                        }
+                        if(address[3] > seq_len) {
+                            log_file.write("Position "+address[3] + " is out of range 1-"+seq_len+".\n");
+                            continue;
+                        }
+                        feature_node = graphDb.createNode(feature_label);
+                        feature_node.setProperty("address", address);
+                        feature_node.setProperty("strand", strand);
+                        feature_node.setProperty("length", feature_len);
+                        feature_node.setProperty("ID", get_property(attribute,"ID"));
+                        feature_node.setProperty("attribute", attribute);
+                        feature_node.setProperty("type", fields[2]);
+                        feature_node.setProperty("name", get_property(attribute,"Name"));
+                        feature_node.setProperty("annotation_node_id", annotation_node_id);
+                        feature_node.setProperty("genome",address[0]);
+                        parent_node = get_node_by_id(gene_nodes,get_property(attribute,"Parent"));
+                        if (parent_node != null)
+                            parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
+                        start_ptr = locate(address, K);
+                        offset = start_ptr.offset;
+                        node = graphDb.getNodeById(start_ptr.node_id);
+                        rel = feature_node.createRelationshipTo(node, RelTypes.starts);
+                        rel.setProperty("offset", offset);
+                        rel.setProperty("genomic_position", address[2]);
+                        rel.setProperty("forward", start_ptr.canonical);
+                        stop_ptr = locate(new int[]{address[0], address[1], address[3]}, K);
+                        rel = feature_node.createRelationshipTo(graphDb.getNodeById(stop_ptr.node_id), RelTypes.stops);
+                        rel.setProperty("offset", stop_ptr.offset);
+                        rel.setProperty("genomic_position", address[2] + feature_len - 1);
+                        rel.setProperty("forward", stop_ptr.canonical);
+                        if (fields[2].endsWith("gene")) {
+                            // create new gene node
+                            feature_node.addLabel(gene_label);
+                            gene_nodes.add(feature_node);
+                            // adding gene_node id to the sequence node
+                            //genes_list[address[0]][address[1]].add(gene_node.getId());
+                            ++num_genes;
+                        } else  switch(fields[2]) {
+                                    case "mRNA":
+                                        ++num_mRNAs;
+                                        feature_node.addLabel(mRNA_label);
+                                        if (parent_node != null)
+                                            parent_node.createRelationshipTo(feature_node, RelTypes.codes_for);
+                                        rna_nodes.addFirst(feature_node);
+                                        break;
+                                    case "tRNA":
+                                        ++num_tRNAs;
+                                        feature_node.addLabel(tRNA_label);
+                                        break;
+                                    case "rRNA":
+                                        ++num_rRNAs;
+                                        feature_node.addLabel(rRNA_label);
+                                        break;
+                                    case "CDS": 
+                                        feature_node.addLabel(CDS_label);
+                                        parent_ids = get_property(attribute,"Parent").split(",");
+                                        // connect CDS to its parent RNAs    
+                                        for (i=0;i<parent_ids.length;++i){
+                                            rna_node = get_node_by_id(rna_nodes,parent_ids[i]);
+                                            // for CDSs with a parent of type gene    
+                                            if (rna_node == null){
+                                                gene_node = get_node_by_id(gene_nodes,parent_ids[i]);
+                                                if (gene_node != null){
+                                                    rna_node = graphDb.createNode(feature_label);
+                                                    rna_node.addLabel(mRNA_label);
+                                                    rna_node.setProperty("address", gene_node.getProperty("address"));
+                                                    rna_node.setProperty("strand", gene_node.getProperty("strand"));
+                                                    rna_node.setProperty("length", gene_node.getProperty("length"));
+                                                    rna_node.setProperty("ID", gene_node.getProperty("ID"));
+                                                    rna_node.setProperty("attribute", gene_node.getProperty("attribute"));
+                                                    rna_node.setProperty("type", gene_node.getProperty("type"));
+                                                    rna_node.setProperty("name", gene_node.getProperty("name"));
+                                                    rna_node.setProperty("annotation_node_id", annotation_node_id);
+                                                    rna_node.setProperty("genome",address[0]);
+                                                    ++num_mRNAs;
+                                                    rna_nodes.addFirst(rna_node);                                           
+                                                    gene_node.createRelationshipTo(rna_node, RelTypes.is_parent_of);
+                                                    gene_node.createRelationshipTo(rna_node, RelTypes.codes_for);
+                                                    feature_node.createRelationshipTo(rna_node, RelTypes.contributes_to);
+                                                }
+                                            } else
+                                                feature_node.createRelationshipTo(rna_node, RelTypes.contributes_to);
+                                        }
+                                        break;
+                                    case "exon":
+                                        feature_node.addLabel(exon_label);
+                                        break;
+                                    case "intron":
+                                        feature_node.addLabel(intron_label);
+                                        break;
+                        }
                         if (trsc % 500 == 1)
                             System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
                     }// for trsc
