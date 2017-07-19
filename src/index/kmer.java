@@ -104,7 +104,7 @@ public class kmer {
         suffix_length = s_len;
         
         for (;i >= 0; --i){
-            prefix = (prefix << 8) | suffix[i];
+            prefix = (prefix << 8) | (old_suffix[i] & 0x00FF);
         }
         
         for (;j >= 0; --j){

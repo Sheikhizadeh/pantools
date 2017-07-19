@@ -248,16 +248,23 @@ public class Pantools {
 "   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genomes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genome_numbers.txt\n" +
 "\n" +
 "4. group:\n" +
-"   To add homology and orthology nodes which point to a groups of homologous or orthologous genes. This functionality needs MCL to be installed on your machine.\n" +
+"   To add homology and orthology nodes which point to a groups of homologous or orthologous genes.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE THRESHOLD [K_SIZE] \n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-k K_SIZE] [-t THRESHOLD] [-i INFLATION] [-c CONTRAST] [-n NUMBER] \n" +
 "\n" +
-"   THRESHOLD : The minimum similarity needed to call two proteins homologous. ( 0 <= THRESHOLD <= 100) \n" +
-"   K_SIZE : If it is not given or is out of range ( 4 <= K_SIZE <= 6 ), it would be set to 5.    \n" +
+"   K_SIZE : Size of peptide k-mers. Should be in range [4-6], otherwise it would be set by default (default = 5)    \n" +
+"   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 70) \n" +
+"   INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 21) \n" +
+"   CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 11) \n" +
+"   NUMBER :    The number of pre-cooked parameter set (k,t,i,c). Could be 1 : (5,70,21,11) or\n" +
+"                                                                          2 : (5,60,19, 9) or\n" +
+"                                                                          3 : (5,40, 6, 7) or\n" +
+"                                                                          4 : (5,20, 2, 3) or\n" +
+"                                                                          5 : (5,10,1.4,2) or\n" +
 "   \n" +
 "Example: \n" +
 "\n" +
-"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database 75 5\n" +
+"   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database\n" +
 "\n" +
 "Visualization in the Neo4j browser\n" +
 "----------------------------------\n" +

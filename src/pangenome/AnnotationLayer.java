@@ -82,10 +82,9 @@ import static pantools.Pantools.write_fasta;
 public class AnnotationLayer {
     private static int K;
     private int KMER_LENGTH = 5;
-    private double CONTRAST = 2;
-    private double INFLATION = 11;
+    private double CONTRAST = 11;
+    private double INFLATION = 21;
     private int THRESHOLD = 70;
-    private boolean PHYLOGENY = true;
     private final int MAX_ALIGNMENT_LENGTH  = 1000;
     private final int MAX_INTERSECTIONS  = 50000000;
     private ProteinAlignment pro_aligner;
@@ -603,31 +602,32 @@ public class AnnotationLayer {
     public void group(String[] args) {
         LinkedList<Node> proteins = new LinkedList();
         String pangenome_path = args[1];
-        int i, d;
+        int i, n, d;
+        double x;
         for (i = 2; i < args.length; ++i){
             switch (args[i]){
-                case "-i":
-                    INFLATION = Double.parseDouble(args[i + 1]);
-                    INFLATION = INFLATION < 1.1 ? 1.1 : INFLATION;
-                    INFLATION = INFLATION > 25 ? 25 : INFLATION;
-                    ++i;
-                    break;
                 case "-k":
-                    KMER_LENGTH = Integer.parseInt(args[i + 1]);
-                    KMER_LENGTH = KMER_LENGTH < 4 ? 4 : KMER_LENGTH;
-                    KMER_LENGTH = KMER_LENGTH > 6 ? 6 : KMER_LENGTH;
+                    n = Integer.parseInt(args[i + 1]);
+                    if (n > 3 && n < 7)
+                        KMER_LENGTH = n;
                     ++i;
                     break;
                 case "-t":
-                    THRESHOLD = Integer.parseInt(args[i + 1]);
-                    THRESHOLD = THRESHOLD < 1 ? 1 : THRESHOLD;
-                    THRESHOLD = THRESHOLD > 99 ? 99 : THRESHOLD;
+                    n = Integer.parseInt(args[i + 1]);
+                    if (n > 0 && n < 100)
+                        THRESHOLD = n;
+                    ++i;
+                    break;
+                case "-i":
+                    x = Double.parseDouble(args[i + 1]);
+                    if (x > 1 && x < 29)
+                        INFLATION = x;
                     ++i;
                     break;
                 case "-c":
-                    CONTRAST = Integer.parseInt(args[i + 1]);
-                    CONTRAST = CONTRAST < 1 ? 1 : CONTRAST;
-                    CONTRAST = CONTRAST > 8 ? 8 : CONTRAST;
+                    x = Double.parseDouble(args[i + 1]);
+                    if (x > 0 && x < 12)
+                        CONTRAST = x;
                     ++i;
                     break;
                 case "-d":
@@ -635,13 +635,9 @@ public class AnnotationLayer {
                     d = d < 1 ? 1 : d;
                     d = d > 5 ? 5 : d;
                     KMER_LENGTH = new int[] {0, 5,  5,  5,  5,  5   }[d];
-                    CONTRAST = new double[] {0, 2,  1.7,  1.4,  1.2,  1   }[d];
-                    INFLATION = new double[]{0, 11,  9,  6,  2,  1.3 }[d];
                     THRESHOLD = new int[]   {0, 70, 60, 40, 20, 10   }[d];
-                    ++i;
-                    break;
-                case "-p":
-                    PHYLOGENY = Integer.parseInt(args[i + 1]) != 0 ;
+                    INFLATION = new double[]{0, 21,  19,  6,  2,  1.4 }[d];
+                    CONTRAST = new double[] {0, 11,  9,  7,  3,  2   }[d];
                     ++i;
                     break;
             }
@@ -846,24 +842,29 @@ public class AnnotationLayer {
     
     private long perfect_score(String p1, String p2) {
         char match;
-        int i;
-        long score1, score2;
-        for (score1 = 0, i = 0; i < p1.length(); ++i) {
-            match = p1.charAt(i);
-            score1 += pro_aligner.match[match][match];
+        int i, len1, len2;
+        long score;
+        len1 = p1.length();
+        len2 = p2.length();
+        if (len1 < len2){
+            for (score = 0, i = 0; i < len1; ++i) {
+                match = p1.charAt(i);
+                score += pro_aligner.match[match][match];
+            }
+        } else {
+            for (score = 0, i = 0; i < len2; ++i) {
+                match = p2.charAt(i);
+                score += pro_aligner.match[match][match];
+            }  
         }
-        for (score2 = 0, i = 0; i < p2.length(); ++i) {
-            match = p2.charAt(i);
-            score2 += pro_aligner.match[match][match];
-        }        
-        return (score1 + score2)/2;
+        return score;
     }
    
     /**
      * Creates homology nodes which connect the homologous coding genes
      */
     private void build_homology_groups(LinkedList<Node> proteins, String pangenome_path){
-        int num_groups = 0, num_grouped_proteins;
+        int i, num_groups = 0, num_grouped_proteins;
         Node protein_node, homology_group_node;
         int[] copy_number;
         BufferedWriter groups_file;
@@ -872,8 +873,12 @@ public class AnnotationLayer {
         try (Transaction tx = graphDb.beginTx()) {
             num_genomes = (int)graphDb.findNodes(pangenome_label).next().getProperty("num_genomes");
             copy_number = new int[num_genomes + 1];   
-            if (PHYLOGENY)
-                calculate_phylogeny_distances(proteins.listIterator());
+            phylogeny_distance = new double[num_genomes + 1][];
+            count = new int[num_genomes + 1][];
+            for (i = 1; i < phylogeny_distance.length; ++i){
+                phylogeny_distance[i] = new double[num_genomes + 1];
+                count[i] = new int[num_genomes + 1];
+            } 
             tx.success();
         }
         try{
@@ -907,12 +912,11 @@ public class AnnotationLayer {
         int i, j, g1, g2;
         Node p1, p2;
         double similarity;
-        phylogeny_distance = new double[num_genomes + 1][];
-        count = new int[num_genomes + 1][];
-        for (i = 1; i < phylogeny_distance.length; ++i){
-            phylogeny_distance[i] = new double[num_genomes + 1];
-            count[i] = new int[num_genomes + 1];
-        }  
+        for (i = 1; i < phylogeny_distance.length; ++i)
+            for (j = 1; j < phylogeny_distance.length; ++j){
+                phylogeny_distance[i][j] = phylogeny_distance[i][j] = 0;
+                count[i][j] = count[j][i] = 0;
+            }
         while (proteins_itr.hasNext()){
             p1 = proteins_itr.next();
             g1 = (int)p1.getProperty("genome");
@@ -939,9 +943,7 @@ public class AnnotationLayer {
                     phylogeny_distance[i][j] = 0;
                 else
                     phylogeny_distance[i][j] = 100 - phylogeny_distance[i][j];
-                //System.out.printf("%.4f\t",phylogeny_distance[i][j]);
             }
-            //System.out.println();
         } 
     }    
 
@@ -1029,9 +1031,9 @@ public class AnnotationLayer {
             write_similaity_matrix(group, graph_path);
             for( infl = INFLATION; infl > 1; --infl){
                 command = "mcl " + graph_path + " --abc -I " + infl + " -o " + clusters_path;
-                if(executeCommand_for(command, 20))
+                if(executeCommand_for(command, 10))
                     break;
-                System.err.println("MCL failed on I = "+infl+" . Trying "+ (infl -1) +"..."); 
+                //System.err.println("\nMCL failed on I = "+infl+" . Trying "+ (infl -1) +"..."); 
                 if((tmp_file = new File(clusters_path)).exists())
                     tmp_file.delete();
             }
@@ -1073,8 +1075,9 @@ public class AnnotationLayer {
         ListIterator<Node> itr1, itr2;
         Node protein1_node, protein2_node;
         Relationship homology_edge;
-        int genome1, genome2;
+        int i, genome1, genome2;
         double similarity;
+        calculate_phylogeny_distances(group.listIterator());
         try (PrintWriter graph = new PrintWriter(graph_path)){
             for (itr1 = group.listIterator(); itr1.hasNext(); ){
                 protein1_node = itr1.next();
@@ -1087,8 +1090,7 @@ public class AnnotationLayer {
                             if (homology_edge != null){
                                 similarity = (double)homology_edge.getProperty("similarity") - THRESHOLD;
                                 genome2 = (int)protein2_node.getProperty("genome");
-                                if (PHYLOGENY)
-                                    similarity += phylogeny_distance[genome1][genome2];
+                                similarity += phylogeny_distance[genome1][genome2];
                                 graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity, CONTRAST) + "\n");
                             }  
                         } 

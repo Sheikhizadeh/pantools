@@ -71,14 +71,21 @@ List of commands and examples for the provided sample data :
 4. group:
    To add homology and orthology nodes which point to a groups of homologous or orthologous genes.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE THRESHOLD [K_SIZE] 
+   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-k K_SIZE] [-t THRESHOLD] [-i INFLATION] [-c CONTRAST] [-n NUMBER] 
 
-   THRESHOLD : The minimum similarity needed to call two proteins homologous. ( 0 <= THRESHOLD <= 100) 
-   K_SIZE : If it is not given or is out of range ( 4 <= K_SIZE <= 6 ), it would be set to 5.    
+   K_SIZE : Size of peptide k-mers. Should be in range [4-6], otherwise it would be set by default (default = 5)    
+   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 70) 
+   INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 21) 
+   CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 11) 
+   NUMBER :    The number of pre-cooked parameter set (k,t,i,c). Could be 1 : (5,70,21,11) or
+                                                                          2 : (5,60,19, 9) or
+                                                                          3 : (5,40, 6, 7) or
+                                                                          4 : (5,20, 2, 3) or
+                                                                          5 : (5,10,1.4,1) or
    
 Example: 
 
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database 75 5
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database
 
 Visualization in the Neo4j browser
 ----------------------------------
