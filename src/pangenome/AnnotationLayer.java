@@ -635,7 +635,7 @@ public class AnnotationLayer {
                     d = d < 1 ? 1 : d;
                     d = d > 5 ? 5 : d;
                     KMER_LENGTH = new int[] {0, 5,  5,  5,  5,  5   }[d];
-                    THRESHOLD = new int[]   {0, 70, 60, 40, 20, 10   }[d];
+                    THRESHOLD = new int[]   {0, 70, 60, 50, 40, 10   }[d];
                     INFLATION = new double[]{0, 21,  19,  6,  2,  1.4 }[d];
                     CONTRAST = new double[] {0, 11,  9,  7,  3,  2   }[d];
                     ++i;
@@ -756,7 +756,7 @@ public class AnnotationLayer {
     }
     
     public void find_intersecting_proteins(LinkedList<Node> proteins){
-        int i, frequency, p, counter, trsc, num_ids;
+        int frequency, p, counter, trsc, num_ids;
         double similarity, max_kmer_freq;
         long[] crossing_protein_ids= new long[MAX_INTERSECTIONS];
         Node protein_node, kmer_node, crossing_protein_node;
@@ -1029,15 +1029,15 @@ public class AnnotationLayer {
             graph_path = pangenome_path + "/" + group.getFirst().getId() + ".graph";
             clusters_path = pangenome_path + "/" + group.getFirst().getId() + ".clusters";
             write_similaity_matrix(group, graph_path);
-            for( infl = INFLATION; infl > 1; --infl){
+            for( infl = INFLATION; infl < 30; ++infl){
                 command = "mcl " + graph_path + " --abc -I " + infl + " -o " + clusters_path;
-                if(executeCommand_for(command, 10))
+                if(executeCommand_for(command, 60))
                     break;
                 //System.err.println("\nMCL failed on I = "+infl+" . Trying "+ (infl -1) +"..."); 
                 if((tmp_file = new File(clusters_path)).exists())
                     tmp_file.delete();
             }
-            if (infl <= 1 ){
+            if (infl >= 30 ){
                 System.err.println("Failed to run MCL on group represented by " + group.getFirst().getId());
             } else {
                 new File(graph_path).delete();
@@ -1072,30 +1072,24 @@ public class AnnotationLayer {
      * @param homology_group_node The homology group
      */
     private void write_similaity_matrix(LinkedList<Node> group, String graph_path){
-        ListIterator<Node> itr1, itr2;
+        ListIterator<Node> itr;
         Node protein1_node, protein2_node;
-        Relationship homology_edge;
-        int i, genome1, genome2;
+        int genome1, genome2;
         double similarity;
         calculate_phylogeny_distances(group.listIterator());
         try (PrintWriter graph = new PrintWriter(graph_path)){
-            for (itr1 = group.listIterator(); itr1.hasNext(); ){
-                protein1_node = itr1.next();
+            for (itr = group.listIterator(); itr.hasNext(); ){
+                protein1_node = itr.next();
                 genome1 = (int)protein1_node.getProperty("genome");
-                for (itr2 = group.listIterator(itr1.nextIndex()); itr2.hasNext(); ){
-                    try (Transaction tx = graphDb.beginTx()) {
-                        for (int trsc = 0; itr2.hasNext() && trsc < MAX_TRANSACTION_SIZE; ++trsc) {
-                            protein2_node = itr2.next();
-                            homology_edge = get_edge(protein1_node, protein2_node, RelTypes.is_similar_to);
-                            if (homology_edge != null){
-                                similarity = (double)homology_edge.getProperty("similarity") - THRESHOLD;
-                                genome2 = (int)protein2_node.getProperty("genome");
-                                similarity += phylogeny_distance[genome1][genome2];
-                                graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity, CONTRAST) + "\n");
-                            }  
-                        } 
-                        tx.success();
+                try (Transaction tx = graphDb.beginTx()) {
+                    for (Relationship homology_edge: protein1_node.getRelationships(RelTypes.is_similar_to, Direction.OUTGOING)){
+                        protein2_node = homology_edge.getEndNode();
+                        similarity = (double)homology_edge.getProperty("similarity") - THRESHOLD;
+                        genome2 = (int)protein2_node.getProperty("genome");
+                        similarity += phylogeny_distance[genome1][genome2];
+                        graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity, CONTRAST) + "\n");
                     }
+                    tx.success();
                 }
             }
             graph.close();
@@ -1151,13 +1145,13 @@ public class AnnotationLayer {
      * @return 
      */
     private Relationship get_edge(Node node1, Node node2, RelationshipType rt){
-        for (Relationship rel: node1.getRelationships(rt,Direction.OUTGOING))
-            if (rel.getEndNode().equals(node2))
-                return rel;
-        for (Relationship rel: node1.getRelationships(rt,Direction.INCOMING))
-            if (rel.getStartNode().equals(node2))
-                return rel;
-        return null;
+        Relationship rel = null;
+        for (Relationship r: node1.getRelationships(rt))
+            if (r.getOtherNode(node1).equals(node2)){
+                rel = r;
+                break;
+            }
+        return rel;
     }
 
     /**
