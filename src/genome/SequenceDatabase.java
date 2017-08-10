@@ -49,7 +49,7 @@ public class SequenceDatabase {
     public MappedByteBuffer[] genomes_buff;
     private int parts_num;
     public long[] parts_size;
-    public int max_byte = 2100000000;
+    public int max_byte = 100000000;
     public char sym[];
     public int[] binary;
     public int[] complement;

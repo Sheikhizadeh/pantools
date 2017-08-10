@@ -81,7 +81,7 @@ import static pantools.Pantools.write_fasta;
  */
 public class AnnotationLayer {
     private static int K;
-    private int KMER_LENGTH = 5;
+    private int KMER_LENGTH = 6;
     private double CONTRAST = 11;
     private double INFLATION = 21;
     private int THRESHOLD = 70;
@@ -633,11 +633,11 @@ public class AnnotationLayer {
                 case "-d":
                     d = Integer.parseInt(args[i + 1]);
                     d = d < 1 ? 1 : d;
-                    d = d > 5 ? 5 : d;
-                    KMER_LENGTH = new int[] {0, 5,  5,  5,  5,  5   }[d];
-                    THRESHOLD = new int[]   {0, 70, 60, 50, 40, 10   }[d];
-                    INFLATION = new double[]{0, 21,  19,  6,  2,  1.4 }[d];
-                    CONTRAST = new double[] {0, 11,  9,  7,  3,  2   }[d];
+                    d = d > 6 ? 6 : d;
+                    KMER_LENGTH = new int[] {0, 6,  6,  6,  6,  6,  6  }[d];
+                    THRESHOLD = new int[]   {0, 70, 60, 50, 40, 30, 20 }[d];
+                    INFLATION = new double[]{0, 21, 17, 13, 9,  5,  1.2}[d];
+                    CONTRAST = new double[] {0, 11, 9,  7,  5,  3,  1  }[d];
                     ++i;
                     break;
             }

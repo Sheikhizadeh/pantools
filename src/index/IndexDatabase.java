@@ -36,7 +36,7 @@ public final class IndexDatabase {
     private long[] ptr_parts_size;
     private int suf_parts_num;
     private long[] suf_parts_size;
-    private int MAX_BYTE_COUNT = 2100000000; // The maximum number of bytes addressable by an integer
+    private int MAX_BYTE_COUNT = 100000000; // The maximum number of bytes addressable by an integer
     private int header_pos;
 
     private static int K;
@@ -46,10 +46,12 @@ public final class IndexDatabase {
     private int min_count;
     private int max_count;
     private long kmers_num;
+    private int id_len;
+    private int offset_len;
 
     private int suf_rec_size;
     private int suf_len;
-    public static int POINTER_LENGTH = 21; // The length of a poniter in bytes
+    public static int POINTER_LENGTH;// = 21; // The length of a poniter in bytes
     private RandomAccessFile suf_file;
     private RandomAccessFile pre_file;
     private MappedByteBuffer[] suf_buff;
@@ -88,7 +90,7 @@ public final class IndexDatabase {
             for (q = 0, p = 0; p < 8; ++p) {
                 pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
                 for (k = 0; k < len / 8; ++k, ++q) {
-                    prefix_ptr[q] = read_long(pre_buff);
+                    prefix_ptr[q] = read_long(pre_buff, 8);
                 }
                 pre_buff = null;
             }
@@ -131,8 +133,8 @@ public final class IndexDatabase {
     public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb, int k) {
         long p;
         IndexPointer null_pointer = new IndexPointer();
-        int i, previous_num_digits = 0, num_digits;
-        long num, prev_num = 0;
+        int i, j, previous_num_digits = 0, num_digits;
+        long num, prev_num = 0, longest_scaffold = 0;
         String output, cmd;
         try {
             Files.createDirectory(Paths.get(index_path));
@@ -229,6 +231,13 @@ public final class IndexDatabase {
             kmers_num = read_long(pre_file);
         // total number of k-mers in the database    
             suf_len = K - pre_len;
+            for (i = 1; i < genomeDb.num_genomes; ++i)
+                for (j = 1; j < genomeDb.num_sequences[i]; ++j)
+                    if (genomeDb.sequence_length[i][j] > longest_scaffold)
+                        longest_scaffold = genomeDb.sequence_length[i][j];
+            id_len = (int)Math.ceil( Math.log(kmers_num) / Math.log(2) / 8);
+            offset_len = (int)Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8);
+            POINTER_LENGTH = 2 * id_len + offset_len + 1;
             key=new kmer(K,pre_len,suf_len);
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
             // load the prefix file into the memory    
@@ -239,7 +248,7 @@ public final class IndexDatabase {
             for (q = 0, p = 0; p < 8; ++p) {
                 pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
                 for (i = 0; i < len / 8; ++i, ++q) {
-                    prefix_ptr[q] = read_long(pre_buff);
+                    prefix_ptr[q] = read_prefix(pre_buff);
                 }
                 pre_buff = null;
             }
@@ -333,7 +342,7 @@ public final class IndexDatabase {
             for (q = 0, p = 0; p < 8; ++p) {
                 pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
                 for (k = 0; k < len / 8; ++k, ++q) {
-                    prefix_ptr[q] = read_long(pre_buff);
+                    prefix_ptr[q] = read_long(pre_buff, 8);
                     //System.out.println(q+" "+prefix_ptr[q]);
                 }
                 pre_buff = null;
@@ -453,6 +462,21 @@ public final class IndexDatabase {
             System.exit(1);
         }
     }
+    
+    /**
+     * Reads a long integer from the memory mapped buffer.
+     * 
+     * @param buff The file associated to the byte stream
+     * @return The long integer value
+     * @throws IOException 
+     */
+    private long read_prefix(MappedByteBuffer buff) throws IOException {
+        long number = 0;
+        for (int i = 0; i < 8; ++i) {
+            number += ((long) (buff.get() & 0x00FF)) << (8 * i);
+        }
+        return number;
+    }    
 
     /**
      * Reads an integer from the byte stream.
@@ -464,7 +488,7 @@ public final class IndexDatabase {
     private int read_int(RandomAccessFile file) throws IOException {
         int number = 0;
         for (int i = 0; i < 4; ++i) {
-            number += (file.readByte() & 0xFF) << (8 * i);
+            number += ((file.readByte() & (int)0x00FF) << (8 * i));
         }
         return number;
     }
@@ -479,7 +503,7 @@ public final class IndexDatabase {
     private long read_long(RandomAccessFile file) throws IOException {
         long number = 0;
         for (int i = 0; i < 8; ++i) {
-            number += ((long) (file.readByte() & 0xFF)) << (8 * i);
+            number += ((file.readByte() & (long)0x00FF) << (8 * i));
         }
         return number;
     }
@@ -491,13 +515,56 @@ public final class IndexDatabase {
      * @return The long integer value
      * @throws IOException 
      */
-    private long read_long(MappedByteBuffer buff) throws IOException {
-        long number = 0;
-        for (int i = 0; i < 8; ++i) {
-            number += ((long) (buff.get() & 0xFF)) << (8 * i);
-        }
-        return number;
+    private int read_int(MappedByteBuffer buff, int n) {
+        int number = 0;
+            for (int i = 0; i < n; ++i) {
+                number = number << 8;
+                number = number | (buff.get() & (int)0x00FF);
+            }
+        return number == (1l << 8 * n) - 1 ? -1 : number;
     }
+    
+    /**
+     * Reads a long integer from the memory mapped buffer.
+     * 
+     * @param buff The file associated to the byte stream
+     * @return The long integer value
+     * @throws IOException 
+     */
+    private long read_long(MappedByteBuffer buff, int n) {
+        long number = 0;
+            for (int i = 0; i < n; ++i) {
+                number = number << 8;
+                number = number | (buff.get() & (long)0xFF);
+            }
+        return number == (1l << 8 * n) - 1 ? -1l : number;
+    }
+
+    /**
+     * Reads a long integer from the memory mapped buffer.
+     * 
+     * @param buff The file associated to the byte stream
+     * @return The long integer value
+     * @throws IOException 
+     */
+    private void write_int(MappedByteBuffer buff, int number, int n) {
+        for (int i = n - 1; i >= 0; --i) {
+            buff.put((byte)((number >> (8 * i)) & 0x00FF));
+        }
+    }
+    
+    /**
+     * Reads a long integer from the memory mapped buffer.
+     * 
+     * @param buff The file associated to the byte stream
+     * @return The long integer value
+     * @throws IOException 
+     */
+    private void write_long(MappedByteBuffer buff, long number, int n) {
+        for (int i = n - 1; i >= 0; --i) {
+            buff.put((byte)((number >> (8 * i)) & 0x00FF));
+        }
+    }    
 
     /**
      * Reads a kmer from th index database.
@@ -535,23 +602,27 @@ public final class IndexDatabase {
      * @param poniter The pointer
      * @param number Number of the pointer.
      */
-    public void get_pointer(IndexPointer poniter, long number) {
-        poniter.node_id = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]));
-        poniter.canonical = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].get((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8)) == 0;
-        poniter.offset = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9));
-        poniter.next_index=ptr_buff[(int)(number* POINTER_LENGTH / ptr_parts_size[0])].getLong((int)(number * POINTER_LENGTH % ptr_parts_size[0] + 13));
+    public void get_pointer(IndexPointer poniter, long number){
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int)(number * POINTER_LENGTH % ptr_parts_size[0]));
+        poniter.node_id = read_long(buff,id_len);
+        poniter.offset = read_int(buff,offset_len);
+        poniter.canonical = buff.get() == 0;
+        poniter.next_index=read_long(buff,id_len);
     }
-
+    
     /**
      * Writes a pointer in the index database
      * @param poniter The pointer
      * @param number Number of the pointer.
      */
-    public void put_pointer(IndexPointer poniter, long number) {
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]), poniter.node_id);
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].put((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8), (byte) (poniter.canonical ? 0 : 1));
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9), poniter.offset);
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putLong((int)(number * POINTER_LENGTH%ptr_parts_size[0]+13), poniter.next_index);
+    public void put_pointer(IndexPointer poniter, long number){
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int)(number * POINTER_LENGTH % ptr_parts_size[0]));
+        write_long(buff, poniter.node_id, id_len);
+        write_int(buff, poniter.offset, offset_len);
+        buff.put((byte) (poniter.canonical ? 0 : 1));
+        write_long(buff, poniter.next_index, id_len);
     }
 
     /**
@@ -560,7 +631,9 @@ public final class IndexDatabase {
      * @return The id of node
      */
     public long get_node_id(long number) {
-        return ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]));
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int) (number * POINTER_LENGTH % ptr_parts_size[0]));
+        return read_long(buff, id_len);
     }
 
     /**
@@ -569,25 +642,9 @@ public final class IndexDatabase {
      * @param number Number of the kmer in the index
      */
     public void put_node_id(long node_id, long number) {
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putLong((int) (number * POINTER_LENGTH % ptr_parts_size[0]), node_id);
-    }
-
-    /**
-     * Looks if a kmer has been canonical at the first visit.
-     * @param number Number of the kmer in the index
-     * @return The canonical status
-     */
-    public boolean get_canonical(long number) {
-        return ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].get((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8)) == 0;
-    }
-
-    /**
-     * Writes the canonical status of a kmer at the first visit.
-     * @param canonical The canonical status to be written ( 0 if it was canonical, 1 otherwise )
-     * @param number Number of the kmer in the index
-     */
-    public void put_canonical(boolean canonical, long number) {
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].put((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 8), (byte) (canonical ? 0 : 1));
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int) (number * POINTER_LENGTH % ptr_parts_size[0]));
+        write_long(buff, node_id, id_len);
     }
 
     /**
@@ -595,8 +652,10 @@ public final class IndexDatabase {
      * @param number Number of the kmer in the index
      * @return The position in the node
      */
-    public int get_position(long number) {
-        return ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].getInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9));
+    public int get_position(long number){
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int) (number * POINTER_LENGTH % ptr_parts_size[0]) + id_len);
+        return read_int(buff, offset_len);
     }
 
     /**
@@ -605,16 +664,43 @@ public final class IndexDatabase {
      * @param number Number of the kmer in the index
      */
     public void put_position(int position, long number) {
-        ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])].putInt((int) (number * POINTER_LENGTH % ptr_parts_size[0] + 9), position);
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int) (number * POINTER_LENGTH % ptr_parts_size[0]) + id_len);
+        write_int(buff, position, offset_len);
     }
-    public long get_next_index(long i)
-    {
-        return ptr_buff[(int)(i*POINTER_LENGTH/ptr_parts_size[0])].getLong((int)(i*POINTER_LENGTH%ptr_parts_size[0]+13));
+
+    /**
+     * Looks if a kmer has been canonical at the first visit.
+     * @param number Number of the kmer in the index
+     * @return The canonical status
+     */
+    public boolean get_canonical(long number) {
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int) (number * POINTER_LENGTH % ptr_parts_size[0]) + id_len + offset_len);
+        return buff.get() == 0;
+    }
+
+    /**
+     * Writes the canonical status of a kmer at the first visit.
+     * @param canonical The canonical status to be written ( 0 if it was canonical, 1 otherwise )
+     * @param number Number of the kmer in the index
+     */
+    public void put_canonical(boolean canonical, long number) {
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int) (number * POINTER_LENGTH % ptr_parts_size[0]) + id_len + offset_len);
+        buff.put((byte) (canonical ? 0 : 1));
+    }
+    
+    public long get_next_index(long number) {
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int) (number * POINTER_LENGTH % ptr_parts_size[0]) + id_len + offset_len + 1);
+        return read_long(buff, id_len);
     }
     //,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-    public void put_next_index(long next_index, long i)
-    {
-        ptr_buff[(int)(i*POINTER_LENGTH/ptr_parts_size[0])].putLong((int)(i*POINTER_LENGTH%ptr_parts_size[0]+13),next_index);
+    public void put_next_index(long next_index, long number) {
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int) (number * POINTER_LENGTH % ptr_parts_size[0]) + id_len + offset_len + 1);
+        write_long(buff, next_index, id_len);
     }  
     /**
      * Finds the number of a kmer in the database.
