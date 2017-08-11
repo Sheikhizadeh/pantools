@@ -231,13 +231,14 @@ public final class IndexDatabase {
             kmers_num = read_long(pre_file);
         // total number of k-mers in the database    
             suf_len = K - pre_len;
-            for (i = 1; i < genomeDb.num_genomes; ++i)
-                for (j = 1; j < genomeDb.num_sequences[i]; ++j)
+            for (i = 1; i <= genomeDb.num_genomes; ++i)
+                for (j = 1; j <= genomeDb.num_sequences[i]; ++j)
                     if (genomeDb.sequence_length[i][j] > longest_scaffold)
                         longest_scaffold = genomeDb.sequence_length[i][j];
-            id_len = (int)Math.ceil( Math.log(kmers_num) / Math.log(2) / 8);
-            offset_len = (int)Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8);
+            id_len = (int)Math.round(Math.ceil( Math.log(kmers_num) / Math.log(2) / 8));
+            offset_len = (int)Math.round(Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8));
             POINTER_LENGTH = 2 * id_len + offset_len + 1;
+            System.out.println(id_len+" "+offset_len+" "+longest_scaffold);
             key=new kmer(K,pre_len,suf_len);
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
             // load the prefix file into the memory    
