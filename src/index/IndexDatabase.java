@@ -238,7 +238,6 @@ public final class IndexDatabase {
             id_len = (int)Math.round(Math.ceil( Math.log(kmers_num) / Math.log(2) / 8));
             offset_len = (int)Math.round(Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8));
             POINTER_LENGTH = 2 * id_len + offset_len + 1;
-            System.out.println(id_len+" "+offset_len+" "+longest_scaffold);
             key=new kmer(K,pre_len,suf_len);
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
             // load the prefix file into the memory    
