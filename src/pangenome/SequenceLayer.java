@@ -56,6 +56,7 @@ import static pantools.Pantools.write_fasta;
 import static index.IndexDatabase.get_K;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import static pantools.Pantools.K;
 import static pantools.Pantools.variation_label;
 
 /**
@@ -68,7 +69,7 @@ public class SequenceLayer {
 
     private kmer fwd_kmer, rev_kmer, k_mer;
     private long seq_len;
-    private static int K, genome, sequence, position;
+    private static int genome, sequence, position;
     private long curr_index;
     private byte curr_side;
     private Node curr_node;
@@ -655,8 +656,8 @@ public class SequenceLayer {
         seq_len = end - begin + 1;
         seq.setLength(0);
         loc = begin;
-        position=start_ptr.offset;
-        node=graphDb.getNodeById(start_ptr.node_id);
+        position = start_ptr.offset;
+        node = graphDb.getNodeById(start_ptr.node_id);
         node_len = (int) node.getProperty("length");
     // Takes the part of the region lies in the first node of the path that region takes in the graph    
         if (start_ptr.canonical) {
@@ -679,20 +680,17 @@ public class SequenceLayer {
             neighbor = rel.getEndNode();
             rel_name = rel.getType().name();
             neighbor_len = (int) neighbor.getProperty("length");
-            if (rel_name.charAt(1) == 'F') // Enterring forward side
+            if (rel_name.charAt(1) == 'F') {// Enterring forward side
                 if (seq.length() + neighbor_len - K + 1 > seq_len) // neighbor is the last node of the path
-                    //loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), 0, seq_len - seq.length() + K - 2);
                     loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), K - 1, seq_len - seq.length() + K - 2);
                 else 
-                    //loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - 1);
                     loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), K - 1, neighbor_len - 1);
-            else // Enterring reverse side
+            }else{ // Enterring reverse side
                 if (seq.length() + neighbor_len - K + 1 > seq_len) // neighbor is the last node of the pat
-                    //loc += append_rev(seq, (String) neighbor.getProperty("sequence"), neighbor_len - (seq_len - seq.length()), neighbor_len - 1);
                     loc += append_rev(seq, (String) neighbor.getProperty("sequence"), neighbor_len - K - (seq_len - seq.length()) + 1, neighbor_len - K);
                 else 
-                    //loc += append_rev(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - 1);
                     loc += append_rev(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
+            }
             node = neighbor;
         } // while
     }
@@ -707,12 +705,11 @@ public class SequenceLayer {
     public static Relationship get_outgoing_edge(Node current_node, int[] address) {
         String origin;
         int[] occurrence;
-        int genome = address[0], sequence = address[1];
-        origin = "a" + genome + "_" + sequence;
+        origin = "a" + address[0] + "_" + address[1];
         for (Relationship r_out : current_node.getRelationships(Direction.OUTGOING)) {
             occurrence = (int[])r_out.getProperty(origin, null);
             if (occurrence != null) {
-                if (Arrays.binarySearch(occurrence, address[2])>=0)
+                if (Arrays.binarySearch(occurrence, address[2]) >= 0)
                     return r_out;
             }
         }
@@ -1365,7 +1362,7 @@ public class SequenceLayer {
      */
     void localize_nodes() {
         int trsc, i, len, m, neighbor_length = 0, count;
-        char node_side, neighbor_side = 'F';
+        char node_side, neighbor_side;
         long length;
         long[] anchor_nodes;
         int[] anchor_positions;
@@ -1383,10 +1380,10 @@ public class SequenceLayer {
         for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                 System.out.println("\rLocalizing sequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
-                origin = address[0] + "_" + address[1];
+                origin = "a" + address[0] + "_" + address[1];
                 length = genomeDb.sequence_length[address[0]][address[1]] - 1;
                 try (Transaction tx = graphDb.beginTx()) {
-                    node = seq_node = graphDb.findNode(sequence_label, "number", origin);
+                    node = seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
                     tx.success();
                 }
                 node_side = 'F';
@@ -1395,7 +1392,7 @@ public class SequenceLayer {
                 {
                     try (Transaction tx = graphDb.beginTx()) {
                         //System.out.println((address[2] + K - 1)+" ? " + length);
-                        for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && address[2] + K - 1 <= length && found; ++trsc) {
+                        for (trsc = 0; trsc < 10 * MAX_TRANSACTION_SIZE && address[2] + K - 1 <= length && found; ++trsc) {
                             found = false;
                             for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
                                 rel_name = r.getType().name();
@@ -1413,7 +1410,7 @@ public class SequenceLayer {
                                         || (is_degenerate && Arrays.equals(addr, address))) {
                                     //System.out.println("found "+address[2]+" "+neighbor.getId());
                                     found = true;
-                                    positions = (int[]) r.getProperty("a" + origin, null);
+                                    positions = (int[]) r.getProperty(origin, null);
                                     if (positions != null) {
                                         len = positions.length;
                                         new_positions = new int[len + 1];
@@ -1421,10 +1418,10 @@ public class SequenceLayer {
                                             new_positions[i] = positions[i];
                                         }
                                         new_positions[i] = address[2];
-                                        r.setProperty("a" + origin, new_positions);
+                                        r.setProperty(origin, new_positions);
                                     } else {
                                         initial_coordinate[0] = address[2];
-                                        r.setProperty("a" + origin, initial_coordinate);
+                                        r.setProperty(origin, initial_coordinate);
                                     }
                                     if (count % ANCHOR_DISTANCES == 0) {
                                         nds.append(neighbor.getId()).append(" ");

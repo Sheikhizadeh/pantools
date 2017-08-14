@@ -52,7 +52,8 @@ public class IndexPointer {
         next_index = -1l;
     }
     
-    public String ToString(){
+    @Override
+    public String toString(){
         return Long.toString(node_id)+Boolean.toString(canonical)+Integer.toString(offset);
     }
 

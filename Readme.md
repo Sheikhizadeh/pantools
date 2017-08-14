@@ -73,15 +73,16 @@ List of commands and examples for the provided sample data :
 
    java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-k K_SIZE] [-t THRESHOLD] [-i INFLATION] [-c CONTRAST] [-n NUMBER] 
 
-   K_SIZE : Size of peptide k-mers. Should be in range [4-6], otherwise it would be set by default (default = 5)    
+   K_SIZE : Size of peptide k-mers. Should be in range [4-6], otherwise it would be set by default (default = 6)    
    THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 70) 
    INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 21) 
    CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 11) 
-   NUMBER :    The number of pre-cooked parameter set (k,t,i,c). Could be 1 : (5,70,21,11) or
-                                                                          2 : (5,60,19, 9) or
-                                                                          3 : (5,40, 6, 7) or
-                                                                          4 : (5,20, 2, 3) or
-                                                                          5 : (5,10,1.4,1) or
+   NUMBER :    The number of pre-cooked parameter set (k,t,i,c). Could be 1 : (6, 70,  21, 11) or
+                                                                          2 : (6, 60,  17,  9) or
+                                                                          3 : (6, 50,  13,  7) or
+                                                                          4 : (6, 40,   9,  5) or
+                                                                          5 : (6, 30,   5,  3) or
+                                                                          6 : (6, 20, 1.2,  1) or
    
 Example: 
 

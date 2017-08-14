@@ -41,6 +41,7 @@ import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import static org.neo4j.graphdb.factory.GraphDatabaseSettings.keep_logical_logs;
 import static pangenome.SequenceLayer.append_fwd;
 import static pangenome.SequenceLayer.append_rev;
+import static pangenome.SequenceLayer.extract_sequence;
 import static pangenome.SequenceLayer.getFolderSize;
 
 import static pantools.Pantools.GENOME_DATABASE_PATH;
@@ -56,6 +57,7 @@ import static pantools.Pantools.startTime;
 import static pangenome.SequenceLayer.locate;
 import static pangenome.SequenceLayer.get_outgoing_edge;
 import static pantools.Pantools.CDS_label;
+import static pantools.Pantools.K;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.annotation_label;
 import static pantools.Pantools.broken_protein_label;
@@ -80,7 +82,6 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
-    private static int K;
     private int KMER_LENGTH = 6;
     private double CONTRAST = 11;
     private double INFLATION = 21;
@@ -91,6 +92,7 @@ public class AnnotationLayer {
     private double[][] phylogeny_distance;
     private int[][] count;
     private int num_genomes;
+
     /**
      * Implements a comparator for integer arrays of size two
      */
@@ -432,6 +434,8 @@ public class AnnotationLayer {
         PriorityQueue<int[]> pq = new PriorityQueue(comp);
         protein_builder pb = new protein_builder();
         Node cds_node, mrna_node, gene_node;
+        Relationship start_edge;
+        IndexPointer start_ptr = new IndexPointer();
         int trsc, isoforms_num, gene_start_pos, protein_num = 0;
         long annotaion;
         int[] address, begin_end;
@@ -447,7 +451,11 @@ public class AnnotationLayer {
                         gene_start_pos = address[2];
                         // extract gene sequence as appears in the sequence and connects it to its nodes
                         gene_builder.setLength(0);
-                        get_sequence_of_gene(gene_builder, address, gene_node);
+                        start_edge = gene_node.getSingleRelationship(RelTypes.starts, Direction.OUTGOING);
+                        start_ptr.node_id = start_edge.getEndNode().getId();
+                        start_ptr.offset = (int)start_edge.getProperty("offset");
+                        start_ptr.canonical = (boolean)start_edge.getProperty("forward");
+                        extract_sequence(gene_builder, start_ptr, address);
                         if (gene_builder.length() == 0)
                             continue;
                         isoforms_num =0;
@@ -532,64 +540,6 @@ public class AnnotationLayer {
         if (number_of_matches > 1) // is not unique
             sequence = -1;
         return sequence;
-    }
-
-    /**
-     * Connect the annotated gene to all the nodes its sequence passes through in the pangenome.
-     * At the same time assembles the sequence of the gene
-     * 
-     * @param gene_builder String builder which will contain the sequence of the gene  
-     * @param address An array containing {genome, sequence, begin, end}
-     * @param gene_node The gene node itself
-     */
-    public void get_sequence_of_gene(StringBuilder gene_builder, int[] address, Node gene_node){
-        Relationship start_edge, rel;
-        Node neighbor, node;
-        int genomic_pos, node_len, neighbor_len, seq_len = address[3] - address[2] + 1, offset;
-        String rel_name;
-        boolean fwd;
-        gene_builder.setLength(0);
-        genomic_pos = address[2]-1;
-        start_edge = gene_node.getSingleRelationship(RelTypes.starts, Direction.OUTGOING);
-        offset = (int)start_edge.getProperty("offset");
-        node = start_edge.getEndNode();
-        node_len = (int) node.getProperty("length");
-        fwd = (boolean)start_edge.getProperty("forward");
-        if (fwd) {
-            if (offset + seq_len - 1 <= node_len - 1) // node covers the gene
-                genomic_pos += append_fwd(gene_builder, (String) node.getProperty("sequence"), offset, offset + seq_len - 1);
-            else
-                genomic_pos += append_fwd(gene_builder, (String) node.getProperty("sequence"), offset, node_len - 1);
-        } else {
-            if (offset - (seq_len - 1) >= 0) // node covers the gene
-                genomic_pos += append_rev(gene_builder, (String) node.getProperty("sequence"), offset - (seq_len - 1), offset);
-            else
-                genomic_pos += append_rev(gene_builder, (String) node.getProperty("sequence"), 0, offset);
-        }
-        while (gene_builder.length() < seq_len ) {
-            try (Transaction tx = graphDb.beginTx()) {
-                for (int trsc = 0; gene_builder.length() < seq_len && trsc < MAX_TRANSACTION_SIZE; ++trsc){
-                    address[2] = genomic_pos - K + 1;
-                    rel = get_outgoing_edge(node, address);
-                    neighbor = rel.getEndNode();
-                    rel_name = rel.getType().name();
-                    neighbor_len = (int) neighbor.getProperty("length");
-                    if (rel_name.charAt(1) == 'F') {
-                        if (gene_builder.length() + neighbor_len - K + 1 > seq_len) 
-                            genomic_pos += append_fwd(gene_builder, (String) neighbor.getProperty("sequence"), K - 1, seq_len - gene_builder.length() + K - 2);
-                        else 
-                            genomic_pos += append_fwd(gene_builder, (String) neighbor.getProperty("sequence"), K - 1, neighbor_len - 1);
-                    } else {
-                        if (gene_builder.length() + neighbor_len - K + 1 > seq_len) 
-                        genomic_pos += append_rev(gene_builder, (String) neighbor.getProperty("sequence"), neighbor_len - K - (seq_len - gene_builder.length()) + 1, neighbor_len - K);
-                    else 
-                        genomic_pos += append_rev(gene_builder, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
-                    }
-                    node = neighbor;
-                }
-                tx.success();
-            }
-        } // while forward, forward ? genomic_pos - node_start_pos : node_len - 1 - (genomic_pos - node_start_pos)
     }
 
     /**

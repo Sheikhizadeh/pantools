@@ -39,6 +39,7 @@ public class Pantools {
     public static IndexDatabase indexDb;
     public static SequenceDatabase genomeDb;
     public static SequenceDatabase sequenceDb;
+    public static int K;
     public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
     public static int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
 
