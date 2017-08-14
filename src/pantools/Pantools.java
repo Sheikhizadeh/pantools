@@ -160,6 +160,8 @@ public class Pantools {
                     seqLayer.retrieve_regions(args[3],args[2]);
                 else if (args[1].equals("genomes"))
                     seqLayer.retrieve_genomes(args[3],args[2]);
+                else if (args[1].equals("synteny"))
+                    seqLayer.retrieve_synteny(args[3],args[2]);
                         else {
                     print_help_comment();
                     System.exit(1);

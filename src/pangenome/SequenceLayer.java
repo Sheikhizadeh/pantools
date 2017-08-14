@@ -610,7 +610,6 @@ public class SequenceLayer {
                             out = new BufferedWriter(new FileWriter(pangenome_path + "/genome_" + genome_number + ".fasta"));
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                                 address[2] = 1;
-                                address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
                                 start = locate(address, K);
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 extract_sequence(seq, start, address);
@@ -638,6 +637,112 @@ public class SequenceLayer {
             System.exit(1);
         }
     }
+
+    public void retrieve_synteny(String synteny_file, String pangenome_path) {
+        if (new File(pangenome_path + GENOME_DATABASE_PATH).exists()) {
+            BufferedReader in;
+            BufferedWriter out;
+            IndexPointer start;
+            String line;
+            int[] address;
+            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
+                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
+            registerShutdownHook(graphDb);
+            startTime = System.currentTimeMillis();
+            genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH, graphDb);
+            address = new int[4];
+            try (Transaction tx = graphDb.beginTx()) {
+                db_node = graphDb.findNodes(pangenome_label).next();
+                if (db_node == null) {
+                    System.out.println("Can not locate database node!");
+                    System.exit(1);
+                }
+                K = (int) db_node.getProperty("k_mer_size");
+                try {
+                    in = new BufferedReader(new FileReader(synteny_file));
+                    while (in.ready()) {
+                        line = in.readLine().trim();
+                        if (line.equals(""))
+                            continue;
+                        address[0] = Integer.parseInt(line);
+                        System.out.println("Reconstructing synteny map for " + address[0] + "...");
+                        try {
+                            for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
+                                address[2] = 1;
+                                start = locate(address, K);
+                                extract_synteny(pangenome_path, address[0], start, address);
+                            }
+                        }catch(NumberFormatException e){
+                            System.out.println("Invalid genome number!");
+                        }
+                    }
+                    in.close();
+                } catch (IOException ioe) {
+                    System.out.println("Failed to read file names!");
+                    System.exit(1);
+                }
+                tx.success();
+            }
+            System.out.println("Synteny files are ready in " + pangenome_path);
+            graphDb.shutdown();
+            genomeDb.close();
+        } else {
+            System.out.println("No database found in " + pangenome_path);
+            System.exit(1);
+        }
+    }
+    
+    public static void extract_synteny(String pangenome_path, int genome, IndexPointer start_ptr, int[] address) throws IOException {
+        Relationship rel;
+        Node node, neighbor;
+        int[] addr = new int[]{address[0],address[1],address[2] - 1};
+        int[] coordinates;
+        int i, loc, g, node_len;
+        String origin = "a" + address[0] + "_" + address[1];
+        loc = 0;
+        node = graphDb.getNodeById(start_ptr.node_id);
+        BufferedWriter[] out = new BufferedWriter[genomeDb.num_genomes + 1];
+    //  traverse the path of the region   
+        while (true) {
+            //System.out.println(loc);
+            node_len = (int) node.getProperty("length");
+            for (Relationship r: node.getRelationships(Direction.INCOMING,RelTypes.FF,RelTypes.RF)){
+                for (String prp: r.getPropertyKeys()){
+                    coordinates = (int[])r.getProperty(prp);
+                    g = Integer.parseInt(prp.substring(1).split("_")[0]);
+                    if (out[g] == null)
+                        out[g] = new BufferedWriter(new FileWriter(pangenome_path + "/synteny_" + genome + "_" + g + ".smf", true));
+                    out[g].write(node_len + " " + origin + " " + loc + " " + prp);
+                    for (i = 0; i < coordinates.length; ++i)
+                        out[g].write("\t" + coordinates[i]);
+                    out[g].write("\n");
+                }
+            }
+            for (Relationship r: node.getRelationships(Direction.INCOMING,RelTypes.FR,RelTypes.RR)){
+                for (String prp: r.getPropertyKeys()){
+                    coordinates = (int[])r.getProperty(prp);
+                    g = Integer.parseInt(prp.substring(1).split("_")[0]);
+                    if (out[g] == null)
+                        out[g] = new BufferedWriter(new FileWriter(pangenome_path + "/synteny_" + genome + "_" + g + ".smf", true));
+                    out[g].write(node_len + " " + origin + " " + loc + " " + prp);
+                    for (i = 0; i < coordinates.length; ++i)
+                        out[g].write("\t" + (-coordinates[i]));
+                    out[g].write("\n");
+                }
+            }
+            loc += node_len - K + 1;
+            rel = get_outgoing_edge(node, origin, loc);
+            if (rel == null)
+                break;
+            else
+                neighbor = rel.getEndNode();
+            node = neighbor;
+        } // while
+        for (g = 1; g <= genomeDb.num_genomes; ++g)
+            if (out[g] != null)
+                out[g].close();
+    }
+
     
     /**
      * Extracts the genomic region belonging to the specified sequence starting at th specified node.
@@ -652,7 +757,7 @@ public class SequenceLayer {
         int[] addr = new int[]{address[0],address[1],address[2],address[3]};
         int begin = addr[2] - 1, end = addr[3] - 1;
         int loc, node_len, neighbor_len, seq_len, position;
-        String rel_name;
+        String rel_name, origin = "a" + address[0] + "_" + address[1];
         seq_len = end - begin + 1;
         seq.setLength(0);
         loc = begin;
@@ -676,7 +781,7 @@ public class SequenceLayer {
     //  traverse the path of the region   
         while (seq.length() < seq_len ) {
             addr[2] = loc - K + 1;
-            rel = get_outgoing_edge(node, addr);
+            rel = get_outgoing_edge(node, origin, addr[2]);
             neighbor = rel.getEndNode();
             rel_name = rel.getType().name();
             neighbor_len = (int) neighbor.getProperty("length");
@@ -699,17 +804,16 @@ public class SequenceLayer {
      * Give the next node of the path to be traversed through.
      * 
      * @param current_node The current node of the path we are located at. 
+     * @param origin 
      * @param address An array which determine the genome, sequence and position of the desirable outgoing edge.
      * @return The outgoing edge.
      */
-    public static Relationship get_outgoing_edge(Node current_node, int[] address) {
-        String origin;
+    public static Relationship get_outgoing_edge(Node current_node, String origin, int pos) {
         int[] occurrence;
-        origin = "a" + address[0] + "_" + address[1];
         for (Relationship r_out : current_node.getRelationships(Direction.OUTGOING)) {
             occurrence = (int[])r_out.getProperty(origin, null);
             if (occurrence != null) {
-                if (Arrays.binarySearch(occurrence, address[2]) >= 0)
+                if (Arrays.binarySearch(occurrence, pos) >= 0)
                     return r_out;
             }
         }
@@ -755,7 +859,7 @@ public class SequenceLayer {
         boolean forward;
         Node node, neighbor, seq_node;
         Relationship rel;
-        String anchor_sides;
+        String anchor_sides, origin = "a" + addr[0] + "_" + addr[1];
         long[] anchor_nodes;
         int[] anchor_positions;
         int[] address = Arrays.copyOf(addr,addr.length);
@@ -786,7 +890,7 @@ public class SequenceLayer {
             while (node_start_pos + node_len <= genomic_pos) 
             {
                 address[2] = node_start_pos + node_len - K + 1;
-                rel = get_outgoing_edge(node, address);
+                rel = get_outgoing_edge(node, origin, address[2]);
                 if (rel == null){
                     System.out.println("Failed to locate address : " + address[0] + " " + address[1] + " "+ address[2]);
                     break;
