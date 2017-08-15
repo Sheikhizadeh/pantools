@@ -641,7 +641,6 @@ public class SequenceLayer {
     public void retrieve_synteny(String synteny_file, String pangenome_path) {
         if (new File(pangenome_path + GENOME_DATABASE_PATH).exists()) {
             BufferedReader in;
-            BufferedWriter out;
             IndexPointer start;
             String line;
             int[] address;
@@ -698,11 +697,15 @@ public class SequenceLayer {
         int[] addr = new int[]{address[0],address[1],address[2] - 1};
         int[] coordinates;
         int i, loc, g, node_len;
+        char q_side;
         String origin = "a" + address[0] + "_" + address[1];
         loc = 0;
         node = graphDb.getNodeById(start_ptr.node_id);
-        BufferedWriter[] out = new BufferedWriter[genomeDb.num_genomes + 1];
+        BufferedWriter[] out_fwd = new BufferedWriter[genomeDb.num_genomes + 1];
+        BufferedWriter[] out_rev = new BufferedWriter[genomeDb.num_genomes + 1];
+        String formatStr = "%8s%10s%10s\n";
     //  traverse the path of the region   
+        q_side = start_ptr.canonical ? 'F' : 'R';
         while (true) {
             //System.out.println(loc);
             node_len = (int) node.getProperty("length");
@@ -710,24 +713,32 @@ public class SequenceLayer {
                 for (String prp: r.getPropertyKeys()){
                     coordinates = (int[])r.getProperty(prp);
                     g = Integer.parseInt(prp.substring(1).split("_")[0]);
-                    if (out[g] == null)
-                        out[g] = new BufferedWriter(new FileWriter(pangenome_path + "/synteny_" + genome + "_" + g + ".smf", true));
-                    out[g].write(node_len + " " + origin + " " + loc + " " + prp);
-                    for (i = 0; i < coordinates.length; ++i)
-                        out[g].write("\t" + coordinates[i]);
-                    out[g].write("\n");
+                    if (out_fwd[g] == null){
+                        out_fwd[g] = new BufferedWriter(new FileWriter(pangenome_path + "/syntenyF_"+ genome + "_" + g + ".smf", true));
+                        out_fwd[g].write("> " + prp + "\n");
+                    }
+                    for (i = 0; i < coordinates.length; ++i){
+                        if (q_side == 'F')
+                            out_fwd[g].write(String.format(formatStr, loc + 1,coordinates[i] + 1, node_len));
+                        else
+                            out_fwd[g].write(String.format(formatStr, loc + 1,coordinates[i] + node_len, node_len));
+                    }
                 }
             }
             for (Relationship r: node.getRelationships(Direction.INCOMING,RelTypes.FR,RelTypes.RR)){
                 for (String prp: r.getPropertyKeys()){
                     coordinates = (int[])r.getProperty(prp);
                     g = Integer.parseInt(prp.substring(1).split("_")[0]);
-                    if (out[g] == null)
-                        out[g] = new BufferedWriter(new FileWriter(pangenome_path + "/synteny_" + genome + "_" + g + ".smf", true));
-                    out[g].write(node_len + " " + origin + " " + loc + " " + prp);
-                    for (i = 0; i < coordinates.length; ++i)
-                        out[g].write("\t" + (-coordinates[i]));
-                    out[g].write("\n");
+                    if (out_rev[g] == null){
+                        out_rev[g] = new BufferedWriter(new FileWriter(pangenome_path + "/syntenyR_"+ genome + "_" + g + ".smf", true));
+                        out_rev[g].write("> " + prp + " Reverse" + "\n");
+                    }
+                    for (i = 0; i < coordinates.length; ++i){
+                        if (q_side == 'R')
+                            out_rev[g].write(String.format(formatStr, loc + 1,coordinates[i] + 1, node_len));
+                        else
+                            out_rev[g].write(String.format(formatStr, loc + 1,coordinates[i] + node_len, node_len));
+                    }
                 }
             }
             loc += node_len - K + 1;
@@ -737,10 +748,14 @@ public class SequenceLayer {
             else
                 neighbor = rel.getEndNode();
             node = neighbor;
+            q_side = rel.getType().name().charAt(1);
         } // while
-        for (g = 1; g <= genomeDb.num_genomes; ++g)
-            if (out[g] != null)
-                out[g].close();
+        for (g = 1; g <= genomeDb.num_genomes; ++g){
+            if (out_fwd[g] != null)
+                out_fwd[g].close();
+            if (out_rev[g] != null)
+                out_rev[g].close();        
+        }
     }
 
     
