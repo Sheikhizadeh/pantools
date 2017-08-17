@@ -25,11 +25,15 @@ import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
@@ -62,6 +66,7 @@ import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.annotation_label;
 import static pantools.Pantools.broken_protein_label;
 import static pantools.Pantools.coding_gene_label;
+import static pantools.Pantools.cores;
 import static pantools.Pantools.executeCommand_for;
 import static pantools.Pantools.exon_label;
 import static pantools.Pantools.feature_label;
@@ -88,11 +93,40 @@ public class AnnotationLayer {
     private int THRESHOLD = 70;
     private final int MAX_ALIGNMENT_LENGTH  = 1000;
     private final int MAX_INTERSECTIONS  = 50000000;
-    private ProteinAlignment pro_aligner;
     private double[][] phylogeny_distance;
     private int[][] count;
     private int num_genomes;
     private LinkedList[] kmers_proteins_list;
+    
+    public class MyThread implements Runnable {
+        ConcurrentLinkedQueue<Relationship> intersections;
+        int id;
+        public MyThread(ConcurrentLinkedQueue<Relationship> p, int i) {
+            intersections = p;
+            id = i;
+        }
+
+        @Override
+        public void run() {
+            Node p1, p2;
+            String s1, s2;
+            double similarity;
+            ProteinAlignment aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
+            try (Transaction tx = graphDb.beginTx()) {
+                while(!intersections.isEmpty()){
+                    Relationship r = intersections.remove();
+                    p1 = r.getStartNode();
+                    p2 = r.getEndNode();
+                    s1 = (String)p1.getProperty("protein");
+                    s2 = (String)p2.getProperty("protein");
+                    similarity = (double)protein_similarity(aligner, s1, s2) / perfect_score(aligner, s1, s2) * 100;
+                    //System.out.println(id+" "+similarity);
+                    r.setProperty("similarity",similarity);
+                }
+                tx.success();
+            }
+        }
+    }    
 
     /**
      * Implements a comparator for integer arrays of size two
@@ -599,7 +633,6 @@ public class AnnotationLayer {
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
-        pro_aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
         kmerize_proteins(proteins);
         /*try(Transaction tx = graphDb.beginTx()){
             Node node;
@@ -614,7 +647,7 @@ public class AnnotationLayer {
             tx.success();
         }*/
         find_intersecting_proteins(proteins);
-        build_homology_groups(proteins, pangenome_path);
+        //build_homology_groups(proteins, pangenome_path);
         File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
         for (File f : directory.listFiles()) {
             if (f.getName().startsWith("neostore.transaction.db.")) {
@@ -681,6 +714,7 @@ public class AnnotationLayer {
     public void find_intersecting_proteins(LinkedList<Node> proteins){
         int i, start, p, counter, trsc, num_ids, kmer_index, caa;
         double similarity, max_kmer_freq;
+        ConcurrentLinkedQueue<Relationship> interesections = new ConcurrentLinkedQueue();
         long[] crossing_protein_ids= new long[MAX_INTERSECTIONS];
         int[] seed = new int[KMER_LENGTH];
         int[] code = new int[256];
@@ -737,12 +771,13 @@ public class AnnotationLayer {
                                     if (counter > Math.max(1, fraction * protein_length)){
                                         crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
                                         if(get_edge(crossing_protein_node, protein_node, RelTypes.is_similar_to) == null){
-                                            crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                                            similarity = (double)protein_similarity(protein, crossing_protein) / perfect_score(protein, crossing_protein) * 100;
+                                            //crossing_protein = (String)crossing_protein_node.getProperty("protein");
+                                            r = protein_node.createRelationshipTo(crossing_protein_node, RelTypes.is_similar_to); 
+                                            interesections.add(r);
+                                            /*similarity = (double)protein_similarity(protein, crossing_protein) / perfect_score(protein, crossing_protein) * 100;
                                             if (similarity > THRESHOLD){
-                                                r = protein_node.createRelationshipTo(crossing_protein_node, RelTypes.is_similar_to); 
                                                 r.setProperty("similarity",similarity);
-                                            }
+                                            }*/
                                         }
                                     }
                                     crossing_protein_id = p_id;
@@ -753,12 +788,13 @@ public class AnnotationLayer {
                             if (counter > Math.max(1, fraction * protein_length)){
                                 crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
                                 if(get_edge(crossing_protein_node, protein_node, RelTypes.is_similar_to) == null){
-                                    crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                                    similarity = (double)protein_similarity(protein, crossing_protein) / perfect_score(protein, crossing_protein) * 100;
+                                    //crossing_protein = (String)crossing_protein_node.getProperty("protein");
+                                    r = protein_node.createRelationshipTo(crossing_protein_node, RelTypes.is_similar_to); 
+                                    interesections.add(r);
+                                    /*similarity = (double)protein_similarity(protein, crossing_protein) / perfect_score(protein, crossing_protein) * 100;
                                     if (similarity > THRESHOLD){
-                                        r = protein_node.createRelationshipTo(crossing_protein_node, RelTypes.is_similar_to); 
                                         r.setProperty("similarity",similarity);
-                                    }
+                                    }*/
                                 }
                             }
                         }
@@ -770,10 +806,20 @@ public class AnnotationLayer {
             }
         } // for protein
         System.out.print("\r" + p + "/" + num_proteins);
-        System.out.println("\nElapsed time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
+        System.out.println("\nCalculating similarities...");
+        try{
+            ExecutorService es = Executors.newCachedThreadPool();
+            for(i = 0; i < cores; i++)
+                es.execute(new MyThread(interesections, i));
+            es.shutdown();
+            es.awaitTermination(10, TimeUnit.MINUTES);        
+        } catch (InterruptedException e){
+            
+        }
+        System.out.println("Elapsed time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
     }
     
-    private long perfect_score(String p1, String p2) {
+    private long perfect_score(ProteinAlignment aligner, String p1, String p2) {
         char match;
         int i, len1, len2;
         long score;
@@ -782,12 +828,12 @@ public class AnnotationLayer {
         if (len1 < len2){
             for (score = 0, i = 0; i < len1; ++i) {
                 match = p1.charAt(i);
-                score += pro_aligner.match[match][match];
+                score += aligner.match[match][match];
             }
         } else {
             for (score = 0, i = 0; i < len2; ++i) {
                 match = p2.charAt(i);
-                score += pro_aligner.match[match][match];
+                score += aligner.match[match][match];
             }  
         }
         return score;
@@ -925,7 +971,7 @@ public class AnnotationLayer {
      * @param p2 The second protein
      * @return The normalized similarity score which is less or equal to 1
      */
-    long protein_similarity(String p1, String p2){
+    long protein_similarity(ProteinAlignment aligner, String p1, String p2){
         int m = p1.length(), n = p2.length(), max_len = max(m,n);
         int i, parts_num = 1, part_len1, part_len2;
         long score;
@@ -934,11 +980,11 @@ public class AnnotationLayer {
             part_len1 = m / parts_num;
             part_len2 = n / parts_num;
             for (score =0, i = 0; i < parts_num; ++i)
-                score += pro_aligner.get_similarity(p1.substring(i * part_len1, min(m, (i + 1) * part_len1)),
+                score += aligner.get_similarity(p1.substring(i * part_len1, min(m, (i + 1) * part_len1)),
                                                     p2.substring(i * part_len2, min(n, (i + 1) * part_len2)) );
             return score;
         } else
-            return pro_aligner.get_similarity(p1, p2);
+            return aligner.get_similarity(p1, p2);
     }
    
     /**
