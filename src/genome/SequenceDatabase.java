@@ -44,6 +44,7 @@ public class SequenceDatabase {
     public String[] genome_names;     // Paths to the genome FASTA files
     public long genome_length[];    // Length of sequences for each genome
     public long sequence_length[][];    // Length of sequences for each genome
+    public long sequence_offset[][];    // Cummulative length of previous sequences
     public long sequence_start[][];    // Length of sequences for each genome    
     private RandomAccessFile genomes_file;
     public MappedByteBuffer[] genomes_buff;
@@ -99,17 +100,21 @@ public class SequenceDatabase {
             genome_length = new long[num_genomes + 1];
             sequence_titles = new String[num_genomes + 1][];
             sequence_length = new long[num_genomes + 1][];
+            sequence_offset = new long[num_genomes + 1][];
             sequence_start = new long[num_genomes + 1][];
             num_sequences = new int[num_genomes + 1];
             for (g = 1; g <= num_genomes; ++g) {
+                genome_names[g] = in.readLine().split(":")[1];
                 genome_length[g] = Long.valueOf(in.readLine().split(":")[1]);
                 num_sequences[g] = Integer.parseInt(in.readLine().split(":")[1]);
                 sequence_titles[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
+                sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
                     sequence_titles[g][s] = in.readLine().split(":")[1];
                     sequence_length[g][s] = Long.valueOf(in.readLine().split(":")[1]);
+                    sequence_offset[g][s] = Long.valueOf(in.readLine().split(":")[1]);
                     sequence_start[g][s] = Long.valueOf(in.readLine().split(":")[1]);
                 }
             }
@@ -167,6 +172,7 @@ public class SequenceDatabase {
         genome_length = new long[num_genomes + 1];
         sequence_titles = new String[num_genomes + 1][];
         sequence_length = new long[num_genomes + 1][];
+        sequence_offset = new long[num_genomes + 1][];
         sequence_start = new long[num_genomes + 1][];
         num_sequences = new int[num_genomes + 1];
         Iterator<String> itr = genome_list.iterator();
@@ -192,6 +198,7 @@ public class SequenceDatabase {
             }
             sequence_titles[g] = new String[num_sequences[g] + 1];
             sequence_length[g] = new long[num_sequences[g] + 1];
+            sequence_offset[g] = new long[num_sequences[g] + 1];
             sequence_start[g] = new long[num_sequences[g] + 1];
         }
         code_genomes(path, 0);
@@ -214,21 +221,26 @@ public class SequenceDatabase {
         try (Transaction tx = graphDb.beginTx()) {
             db_node = graphDb.findNodes(pangenome_label).next();
             num_genomes = (int) db_node.getProperty("num_genomes");
+            genome_names = new String[num_genomes + 1];
             genome_length = new long[num_genomes + 1];
             sequence_titles = new String[num_genomes + 1][];
             sequence_length = new long[num_genomes + 1][];
+            sequence_offset = new long[num_genomes + 1][];
             sequence_start = new long[num_genomes + 1][];
             num_sequences = new int[num_genomes + 1];
             for (g = 1; g <= num_genomes; ++g) {
                 gen_node = graphDb.findNode(genome_label, "number", g);
+                genome_names[g] = (String) gen_node.getProperty("name");
                 num_sequences[g] = (int) gen_node.getProperty("num_sequences");
                 sequence_titles[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
+                sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
                     seq_node = graphDb.findNode(sequence_label, "number", g + "_" + s);
                     sequence_titles[g][s] = (String) seq_node.getProperty("sequence_title");
                     sequence_length[g][s] = (long) seq_node.getProperty("sequence_length");
+                    sequence_offset[g][s] = (long) seq_node.getProperty("sequence_offset");
                     sequence_start[g][s] = num_bytes;
                     num_bytes += sequence_length[g][s] % 2 == 0 ? sequence_length[g][s] / 2 : sequence_length[g][s] / 2 + 1;
                 }
@@ -276,6 +288,8 @@ public class SequenceDatabase {
             try {
                 in = new BufferedReader(new FileReader(genome_names[g]));
                 s = 0;
+                sequence_offset[g][0] = 0;
+                sequence_length[g][0] = 0;
                 while (in.ready()) {
                     line = in.readLine();
                     if (line.equals("")) {
@@ -284,6 +298,7 @@ public class SequenceDatabase {
                     if (line.charAt(0) == '>') {
                         ++s;
                         sequence_titles[g][s] = line.substring(1);
+                        sequence_offset[g][s] = sequence_offset[g][s - 1] + sequence_length[g][s - 1];
                         if (size % 2 == 1) {
                             ++size;
                         }
@@ -428,6 +443,7 @@ public class SequenceDatabase {
             genome_length = new long[num_genomes + 1];
             sequence_titles = new String[num_genomes + 1][];
             sequence_length = new long[num_genomes + 1][];
+            sequence_offset = new long[num_genomes + 1][];
             sequence_start = new long[num_genomes + 1][];
             num_sequences = new int[num_genomes + 1];
             for (g = 1; g <= previous_num_genomes; ++g) {
@@ -435,10 +451,12 @@ public class SequenceDatabase {
                 num_sequences[g] = Integer.parseInt(in.readLine().split(":")[1]);
                 sequence_titles[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
+                sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
                     sequence_titles[g][s] = in.readLine().split(":")[1];
                     sequence_length[g][s] = Long.valueOf(in.readLine().split(":")[1]);
+                    sequence_offset[g][s] = Long.valueOf(in.readLine().split(":")[1]);
                     sequence_start[g][s] = Long.valueOf(in.readLine().split(":")[1]);
                 }
             }
@@ -461,6 +479,7 @@ public class SequenceDatabase {
                 in.close();
                 sequence_titles[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
+                sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
             }
         } catch (IOException e) {
@@ -496,11 +515,13 @@ public class SequenceDatabase {
             out.write("number_of_bytes:" + num_bytes + "\n");
             out.write("number_of_genomes:" + num_genomes + "\n");
             for (g = 1; g <= num_genomes; ++g) {
+                out.write("genome name:" + genome_names[g] + "\n");
                 out.write("genome length:" + genome_length[g] + "\n");
                 out.write("number_of_sequences:" + num_sequences[g] + "\n");
                 for (s = 1; s <= num_sequences[g]; ++s) {
                     out.write("sequence title:" + sequence_titles[g][s] + "\n");
                     out.write("sequence length:" + sequence_length[g][s] + "\n");
+                    out.write("sequence offset:" + sequence_offset[g][s] + "\n");
                     out.write("sequence start:" + sequence_start[g][s] + "\n");
                 }
             }
