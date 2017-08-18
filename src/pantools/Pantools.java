@@ -79,7 +79,7 @@ public class Pantools {
         contributes_to,// for connecting CDSs to mRNA
         visits,
         precedes, 
-        is_similar_to,
+        is_similar_to
     }
 
     public static long startTime;

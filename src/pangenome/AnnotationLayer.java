@@ -93,6 +93,7 @@ public class AnnotationLayer {
     private int THRESHOLD = 70;
     private final int MAX_ALIGNMENT_LENGTH  = 1000;
     private final int MAX_INTERSECTIONS  = 50000000;
+    private int THREADS = cores;
     private double[][] phylogeny_distance;
     private int[][] count;
     private int num_genomes;
@@ -101,29 +102,36 @@ public class AnnotationLayer {
     public class MyThread implements Runnable {
         ConcurrentLinkedQueue<Relationship> intersections;
         int id;
-        public MyThread(ConcurrentLinkedQueue<Relationship> p, int i) {
+        int total;
+        public MyThread(ConcurrentLinkedQueue<Relationship> p, int t, int i) {
             intersections = p;
             id = i;
+            total = t;
         }
 
         @Override
         public void run() {
+            int trc, i = 0, chunk = total / 100;
             Node p1, p2;
             String s1, s2;
             double similarity;
             ProteinAlignment aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
-            try (Transaction tx = graphDb.beginTx()) {
-                while(!intersections.isEmpty()){
-                    Relationship r = intersections.remove();
-                    p1 = r.getStartNode();
-                    p2 = r.getEndNode();
-                    s1 = (String)p1.getProperty("protein");
-                    s2 = (String)p2.getProperty("protein");
-                    similarity = (double)protein_similarity(aligner, s1, s2) / perfect_score(aligner, s1, s2) * 100;
-                    //System.out.println(id+" "+similarity);
-                    r.setProperty("similarity",similarity);
+            while (!intersections.isEmpty()){
+                try (Transaction tx = graphDb.beginTx()) {
+                    for(trc = 0; !intersections.isEmpty() && trc < 10 * MAX_TRANSACTION_SIZE ; ++i){
+                        Relationship r = intersections.remove();
+                        p1 = r.getStartNode();
+                        p2 = r.getEndNode();
+                        s1 = (String)p1.getProperty("protein");
+                        s2 = (String)p2.getProperty("protein");
+                        similarity = (double)protein_similarity(aligner, s1, s2) / perfect_score(aligner, s1, s2) * 100;
+                        //System.out.println(id+" "+similarity);
+                        r.setProperty("similarity",similarity);
+                        if (i % chunk == 0)
+                            System.out.print("|");
+                    }
+                    tx.success();
                 }
-                tx.success();
             }
         }
     }    
@@ -588,7 +596,7 @@ public class AnnotationLayer {
     public void group(String[] args) {
         LinkedList<Node> proteins = new LinkedList();
         String pangenome_path = args[1];
-        int i, n, d;
+        int i, n, d, p;
         double x;
         for (i = 2; i < args.length; ++i){
             switch (args[i]){
@@ -626,6 +634,12 @@ public class AnnotationLayer {
                     CONTRAST = new double[] {0, 11, 9,  7,  5,  3,  1  }[d];
                     ++i;
                     break;
+                case "-p":
+                    p = Integer.parseInt(args[i + 1]);
+                    if (p >= 1 && p <= cores)
+                        THREADS = p;
+                    ++i;
+                    break;
             }
         }
         System.out.println("KMER_LENGTH = " + KMER_LENGTH + "\tTHRESHOLD = " + THRESHOLD + "\tINFLATION = " + INFLATION  + "\tCONTRAST = " + CONTRAST);
@@ -647,7 +661,7 @@ public class AnnotationLayer {
             tx.success();
         }*/
         find_intersecting_proteins(proteins);
-        //build_homology_groups(proteins, pangenome_path);
+        build_homology_groups(proteins, pangenome_path);
         File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
         for (File f : directory.listFiles()) {
             if (f.getName().startsWith("neostore.transaction.db.")) {
@@ -659,7 +673,7 @@ public class AnnotationLayer {
     
     private void kmerize_proteins(LinkedList<Node> proteins){
         Node protein_node, panproteome;
-        int i, trsc, start, protein_length, kmer_index, caa, max, max_kmer_freq;
+        int i, start, protein_length, kmer_index, caa, max, max_kmer_freq;
         long total_proteins, num_proteins = 0, num_kmers = 0;
         String protein;
         int[] seed = new int[KMER_LENGTH];
@@ -672,7 +686,7 @@ public class AnnotationLayer {
         {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
         for (i = 0; i < 20; ++i)
             code[aminoacids[i]] = i;
-        System.out.println("Kmerizing proteins...");
+        System.out.println("\nKmerizing proteins :");
         try (Transaction tx = graphDb.beginTx()) {
             panproteome = graphDb.findNodes(pangenome_label).next();
             panproteome.setProperty("l_mer_size", KMER_LENGTH);
@@ -681,10 +695,11 @@ public class AnnotationLayer {
             proteins_iterator = graphDb.findNodes(mRNA_label);
             while (proteins_iterator.hasNext()){
                 protein_node = proteins_iterator.next();
-                proteins.add(protein_node);
                 protein = (String)protein_node.getProperty("protein", "");
                 protein_length = protein.length();
                 if (protein_length > KMER_LENGTH){
+                    proteins.add(protein_node);
+                    ++num_proteins;
                     for (i = 0; i < KMER_LENGTH - 1; ++i)
                         seed[i] = protein.charAt(i);
                     for (start = 0; start < protein_length - KMER_LENGTH; ++start){// for each penta-mer of the protein
@@ -701,7 +716,6 @@ public class AnnotationLayer {
                         if (kmers_proteins_list[kmer_index].size() < max_kmer_freq)
                             kmers_proteins_list[kmer_index].add(protein_node.getId());
                     }                            
-                    ++num_proteins;
                 }
                 if (num_proteins % 11 == 0)
                     System.out.print("\r" + num_proteins + " proteins, " + num_kmers + " kmers" );
@@ -713,7 +727,7 @@ public class AnnotationLayer {
     
     public void find_intersecting_proteins(LinkedList<Node> proteins){
         int i, start, p, counter, trsc, num_ids, kmer_index, caa;
-        double similarity, max_kmer_freq;
+        double max_kmer_freq;
         ConcurrentLinkedQueue<Relationship> interesections = new ConcurrentLinkedQueue();
         long[] crossing_protein_ids= new long[MAX_INTERSECTIONS];
         int[] seed = new int[KMER_LENGTH];
@@ -729,94 +743,83 @@ public class AnnotationLayer {
         long protein_node_id;
         double fraction = THRESHOLD / 1000.0; // otherwise are not similar enough 
         int protein_length, num_proteins = proteins.size();
-        String protein, crossing_protein;
+        String protein;
         long crossing_protein_id, p_id;
         double []prb = new double[]{0,0,0,0,0.0062305,0.0003125,0.0000156}; // kmer occurance probabilities
         max_kmer_freq = (int)Math.round(num_proteins * (prb[KMER_LENGTH] + (7 - KMER_LENGTH) / 100.0 )); // increases sensitivity
-        System.out.println("Finding intersecting proteins...");
+        System.out.println("\nFinding intersecting proteins :");
         for (p = 0; proteins_itr.hasNext(); ) {
             try (Transaction tx = graphDb.beginTx()) {
                 for (trsc = 0; proteins_itr.hasNext() && trsc < 2 * MAX_TRANSACTION_SIZE; ++trsc){
                     protein_node = proteins_itr.next();
-                    protein = (String)protein_node.getProperty("protein", "");
+                    protein = (String)protein_node.getProperty("protein");
                     protein_length = protein.length();
-                    if (protein_length > KMER_LENGTH){
-                        protein_node_id = protein_node.getId();
-                        num_ids = 0;
-                        ++p;
-                        for (i = 0; i < KMER_LENGTH - 1; ++i)
-                            seed[i] = protein.charAt(i);
-                        for (start = 0; start < protein_length - KMER_LENGTH && num_ids < MAX_INTERSECTIONS; ++start){// for each penta-mer of the protein
-                            seed[(start + KMER_LENGTH - 1) % KMER_LENGTH] = protein.charAt(start + KMER_LENGTH - 1);
-                            kmer_index = 0;
-                            for (i = 0; i < KMER_LENGTH; ++i){
-                                caa = seed[(start + i) % KMER_LENGTH];
-                                kmer_index = kmer_index * 20 + code[caa];
-                            }
-                            if (kmers_proteins_list[kmer_index].size() < max_kmer_freq){ // halfs the run-time
-                                proteins_list = kmers_proteins_list[kmer_index].iterator();
-                                while(proteins_list.hasNext() && num_ids < MAX_INTERSECTIONS){
-                                    crossing_protein_id = proteins_list.next();
-                                    if (crossing_protein_id != protein_node_id)
-                                        crossing_protein_ids[num_ids++] = crossing_protein_id;
-                                }
+                    protein_node_id = protein_node.getId();
+                    num_ids = 0;
+                    ++p;
+                    for (i = 0; i < KMER_LENGTH - 1; ++i)
+                        seed[i] = protein.charAt(i);
+                    for (start = 0; start < protein_length - KMER_LENGTH && num_ids < MAX_INTERSECTIONS; ++start){// for each penta-mer of the protein
+                        seed[(start + KMER_LENGTH - 1) % KMER_LENGTH] = protein.charAt(start + KMER_LENGTH - 1);
+                        kmer_index = 0;
+                        for (i = 0; i < KMER_LENGTH; ++i){
+                            caa = seed[(start + i) % KMER_LENGTH];
+                            kmer_index = kmer_index * 20 + code[caa];
+                        }
+                        if (kmers_proteins_list[kmer_index].size() < max_kmer_freq){ // halfs the run-time
+                            proteins_list = kmers_proteins_list[kmer_index].iterator();
+                            while(proteins_list.hasNext() && num_ids < MAX_INTERSECTIONS){
+                                crossing_protein_id = proteins_list.next();
+                                if (crossing_protein_id != protein_node_id)
+                                    crossing_protein_ids[num_ids++] = crossing_protein_id;
                             }
                         }
-                        if (num_ids > 0){
-                            --num_ids;
-                            Arrays.sort(crossing_protein_ids, 0, num_ids);
-                            for (counter = 0, crossing_protein_id = crossing_protein_ids[0]; num_ids >= 0; --num_ids){
-                                p_id = crossing_protein_ids[num_ids];
-                                if (crossing_protein_id != p_id){
-                                    if (counter > Math.max(1, fraction * protein_length)){
-                                        crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
-                                        if(get_edge(crossing_protein_node, protein_node, RelTypes.is_similar_to) == null){
-                                            //crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                                            r = protein_node.createRelationshipTo(crossing_protein_node, RelTypes.is_similar_to); 
-                                            interesections.add(r);
-                                            /*similarity = (double)protein_similarity(protein, crossing_protein) / perfect_score(protein, crossing_protein) * 100;
-                                            if (similarity > THRESHOLD){
-                                                r.setProperty("similarity",similarity);
-                                            }*/
-                                        }
-                                    }
-                                    crossing_protein_id = p_id;
-                                    counter = 1;                                
-                                } else
-                                    ++counter;
-                            }
-                            if (counter > Math.max(1, fraction * protein_length)){
-                                crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
-                                if(get_edge(crossing_protein_node, protein_node, RelTypes.is_similar_to) == null){
-                                    //crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                                    r = protein_node.createRelationshipTo(crossing_protein_node, RelTypes.is_similar_to); 
-                                    interesections.add(r);
-                                    /*similarity = (double)protein_similarity(protein, crossing_protein) / perfect_score(protein, crossing_protein) * 100;
-                                    if (similarity > THRESHOLD){
-                                        r.setProperty("similarity",similarity);
-                                    }*/
-                                }
-                            }
-                        }
-                        if (p % 11 == 1)
-                            System.out.print("\r" + p + "/" + num_proteins);
                     }
+                    if (num_ids > 0){
+                        --num_ids;
+                        Arrays.sort(crossing_protein_ids, 0, num_ids);
+                        for (counter = 0, crossing_protein_id = crossing_protein_ids[0]; num_ids >= 0; --num_ids){
+                            p_id = crossing_protein_ids[num_ids];
+                            if (crossing_protein_id != p_id){
+                                if (counter > Math.max(1, fraction * protein_length)){
+                                    crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
+                                    if(get_edge(crossing_protein_node, protein_node, RelTypes.is_similar_to) == null){
+                                        r = protein_node.createRelationshipTo(crossing_protein_node, RelTypes.is_similar_to); 
+                                        interesections.add(r);
+                                    }
+                                }
+                                crossing_protein_id = p_id;
+                                counter = 1;                                
+                            } else
+                                ++counter;
+                        }
+                        if (counter > Math.max(1, fraction * protein_length)){
+                            crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
+                            if(get_edge(crossing_protein_node, protein_node, RelTypes.is_similar_to) == null){
+                                r = protein_node.createRelationshipTo(crossing_protein_node, RelTypes.is_similar_to); 
+                                interesections.add(r);
+                            }
+                        }
+                    }
+                    if (p % 11 == 1)
+                        System.out.print("\r" + p + "/" + num_proteins);
                 }
                 tx.success();
             }
         } // for protein
         System.out.print("\r" + p + "/" + num_proteins);
-        System.out.println("\nCalculating similarities...");
+        System.out.println("\n\nCalculating similarities :");
+        System.out.print("0 .................................................................................................... 100\n  ");
         try{
             ExecutorService es = Executors.newCachedThreadPool();
-            for(i = 0; i < cores; i++)
-                es.execute(new MyThread(interesections, i));
+            for(i = 0; i < THREADS; i++)
+                es.execute(new MyThread(interesections, interesections.size(), i));
             es.shutdown();
-            es.awaitTermination(10, TimeUnit.MINUTES);        
+            es.awaitTermination(10, TimeUnit.DAYS);        
         } catch (InterruptedException e){
             
         }
-        System.out.println("Elapsed time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
+        System.out.println("\nElapsed time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
     }
     
     private long perfect_score(ProteinAlignment aligner, String p1, String p2) {
@@ -844,11 +847,12 @@ public class AnnotationLayer {
      */
     private void build_homology_groups(LinkedList<Node> proteins, String pangenome_path){
         int i, num_groups = 0, num_grouped_proteins;
-        Node protein_node, homology_group_node;
+        Node protein_node, homology_group;
         int[] copy_number;
         BufferedWriter groups_file;
         LinkedList<Node> group = new LinkedList();
         LinkedList<Node> homology_group_nodes = new LinkedList();
+        System.out.println("\rBuilding homology groups : ");
         try (Transaction tx = graphDb.beginTx()) {
             num_genomes = (int)graphDb.findNodes(pangenome_label).next().getProperty("num_genomes");
             copy_number = new int[num_genomes + 1];   
@@ -868,14 +872,15 @@ public class AnnotationLayer {
                 num_grouped_proteins = breadth_first_search(group, protein_node);
                 if (num_grouped_proteins > 0){ // has not been grouped before
                     num_groups += break_group(homology_group_nodes, group, pangenome_path);
-                    group.clear();
                     while (!homology_group_nodes.isEmpty()){
-                        homology_group_node = homology_group_nodes.remove();
-                        groups_file.write(Long.toString(homology_group_node.getId()) + ":");
-                        set_and_write_homology_groups(homology_group_node, copy_number, groups_file);
+                        homology_group = homology_group_nodes.remove();
+                        groups_file.write(Long.toString(homology_group.getId()) + ":");
+                        set_and_write_homology_groups(homology_group, copy_number, groups_file);
                     }  
+                    group.clear();
+                    homology_group_nodes.clear();
                 }
-                System.out.print("\rHomology groups : " + num_groups);
+                System.out.print("\r" + num_groups + " groups");
                 tx.success();
                 }
             } // while 
@@ -883,7 +888,7 @@ public class AnnotationLayer {
         }catch (IOException ex){
             System.out.print(ex.getMessage());
         }                
-        System.out.println("\rHomology groups : " + num_groups);
+        System.out.println("\r" + num_groups + " groups\n");
 
     }
     
@@ -903,10 +908,12 @@ public class AnnotationLayer {
                 p2 = r.getEndNode();
                 g2 = (int)p2.getProperty("genome");
                 similarity = (double)r.getProperty("similarity");
-                phylogeny_distance[g1][g2] += similarity;
-                phylogeny_distance[g2][g1] += similarity;
-                ++count[g1][g2];
-                ++count[g2][g1];
+                if (similarity > THRESHOLD){
+                    phylogeny_distance[g1][g2] += similarity;
+                    phylogeny_distance[g2][g1] += similarity;
+                    ++count[g1][g2];
+                    ++count[g2][g1];
+                }
             }
         }
         for (i = 1; i < phylogeny_distance.length; ++i)
@@ -935,12 +942,11 @@ public class AnnotationLayer {
      */
     private int breadth_first_search(LinkedList<Node> group, Node start_protein){
         int num_members = 0;
+        long start_id = start_protein.getId();
         Node crossing_protein;
-        Relationship crossing_edge;
-        Iterator<Relationship> itr;
         try (Transaction tx1 = graphDb.beginTx()) {
         // To avoid having one protein in different groups    
-            if (!start_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING) && start_protein.hasProperty("protein") ) { 
+            if (!start_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING) ) { 
                 Queue<Node> homologs = new LinkedList();
                 homologs.add(start_protein);
                 // for all the candidates with some shared node with the protein    
@@ -948,13 +954,14 @@ public class AnnotationLayer {
                     start_protein = homologs.remove();
                     group.add(start_protein);
                     ++num_members;
-                    itr = start_protein.getRelationships(RelTypes.is_similar_to).iterator();
-                    while (itr.hasNext()) {
-                        crossing_edge = itr.next();
-                        crossing_protein = crossing_edge.getOtherNode(start_protein);
-                        if(!crossing_protein.hasProperty("grouped")){
-                            crossing_protein.setProperty("grouped", true);
-                            homologs.add(crossing_protein);
+                    for (Relationship crossing_edge: start_protein.getRelationships(RelTypes.is_similar_to)) {
+                        if ((double)crossing_edge.getProperty("similarity") > THRESHOLD)
+                        {
+                            crossing_protein = crossing_edge.getOtherNode(start_protein);
+                            if(!crossing_protein.hasProperty("group")){
+                                crossing_protein.setProperty("group", start_id);
+                                homologs.add(crossing_protein);
+                            }
                         }
                     }
                 }// while
@@ -993,16 +1000,16 @@ public class AnnotationLayer {
     int break_group(LinkedList<Node> homology_group_nodes, LinkedList<Node> group, String pangenome_path){
         int i, num_groups = 0;
         double infl;
-        Node homology_group_node;
+        Node homology_group;
         String graph_path, clusters_path, line, command;
         String[] fields;
         BufferedReader clusters_file;
         File tmp_file;
         if (group.size() == 1){
-            homology_group_node = graphDb.createNode(homology_group_lable); 
-            homology_group_node.createRelationshipTo(group.remove(), RelTypes.has_homolog);
-            homology_group_node.setProperty("num_members", 1);
-            homology_group_nodes.add(homology_group_node);
+            homology_group = graphDb.createNode(homology_group_lable); 
+            homology_group.createRelationshipTo(group.remove(), RelTypes.has_homolog);
+            homology_group.setProperty("num_members", 1);
+            homology_group_nodes.add(homology_group);
             num_groups++;
         } else {       
             graph_path = pangenome_path + "/" + group.getFirst().getId() + ".graph";
@@ -1026,12 +1033,12 @@ public class AnnotationLayer {
                         line = clusters_file.readLine();
                         fields = line.split("\\s");
                         if (fields.length > 1){
-                            homology_group_node = graphDb.createNode(homology_group_lable);
-                            homology_group_nodes.add(homology_group_node);
+                            homology_group = graphDb.createNode(homology_group_lable);
+                            homology_group_nodes.add(homology_group);
                             ++num_groups;
                             for (i = 0; i < fields.length; ++i)
-                                homology_group_node.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[i])), RelTypes.has_homolog);
-                            homology_group_node.setProperty("num_members", fields.length);
+                                homology_group.createRelationshipTo(graphDb.getNodeById(Long.parseLong(fields[i])), RelTypes.has_homolog);
+                            homology_group.setProperty("num_members", fields.length);
                         } else 
                             num_groups += group_singleton(homology_group_nodes, fields[0]);
                     }
@@ -1063,10 +1070,13 @@ public class AnnotationLayer {
                 try (Transaction tx = graphDb.beginTx()) {
                     for (Relationship homology_edge: protein1_node.getRelationships(RelTypes.is_similar_to, Direction.OUTGOING)){
                         protein2_node = homology_edge.getEndNode();
-                        similarity = (double)homology_edge.getProperty("similarity") - THRESHOLD;
-                        genome2 = (int)protein2_node.getProperty("genome");
-                        similarity += phylogeny_distance[genome1][genome2];
-                        graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity, CONTRAST) + "\n");
+                        similarity = (double)homology_edge.getProperty("similarity");
+                        if (similarity > THRESHOLD){
+                            similarity -= THRESHOLD;
+                            genome2 = (int)protein2_node.getProperty("genome");
+                            similarity += phylogeny_distance[genome1][genome2];
+                            graph.write(protein1_node.getId()+" "+protein2_node.getId()+" "+ Math.pow(similarity, CONTRAST) + "\n");
+                        }
                     }
                     tx.success();
                 }
@@ -1079,9 +1089,11 @@ public class AnnotationLayer {
     private int group_singleton(LinkedList<Node> homology_group_nodes, String singleton_id){
         int num_groups = 0;
         double best_score, similarity;
-        Node homology_group_node, single_protein, neighbor, best_hit;
+        Node homology_group, single_protein, neighbor, best_hit;
         single_protein = graphDb.getNodeById(Long.parseLong(singleton_id));
-        if (!single_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
+                try(Transaction tx = graphDb.beginTx()){
+        if (!single_protein.hasRelationship(RelTypes.has_homolog, Direction.INCOMING))
+        {
             best_score = 0;
             best_hit = null;
             for (Relationship r: single_protein.getRelationships(RelTypes.is_similar_to)){
@@ -1094,25 +1106,26 @@ public class AnnotationLayer {
             }
             if (best_score > 0){
                 if(best_hit.hasRelationship(RelTypes.has_homolog, Direction.INCOMING)){
-                    homology_group_node = best_hit.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING).getStartNode();
-                    homology_group_node.createRelationshipTo(single_protein, RelTypes.has_homolog);
-                    homology_group_node.setProperty("num_members", (int)homology_group_node.getProperty("num_members") + 1);
+                    homology_group = best_hit.getSingleRelationship(RelTypes.has_homolog, Direction.INCOMING).getStartNode();
+                    homology_group.createRelationshipTo(single_protein, RelTypes.has_homolog);
+                    homology_group.setProperty("num_members", (int)homology_group.getProperty("num_members") + 1);
                 } else {
-                    homology_group_node = graphDb.createNode(homology_group_lable);
-                    homology_group_nodes.add(homology_group_node);
+                    homology_group = graphDb.createNode(homology_group_lable);
+                    homology_group_nodes.add(homology_group);
                     ++num_groups;
-                    homology_group_node.createRelationshipTo(single_protein, RelTypes.has_homolog);
-                    homology_group_node.createRelationshipTo(best_hit, RelTypes.has_homolog);
-                    homology_group_node.setProperty("num_members", 2);
+                    homology_group.createRelationshipTo(single_protein, RelTypes.has_homolog);
+                    homology_group.createRelationshipTo(best_hit, RelTypes.has_homolog);
+                    homology_group.setProperty("num_members", 2);
                 }
             } else {
-                    homology_group_node = graphDb.createNode(homology_group_lable);
-                    homology_group_nodes.add(homology_group_node);
+                    homology_group = graphDb.createNode(homology_group_lable);
+                    homology_group_nodes.add(homology_group);
                     ++num_groups;
-                    homology_group_node.createRelationshipTo(single_protein, RelTypes.has_homolog);
-                    homology_group_node.setProperty("num_members", 1);
+                    homology_group.createRelationshipTo(single_protein, RelTypes.has_homolog);
+                    homology_group.setProperty("num_members", 1);
             }
         }
+        tx.success();}
         return num_groups;
     }    
     
@@ -1139,14 +1152,14 @@ public class AnnotationLayer {
     void set_and_write_homology_groups(Node homology_group_node, int[] copy_number, BufferedWriter groups_file) throws IOException {
         int i;
         Node protein_node;
-        for (Relationship rel: homology_group_node.getRelationships(Direction.OUTGOING)){
+        for (Relationship rel: homology_group_node.getRelationships(Direction.OUTGOING, RelTypes.has_homolog)){
             protein_node = rel.getEndNode();
             ++copy_number[(int)protein_node.getProperty("genome")];
             groups_file.write(" " + protein_node.getProperty("protein_ID"));
         }
         groups_file.write("\n");
         homology_group_node.setProperty("copy_number_variation", copy_number);
-        for (i=0; i<copy_number.length; ++i)
+        for (i=0; i < copy_number.length; ++i)
             copy_number[i] = 0;
     }    
     
