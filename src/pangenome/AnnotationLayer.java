@@ -95,8 +95,7 @@ public class AnnotationLayer {
     private ConcurrentLinkedQueue[] kmers_proteins_list;
     private ConcurrentLinkedQueue<Node> proteins;
     private ConcurrentLinkedQueue<Node> kmerized_proteins;
-    private ConcurrentLinkedQueue<intersection> interesections;
-    
+    private String pangenome_path;
     
     public class intersection{
         public Node protein1;
@@ -159,7 +158,6 @@ public class AnnotationLayer {
                 }
                 tx.success();
             }
-            System.out.print("|");
         }
     }    
 
@@ -179,6 +177,7 @@ public class AnnotationLayer {
             long[] crossing_protein_ids= new long[MAX_INTERSECTIONS];
             int[] seed = new int[KMER_LENGTH];
             int[] code = new int[256];
+            String formatStr = "%d %d %.2f\n";
             char[] aminoacids = new char[]
             {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
             for (i = 0; i < 20; ++i)
@@ -190,6 +189,7 @@ public class AnnotationLayer {
             int protein_length, num_proteins = total;
             String protein, crossing_protein;
             long crossing_protein_id, p_id;
+            try(BufferedWriter intersections_file = new BufferedWriter(new FileWriter(pangenome_path + id + ".int"))){
             max_kmer_freq = (int)Math.round(num_proteins * (8 - KMER_LENGTH) / 100.0 ); // increases sensitivity
             ProteinAlignment aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
             try (Transaction tx = graphDb.beginTx()) {
@@ -231,7 +231,8 @@ public class AnnotationLayer {
                                     crossing_protein = (String)crossing_protein_node.getProperty("protein");
                                     similarity = (double)protein_similarity(aligner, protein, crossing_protein) / perfect_score(aligner, protein, crossing_protein) * 100;
                                     if (similarity > THRESHOLD)
-                                        interesections.add(new intersection(protein_node, crossing_protein_node, similarity));
+                                        intersections_file.write(String.format(formatStr, protein_id, crossing_protein_id, similarity));
+                                        //interesections.add(new intersection(protein_node, crossing_protein_node, similarity));
                                 }
                                 crossing_protein_id = p_id;
                                 counter = 1;                                
@@ -243,7 +244,8 @@ public class AnnotationLayer {
                             crossing_protein = (String)crossing_protein_node.getProperty("protein");
                             similarity = (double)protein_similarity(aligner, protein, crossing_protein) / perfect_score(aligner, protein, crossing_protein) * 100;
                             if (similarity > THRESHOLD)
-                                interesections.add(new intersection(protein_node, crossing_protein_node, similarity));
+                                intersections_file.write(String.format(formatStr, protein_id, crossing_protein_id, similarity));
+                                //interesections.add(new intersection(protein_node, crossing_protein_node, similarity));
                         }
                     }
                     if (p % chunk == 0)
@@ -251,7 +253,10 @@ public class AnnotationLayer {
                 }// for protein
                 tx.success();
             } 
-            System.out.print("|");
+            intersections_file.close();
+            } catch (IOException e){
+                
+            }
         }
     }    
 
@@ -713,7 +718,7 @@ public class AnnotationLayer {
      * args[3] LEN_FACTOR to be replaced by the default value, if given
      */
     public void group(String[] args) {
-        String pangenome_path = args[1];
+        pangenome_path = args[1];
         int i, n, d, p, kmers_num = 0, proteins_num, intersections_num;
         double x;
         ResourceIterator<Node>  proteins_iterator;
@@ -771,7 +776,6 @@ public class AnnotationLayer {
         kmers_proteins_list = new ConcurrentLinkedQueue[(int)Math.round(Math.pow(20, KMER_LENGTH))];
         proteins = new ConcurrentLinkedQueue<Node>();
         kmerized_proteins = new ConcurrentLinkedQueue<Node>();
-        interesections = new ConcurrentLinkedQueue<intersection>();
         try(Transaction tx = graphDb.beginTx()){
             Node panproteome = graphDb.findNodes(pangenome_label).next();
             panproteome.setProperty("l_mer_size", KMER_LENGTH);
@@ -822,19 +826,33 @@ public class AnnotationLayer {
                 kmers_proteins_list[i] = null;   
             }
         }
-        intersections_num = interesections.size();
         System.gc();
         
         int trs;
-        intersection intrs;
-        while (!interesections.isEmpty()){
-            try(Transaction tx = graphDb.beginTx()){
-                for(trs = 0; !interesections.isEmpty() && trs < 10 * MAX_TRANSACTION_SIZE ; ++trs){
-                    intrs = interesections.remove();
-                    rel = intrs.protein1.createRelationshipTo(intrs.protein2, RelTypes.is_similar_to);
-                    rel.setProperty("similarity", intrs.similarity);
+        String[] fields;
+        Node p1, p2;
+        double similarity;
+        intersections_num = 0;
+        for(i = 0; i < THREADS; i++){
+            try(BufferedReader in = new BufferedReader(new FileReader(pangenome_path + i+ ".int"))){
+                while (in.ready()){
+                    try(Transaction tx = graphDb.beginTx()){
+                        for(trs = 0; in.ready() && trs < 10 * MAX_TRANSACTION_SIZE ; ++trs){
+                            fields = in.readLine().split("\\s");
+                            p1 = graphDb.getNodeById(Long.parseLong(fields[0]));
+                            p2 = graphDb.getNodeById(Long.parseLong(fields[1]));
+                            similarity = Double.parseDouble(fields[2]);
+                            rel = p1.createRelationshipTo(p2, RelTypes.is_similar_to);
+                            rel.setProperty("similarity", similarity);
+                            ++intersections_num;
+                        }
+                        tx.success();
+                    }
                 }
-                tx.success();
+                in.close();
+                //new File(i+".in").delete();
+            } catch (IOException e){
+                
             }
         }
         System.gc();
