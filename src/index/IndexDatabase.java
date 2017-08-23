@@ -753,13 +753,11 @@ public final class IndexDatabase {
      * @param value The integer value
      * @return The byte array
      */ 
-    public byte[] i2b(int value) {
-        byte[] data = new byte[4];
+    public static void i2b(int value, byte[] data) {
         data[0] = (byte) ((value >> 24) & 0xFF);
         data[1] = (byte) ((value >> 16) & 0xFF);
         data[2] = (byte) ((value >> 8) & 0xFF);
         data[3] = (byte) (value & 0xFF);
-        return data;
     }
 
     /**
@@ -768,15 +766,15 @@ public final class IndexDatabase {
      * @param offset Index of the first byte in the array
      * @return The long integer
      */
-    public long b2l(byte[] b, int offset) {
-        return (b[offset + 7] & 0xFF)
-                | ((b[offset + 6] & 0xFF) << 8)
-                | ((b[offset + 5] & 0xFF) << 16)
-                | ((b[offset + 4] & 0xFF) << 24)
-                | ((b[offset + 3] & 0xFF) << 32)
-                | ((b[offset + 2] & 0xFF) << 40)
-                | ((b[offset + 1] & 0xFF) << 48)
-                | ((b[offset] & 0xFF) << 56);
+    public static long b2l(byte[] b, int offset) {
+        return (  (long)  b[offset + 7] & 0x00FF)
+                | (long)((b[offset + 6] & 0x00FF) << 8)
+                | (long)((b[offset + 5] & 0x00FF) << 16)
+                | (long)((b[offset + 4] & 0x00FF) << 24)
+                | (long)((b[offset + 3] & 0x00FF) << 32)
+                | (long)((b[offset + 2] & 0x00FF) << 40)
+                | (long)((b[offset + 1] & 0x00FF) << 48)
+                | (long)((b[offset] & 0x00FF) << 56);
     }
 
     /**
@@ -784,17 +782,15 @@ public final class IndexDatabase {
      * @param value The long value
      * @return The byte array
      */
-    public byte[] l2b(long value) {
-        byte[] data = new byte[8];
-        data[0] = (byte) ((value >> 56) & 0xFF);
-        data[1] = (byte) ((value >> 48) & 0xFF);
-        data[2] = (byte) ((value >> 40) & 0xFF);
-        data[3] = (byte) ((value >> 32) & 0xFF);
-        data[4] = (byte) ((value >> 24) & 0xFF);
-        data[5] = (byte) ((value >> 16) & 0xFF);
-        data[6] = (byte) ((value >> 8) & 0xFF);
-        data[7] = (byte) (value & 0xFF);
-        return data;
+    public static void l2b(long value, byte[] data) {
+        data[0] = (byte) ((value >> 56) & 0x00FF);
+        data[1] = (byte) ((value >> 48) & 0x00FF);
+        data[2] = (byte) ((value >> 40) & 0x00FF);
+        data[3] = (byte) ((value >> 32) & 0x00FF);
+        data[4] = (byte) ((value >> 24) & 0x00FF);
+        data[5] = (byte) ((value >> 16) & 0x00FF);
+        data[6] = (byte) ((value >> 8) & 0x00FF);
+        data[7] = (byte) (value & 0x00FF);
     }
     public static int get_K(){
         return K;

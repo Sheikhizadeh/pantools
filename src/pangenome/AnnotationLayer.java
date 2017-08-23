@@ -34,10 +34,13 @@ import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
+import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
@@ -82,12 +85,13 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
-    private int KMER_LENGTH = 6;
+    private double FRACTION = 0.05;
     private double CONTRAST = 11;
     private double INFLATION = 21;
     private int THRESHOLD = 70;
     private final int MAX_ALIGNMENT_LENGTH  = 1000;
     private final int MAX_INTERSECTIONS  = 10000000;
+    private int MAX_KMER_FREQ;
     private int THREADS = cores;
     private double[][] phylogeny_distance;
     private int[][] count;
@@ -95,6 +99,8 @@ public class AnnotationLayer {
     private ConcurrentLinkedQueue[] kmers_proteins_list;
     private ConcurrentLinkedQueue<Node> proteins;
     private ConcurrentLinkedQueue<Node> kmerized_proteins;
+    private ConcurrentLinkedQueue<intersection> intersections;
+    private ConcurrentLinkedQueue<intersection> similarities;
     private String pangenome_path;
     
     public class intersection{
@@ -107,50 +113,39 @@ public class AnnotationLayer {
             similarity = s;
         }
     }
-    
+        
     public class Kmerize_proteins implements Runnable {
-        int id;
         int total;
-        public Kmerize_proteins(int t, int i) {
-            id = i;
+        public Kmerize_proteins(int t) {
             total = t;
         }
 
         @Override
         public void run() {
-            int i = 0, c, chunk = total / 50;
+            int i = 0, mask = (1 << 24) - 1, c, chunk = total / 50;
             Node protein_node;
-            int start, protein_length, kmer_index, caa, max, max_kmer_freq;
+            int protein_length, kmer_index;
             String protein;
-            int[] seed = new int[KMER_LENGTH];
-            max = (int)Math.pow(20,KMER_LENGTH);
             int[] code = new int[256];
             char[] aminoacids = new char[]
             {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
             for (i = 0; i < 20; ++i)
                 code[aminoacids[i]] = i;
             try (Transaction tx = graphDb.beginTx()) {
-                max_kmer_freq = (int)Math.round(total * (8 - KMER_LENGTH) / 100.0 ); // increases sensitivity
                 for (c = 0; !proteins.isEmpty(); ++c){
                     protein_node = proteins.remove();
                     protein = (String)protein_node.getProperty("protein", "");
                     protein_length = protein.length();
-                    if (protein_length > KMER_LENGTH){
+                    if (protein_length > 6){
                         kmerized_proteins.add(protein_node);
-                        for (i = 0; i < KMER_LENGTH - 1; ++i)
-                            seed[i] = protein.charAt(i);
-                        for (start = 0; start < protein_length - KMER_LENGTH; ++start){// for each penta-mer of the protein
-                            seed[(start + KMER_LENGTH - 1) % KMER_LENGTH] = protein.charAt(start + KMER_LENGTH - 1);
-                            kmer_index = 0;
-                            for (i = 0; i < KMER_LENGTH; ++i){
-                                caa = seed[(start + i) % KMER_LENGTH];
-                                kmer_index = kmer_index * 20 + code[caa];
-                            }
-                            if (kmers_proteins_list[kmer_index] == null){
+                        kmer_index = 0;
+                        for (i = 0; i < 5; ++i)
+                            kmer_index = (kmer_index << 4) | code[protein.charAt(i)];
+                        for (; i < protein_length; ++i){// for each kmer of the protein
+                            if (kmers_proteins_list[kmer_index] == null)
                                 kmers_proteins_list[kmer_index] = new ConcurrentLinkedQueue();
-                            }
-                            if (kmers_proteins_list[kmer_index].size() < max_kmer_freq)
-                                kmers_proteins_list[kmer_index].add(protein_node.getId());
+                            kmers_proteins_list[kmer_index].add(protein_node.getId());
+                            kmer_index = ((kmer_index << 4) & mask) | code[protein.charAt(i)];
                         }                            
                     }
                     if (c % chunk == 0)
@@ -162,22 +157,19 @@ public class AnnotationLayer {
     }    
 
     public class Find_intersections implements Runnable {
-        int id;
         int total;
-        public Find_intersections(int t, int i) {
-            id = i;
+        double fraction = FRACTION;
+        int max_intersection = MAX_INTERSECTIONS;
+        public Find_intersections(int t) {
             total = t;
         }
 
         @Override
         public void run() {
-            int i = 0, chunk = total / 50;
-            int start, p, counter, num_ids, kmer_index, caa;
-            double max_kmer_freq, min_freq;
-            long[] crossing_protein_ids= new long[MAX_INTERSECTIONS];
-            int[] seed = new int[KMER_LENGTH];
+            int i, mask = (1 << 24) - 1, chunk = total / 50;
+            int p, counter, num_ids, kmer_index;
+            long[] crossing_protein_ids= new long[max_intersection];
             int[] code = new int[256];
-            String formatStr = "%d %d %.2f\n";
             char[] aminoacids = new char[]
             {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
             for (i = 0; i < 20; ++i)
@@ -185,40 +177,28 @@ public class AnnotationLayer {
             Node protein_node, crossing_protein_node;
             Iterator<Long> proteins_list;
             long protein_id;
-            double similarity; // otherwise are not similar enough 
-            int protein_length, num_proteins = total;
+            int protein_length, shorter_length;
             String protein, crossing_protein;
             long crossing_protein_id, p_id;
-            try(BufferedWriter intersections_file = new BufferedWriter(new FileWriter(pangenome_path + id + ".int"))){
-            max_kmer_freq = (int)Math.round(num_proteins * (8 - KMER_LENGTH) / 100.0 ); // increases sensitivity
-            ProteinAlignment aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
             try (Transaction tx = graphDb.beginTx()) {
                 for (p = 0; !kmerized_proteins.isEmpty(); ++p) {
                     protein_node = kmerized_proteins.remove();
                     proteins.add(protein_node);
                     protein = (String)protein_node.getProperty("protein");
                     protein_length = protein.length();
-                    min_freq = Math.max(1, THRESHOLD / 2000.0 * protein_length);
                     protein_id = protein_node.getId();
                     num_ids = 0;
-                    for (i = 0; i < KMER_LENGTH - 1; ++i)
-                        seed[i] = protein.charAt(i);
-                    for (start = 0; start < protein_length - KMER_LENGTH && num_ids < MAX_INTERSECTIONS; ++start){// for each penta-mer of the protein
-                        seed[(start + KMER_LENGTH - 1) % KMER_LENGTH] = protein.charAt(start + KMER_LENGTH - 1);
-                        kmer_index = 0;
-                        for (i = 0; i < KMER_LENGTH; ++i){
-                            caa = seed[(start + i) % KMER_LENGTH];
-                            kmer_index = kmer_index * 20 + code[caa];
+                    kmer_index = 0;
+                    for (i = 0; i < 5; ++i)
+                        kmer_index = (kmer_index << 4) | code[protein.charAt(i)];
+                    for (; i < protein_length - 1 && num_ids < max_intersection; ++i){// for each kmer of the protein
+                        proteins_list = kmers_proteins_list[kmer_index].iterator();
+                        while(proteins_list.hasNext() && num_ids < max_intersection){
+                            crossing_protein_id = proteins_list.next();
+                            if (crossing_protein_id > protein_id)
+                                crossing_protein_ids[num_ids++] = crossing_protein_id;
                         }
-                        if (kmers_proteins_list[kmer_index].size() < max_kmer_freq){ // halfs the run-time
-                            proteins_list = kmers_proteins_list[kmer_index].iterator();
-                            while(proteins_list.hasNext() && num_ids < MAX_INTERSECTIONS){
-                                crossing_protein_id = proteins_list.next();
-                                if (crossing_protein_id > protein_id)
-                                    crossing_protein_ids[num_ids++] = crossing_protein_id;
-                            }
-                        } else
-                            kmers_proteins_list[kmer_index].clear();
+                        kmer_index = ((kmer_index << 4) & mask) | code[protein.charAt(i)];
                     }
                     if (num_ids > 0){
                         --num_ids;
@@ -226,40 +206,71 @@ public class AnnotationLayer {
                         for (counter = 0, crossing_protein_id = crossing_protein_ids[num_ids]; num_ids >= 0; --num_ids){
                             p_id = crossing_protein_ids[num_ids];
                             if (crossing_protein_id != p_id){
-                                if (counter > min_freq){
+                                if(counter > 1){
                                     crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
                                     crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                                    similarity = (double)protein_similarity(aligner, protein, crossing_protein) / perfect_score(aligner, protein, crossing_protein) * 100;
-                                    if (similarity > THRESHOLD)
-                                        intersections_file.write(String.format(formatStr, protein_id, crossing_protein_id, similarity));
-                                        //interesections.add(new intersection(protein_node, crossing_protein_node, similarity));
+                                    shorter_length = Math.min(protein_length, crossing_protein.length());
+                                    if (counter > fraction * shorter_length)
+                                        intersections.add(new intersection(protein_node, crossing_protein_node, 0));
                                 }
                                 crossing_protein_id = p_id;
-                                counter = 1;                                
+                                counter = 1; 
                             } else
                                 ++counter;
                         }
-                        if (counter > min_freq){
+                        if(counter > 1){
                             crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
                             crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                            similarity = (double)protein_similarity(aligner, protein, crossing_protein) / perfect_score(aligner, protein, crossing_protein) * 100;
-                            if (similarity > THRESHOLD)
-                                intersections_file.write(String.format(formatStr, protein_id, crossing_protein_id, similarity));
-                                //interesections.add(new intersection(protein_node, crossing_protein_node, similarity));
+                            shorter_length = Math.min(protein_length, crossing_protein.length());
+                            if (counter > fraction * shorter_length)
+                                intersections.add(new intersection(protein_node, crossing_protein_node, 0));
                         }
                     }
                     if (p % chunk == 0)
                         System.out.print("|");
                 }// for protein
                 tx.success();
-            } 
-            intersections_file.close();
-            } catch (IOException e){
-                
             }
         }
     }    
 
+    public class Find_similarities implements Runnable {
+        int total;
+        int threshold = THRESHOLD;
+        int max_alg_len = MAX_ALIGNMENT_LENGTH;
+        ProteinAlignment aligner;
+        public Find_similarities(int t) {
+            total = t;
+            aligner = new ProteinAlignment(-10,-1,max_alg_len);
+        }
+
+        @Override
+        public void run() {
+            int i, chunk = total / 50;
+            Node protein_node1, protein_node2;
+            String protein1, protein2;
+            intersection ints;
+            double similarity;
+            try (Transaction tx = graphDb.beginTx()) {
+                for (i = 0; !intersections.isEmpty(); ++i) {
+                    ints = intersections.remove();
+                    protein_node1 = ints.protein1;
+                    protein_node2 = ints.protein2;
+                    protein1 = (String)protein_node1.getProperty("protein");
+                    protein2 = (String)protein_node2.getProperty("protein");
+                    similarity = (double)protein_similarity(aligner, protein1, protein2) / perfect_score(aligner, protein1, protein2) * 100;
+                    if (similarity > threshold){
+                        ints.similarity = similarity;
+                        similarities.add(ints);
+                    }
+                    if (i % chunk == 0)
+                        System.out.print("|");
+                }// for intersection
+                tx.success();
+            }
+        }
+    }    
+    
     /**
      * Implements a comparator for integer arrays of size two
      */
@@ -719,17 +730,16 @@ public class AnnotationLayer {
      */
     public void group(String[] args) {
         pangenome_path = args[1];
-        int i, n, d, p, kmers_num = 0, proteins_num, intersections_num;
+        int i, n, d, p, hexamers_num = 0, proteins_num, kmer_table_size;
         double x;
         ResourceIterator<Node>  proteins_iterator;
-        Relationship rel;
         startTime = System.currentTimeMillis();
         for (i = 2; i < args.length; ++i){
             switch (args[i]){
-                case "-k":
-                    n = Integer.parseInt(args[i + 1]);
-                    if (n > 3 && n < 8)
-                        KMER_LENGTH = n;
+                case "-f":
+                    x = Double.parseDouble(args[i + 1]);
+                    if (x >= 0.01 && x <= 0.05)
+                        FRACTION = x;
                     ++i;
                     break;
                 case "-t":
@@ -754,7 +764,7 @@ public class AnnotationLayer {
                     d = Integer.parseInt(args[i + 1]);
                     d = d < 1 ? 1 : d;
                     d = d > 6 ? 6 : d;
-                    KMER_LENGTH = new int[] {0, 6,  6,  6,  6,  6,  6  }[d];
+                    FRACTION = new double[] {0, 0.05, 0.04, 0.03, 0.02, 0.01  }[d];
                     THRESHOLD = new int[]   {0, 70, 60, 50, 40, 30, 20 }[d];
                     INFLATION = new double[]{0, 21, 17, 13, 9,  5,  1.2}[d];
                     CONTRAST = new double[] {0, 11, 9,  7,  5,  3,  1  }[d];
@@ -768,35 +778,46 @@ public class AnnotationLayer {
                     break;
             }
         }
-        System.out.println("KMER_LENGTH = " + KMER_LENGTH + "\tTHRESHOLD = " + THRESHOLD + "\tINFLATION = " + INFLATION  + "\tCONTRAST = " + CONTRAST);
+        System.out.println("Running on " + THREADS + " CPU cores ...");
+        System.out.println("FRACTION = " + FRACTION);
+        System.out.println("THRESHOLD = " + THRESHOLD);
+        System.out.println("INFLATION = " + INFLATION);
+        System.out.println("CONTRAST = " + CONTRAST);
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
-
-        kmers_proteins_list = new ConcurrentLinkedQueue[(int)Math.round(Math.pow(20, KMER_LENGTH))];
-        proteins = new ConcurrentLinkedQueue<Node>();
-        kmerized_proteins = new ConcurrentLinkedQueue<Node>();
+        
+        kmer_table_size = (int)Math.round(Math.pow(2, 24));
+        kmers_proteins_list = new ConcurrentLinkedQueue[kmer_table_size];
+        proteins = new ConcurrentLinkedQueue<>();
+        kmerized_proteins = new ConcurrentLinkedQueue<>();
+        intersections = new ConcurrentLinkedQueue<>();
+        similarities = new ConcurrentLinkedQueue<>();
+        int num_similarities, num_intersections;
         try(Transaction tx = graphDb.beginTx()){
-            Node panproteome = graphDb.findNodes(pangenome_label).next();
-            panproteome.setProperty("l_mer_size", KMER_LENGTH);
             proteins_iterator = graphDb.findNodes(mRNA_label);
             while (proteins_iterator.hasNext())
                 proteins.add(proteins_iterator.next());
             tx.success();
         }
+
+        MAX_KMER_FREQ = proteins.size() / 100;
         System.out.println("\nKmerizing proteins :");
-        System.out.print("0 ............................................................................. 100\n  "); 
+        System.out.print("0 .......................................................... 100\n  "); 
         try{
             ExecutorService es = Executors.newCachedThreadPool();
             for(i = 0; i < THREADS; i++)
-                es.execute(new Kmerize_proteins(proteins.size(), i));
+                es.execute(new Kmerize_proteins(proteins.size()));
             es.shutdown();
             es.awaitTermination(10, TimeUnit.DAYS);        
         } catch (InterruptedException e){
             
         }
         proteins_num = kmerized_proteins.size();
-        System.gc();
+        for (i = 0; i < kmer_table_size; ++i)
+            if (kmers_proteins_list[i] != null && kmers_proteins_list[i].size() >= MAX_KMER_FREQ)
+                kmers_proteins_list[i].clear();
+        
         /*try(Transaction tx = graphDb.beginTx()){
             Node node;
             ResourceIterator<Node> itr = graphDb.findNodes(mRNA_label);
@@ -809,12 +830,13 @@ public class AnnotationLayer {
             }
             tx.success();
         }*/
-        System.out.println("\n\nFinding intersections and similarities :");
-        System.out.print("0 ............................................................................. 100\n  ");        
+        
+        System.out.println("\n\nFinding intersections :");
+        System.out.print("0 .......................................................... 100\n  "); 
         try{
             ExecutorService es = Executors.newCachedThreadPool();
             for(i = 0; i < THREADS; i++)
-                es.execute(new Find_intersections(kmerized_proteins.size(), i));
+                es.execute(new Find_intersections(proteins_num));
             es.shutdown();
             es.awaitTermination(10, TimeUnit.DAYS);        
         } catch (InterruptedException e){
@@ -822,46 +844,48 @@ public class AnnotationLayer {
         }
         for(i = 0; i < kmers_proteins_list.length; i++){
             if (kmers_proteins_list[i] != null){
-                ++kmers_num;
+                ++hexamers_num;
                 kmers_proteins_list[i] = null;   
             }
         }
         System.gc();
+        num_intersections = intersections.size();
         
-        int trs;
-        String[] fields;
-        Node p1, p2;
-        double similarity;
-        intersections_num = 0;
-        for(i = 0; i < THREADS; i++){
-            try(BufferedReader in = new BufferedReader(new FileReader(pangenome_path + i+ ".int"))){
-                while (in.ready()){
-                    try(Transaction tx = graphDb.beginTx()){
-                        for(trs = 0; in.ready() && trs < 10 * MAX_TRANSACTION_SIZE ; ++trs){
-                            fields = in.readLine().split("\\s");
-                            p1 = graphDb.getNodeById(Long.parseLong(fields[0]));
-                            p2 = graphDb.getNodeById(Long.parseLong(fields[1]));
-                            similarity = Double.parseDouble(fields[2]);
-                            rel = p1.createRelationshipTo(p2, RelTypes.is_similar_to);
-                            rel.setProperty("similarity", similarity);
-                            ++intersections_num;
-                        }
-                        tx.success();
-                    }
+        System.out.println("\n\nFinding similarities :");
+        System.out.print("0 .......................................................... 100\n  "); 
+        try{
+            ExecutorService es = Executors.newCachedThreadPool();
+            for(i = 0; i < THREADS; i++)
+                es.execute(new Find_similarities(num_intersections));
+            es.shutdown();
+            es.awaitTermination(10, TimeUnit.DAYS);        
+        } catch (InterruptedException e){
+            
+        }
+        num_similarities = similarities.size();
+
+        
+        System.out.println("\n\nWriting similarity components :");
+        intersection ints;
+        for (i = 0; i < num_similarities; ){
+            try(Transaction tx = graphDb.beginTx()){
+                for (int trs = 0; trs < 10 * MAX_TRANSACTION_SIZE && i < num_similarities; ++trs, ++i) {
+                    ints = similarities.remove();
+                    ints.protein1.createRelationshipTo(ints.protein2, RelTypes.is_similar_to).setProperty("similarity", ints.similarity);
+                    if (i % 1001 == 0)
+                       System.out.print("\r" + ( i / num_similarities) + "%");
                 }
-                in.close();
-                //new File(i+".in").delete();
-            } catch (IOException e){
-                
+                tx.success();
             }
         }
-        System.gc();
-        
-        System.out.println("\n\nBuilding homology groups : ");
+        System.out.println("\r100%");
+
+        System.out.println("\nBuilding homology groups : ");
         build_homology_groups(pangenome_path);
-        System.out.println("Kmers = " + kmers_num);
+        System.out.println("Hexamers = " + hexamers_num);
         System.out.println("Proteins = " + proteins_num);
-        System.out.println("Intersections = " + intersections_num);
+        System.out.println("Intersections = " + num_intersections);
+        System.out.println("Similarities = " + num_similarities);
         System.out.println("Database size = " + getFolderSize(new File(pangenome_path + GRAPH_DATABASE_PATH)) + " MB");        
 
         File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
@@ -872,6 +896,24 @@ public class AnnotationLayer {
         }
     }
         
+    /**
+     * Retrieves the first random relationship of a specific type which connects two nodes in any direction. 
+     * @param node1 The first node
+     * @param node2 The second node
+     * @param rt The relationship type
+     * @return 
+     */
+
+    private Relationship get_edge(Node node1, Node node2, RelationshipType rt){
+        Relationship rel = null;
+        for (Relationship r: node1.getRelationships(rt))
+            if (r.getOtherNode(node1).equals(node2)){
+                rel = r;
+                break;
+            }
+        return rel;
+    }
+
     private long perfect_score(ProteinAlignment aligner, String p1, String p2) {
         char match;
         int i, len1, len2;

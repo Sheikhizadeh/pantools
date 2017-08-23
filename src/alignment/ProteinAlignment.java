@@ -16,6 +16,7 @@ public class ProteinAlignment {
     public int MAX_LENGTH;
     public int GAP_OPEN;
     public int GAP_EXT;
+    public int NEGATIVE_INFINITY = Integer.MIN_VALUE;
     
     /**
      * The constructor of the class
@@ -702,11 +703,11 @@ public class ProteinAlignment {
         int m = s1.length(), n = s2.length();
         //return Math.random()*80;
         for (i = 1; i <= m; i++) {
-            left[i][0] = Integer.MIN_VALUE;
+            left[i][0] = NEGATIVE_INFINITY;
             matrix[i][0] = 0;//GAP_OPEN + i*GAP_EXT;
         }        
         for (j = 1; j <= n; j++) {
-            up[0][j] = Integer.MIN_VALUE;
+            up[0][j] = NEGATIVE_INFINITY;
             matrix[0][j] = 0;//GAP_OPEN + j*GAP_EXT;
         }   
         for (i = 1; i <= m; i++) {
