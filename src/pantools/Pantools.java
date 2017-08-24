@@ -41,7 +41,7 @@ public class Pantools {
     public static SequenceDatabase sequenceDb;
     public static int K;
     public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
-    public static int cores = Runtime.getRuntime().availableProcessors() / 2;
+    public static int cores = Math.max(Runtime.getRuntime().availableProcessors() / 2, 2); 
 
     public static Label pangenome_label = DynamicLabel.label("pangenome");
     public static Label genome_label = DynamicLabel.label("genome");
@@ -64,7 +64,6 @@ public class Pantools {
     public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
     public static Label homology_group_lable = DynamicLabel.label("homology_group");
     public static Label kmer_lable = DynamicLabel.label("kmer");
-
     
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
