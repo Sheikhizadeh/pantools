@@ -109,10 +109,10 @@ public class AnnotationLayer {
     private String pangenome_path;
     
     public AnnotationLayer(){
-        FRACTION = 0.05;
+        FRACTION = 0.06;
         CONTRAST = 11;
-        INFLATION = 21;
-        THRESHOLD = 70;
+        INFLATION = 16;
+        THRESHOLD = 90;
         MAX_ALIGNMENT_LENGTH  = 1000;
         MAX_INTERSECTIONS  = 10000000;
         THREADS = cores;
@@ -172,7 +172,7 @@ public class AnnotationLayer {
 
     public class Find_intersections implements Runnable {
         int total;
-        double fraction = FRACTION;
+        double frac = FRACTION;
         int max_intersection = MAX_INTERSECTIONS;
         public Find_intersections(int t) {
             total = t;
@@ -191,13 +191,12 @@ public class AnnotationLayer {
             Node protein_node, crossing_protein_node;
             Iterator<Long> proteins_list;
             long protein_id;
-            int protein_length, shorter_length;
+            int protein_length, shorter_len;
             String protein, crossing_protein;
             long crossing_protein_id, p_id;
             try (Transaction tx = graphDb.beginTx()) {
                 protein_node = kmerized_proteins.poll();
                 for (p = 0; protein_node != null; ++p) {
-                    proteins.add(protein_node); // for build_homology_groups()
                     protein = (String)protein_node.getProperty("protein");
                     protein_length = protein.length();
                     protein_id = protein_node.getId();
@@ -223,8 +222,8 @@ public class AnnotationLayer {
                                 if(counter > 1){
                                     crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
                                     crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                                    shorter_length = Math.min(protein_length, crossing_protein.length());
-                                    if (counter > fraction * shorter_length){
+                                    shorter_len = Math.min(protein_length, crossing_protein.length());
+                                    if (counter >= frac * (shorter_len - 5)){
                                         intersections.add(new intersection(protein_node, crossing_protein_node, 0));
                                         num_intersections.getAndIncrement();
                                     }
@@ -237,8 +236,8 @@ public class AnnotationLayer {
                         if(counter > 1){
                             crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
                             crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                            shorter_length = Math.min(protein_length, crossing_protein.length());
-                            if (counter > fraction * shorter_length){
+                            shorter_len = Math.min(protein_length, crossing_protein.length());
+                            if (counter >= frac * (shorter_len - 5)){
                                 intersections.add(new intersection(protein_node, crossing_protein_node, 0));
                                 num_intersections.getAndIncrement();
                             }
@@ -804,7 +803,7 @@ public class AnnotationLayer {
             switch (args[i]){
                 case "-f":
                     x = Double.parseDouble(args[i + 1]);
-                    if (x >= 0.01 && x <= 0.05)
+                    if (x >= 0.001 && x <= 0.1)
                         FRACTION = x;
                     ++i;
                     break;
@@ -830,9 +829,9 @@ public class AnnotationLayer {
                     d = Integer.parseInt(args[i + 1]);
                     d = d < 1 ? 1 : d;
                     d = d > 6 ? 6 : d;
-                    FRACTION = new double[] {0, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01  }[d];
-                    THRESHOLD = new int[]   {0, 70, 60, 50, 40, 30, 20 }[d];
-                    INFLATION = new double[]{0, 21, 17, 13, 9,  5,  1.2}[d];
+                    FRACTION = new double[] {0, 0.055, 0.045, 0.035, 0.025, 0.015, 0.005}[d];
+                    THRESHOLD = new int[]   {0, 90, 80, 70, 60, 50, 40 }[d];
+                    INFLATION = new double[]{0, 16, 13, 10, 7,  4,  1.2}[d];
                     CONTRAST = new double[] {0, 11, 9,  7,  5,  3,  1  }[d];
                     ++i;
                     break;
@@ -883,11 +882,15 @@ public class AnnotationLayer {
             
         }
         for (i = 0; i < kmer_table_size; ++i){
-            if (!kmers_proteins_list[i].isEmpty())
+            if (!kmers_proteins_list[i].isEmpty()){
                 ++num_hexamers;
-            if (kmers_proteins_list[i].size() >= MAX_KMER_FREQ)
-                kmers_proteins_list[i].clear();
+                if (kmers_proteins_list[i].size() >= MAX_KMER_FREQ)
+                    kmers_proteins_list[i].clear();
+            }
+            else 
+                kmers_proteins_list[i] = null;
         }
+        System.gc();
         
         /*try(Transaction tx = graphDb.beginTx()){
             Node node;
@@ -895,7 +898,7 @@ public class AnnotationLayer {
             while(itr.hasNext()){
                 node = itr.next();
                 proteins.add(node);
-                node.removeProperty("grouped");
+                node.removeProperty("group_id");
                 for (Relationship r: node.getRelationships(RelTypes.has_homolog, Direction.INCOMING))
                     r.delete();
             }
@@ -919,8 +922,7 @@ public class AnnotationLayer {
         } catch (InterruptedException e){
             
         }
-        for(i = 0; i < kmers_proteins_list.length; i++)
-            kmers_proteins_list[i] = null;   
+        kmers_proteins_list = null;   
         System.gc();
 
         System.out.println("\n\nBuilding homology groups : ");
@@ -985,9 +987,14 @@ public class AnnotationLayer {
         Node protein_node, homology_group;
         int[] copy_number;
         BufferedWriter groups_file;
+        ResourceIterator<Node>  proteins_iterator;
         LinkedList<Node> group = new LinkedList();
         LinkedList<Node> homology_group_nodes = new LinkedList();
         try (Transaction tx = graphDb.beginTx()) {
+            proteins.clear();
+            proteins_iterator = graphDb.findNodes(mRNA_label);
+            while (proteins_iterator.hasNext())
+                proteins.add(proteins_iterator.next());
             num_genomes = (int)graphDb.findNodes(pangenome_label).next().getProperty("num_genomes");
             copy_number = new int[num_genomes + 1];   
             phylogeny_distance = new double[num_genomes + 1][];
@@ -1088,8 +1095,8 @@ public class AnnotationLayer {
                     ++num_members;
                     for (Relationship crossing_edge: start_protein.getRelationships(RelTypes.is_similar_to)) {
                         crossing_protein = crossing_edge.getOtherNode(start_protein);
-                        if(!crossing_protein.hasProperty("group")){
-                            crossing_protein.setProperty("group", start_id);
+                        if(!crossing_protein.hasProperty("group_id")){
+                            crossing_protein.setProperty("group_id", start_id);
                             homologs.add(crossing_protein);
                         }
                     }
@@ -1127,7 +1134,7 @@ public class AnnotationLayer {
      * divides the pre-calculated homology groups into homology groups using MCL algorithm 
      */   
     int break_group(LinkedList<Node> homology_group_nodes, LinkedList<Node> group, String pangenome_path){
-        int i, num_groups = 0;
+        int i, num_groups = 0, num_members;
         double infl;
         Node homology_group;
         String graph_path, clusters_path, line, command;
@@ -1144,18 +1151,19 @@ public class AnnotationLayer {
             graph_path = pangenome_path + "/" + group.getFirst().getId() + ".graph";
             clusters_path = pangenome_path + "/" + group.getFirst().getId() + ".clusters";
             write_similaity_matrix(group, graph_path);
-            for( infl = INFLATION; infl < 30; ++infl){
-                command = "mcl " + graph_path + " --abc -I " + infl + " -o " + clusters_path;
-                if(executeCommand_for(command, 60))
-                    break;
-                //System.err.println("\nMCL failed on I = "+infl+" . Trying "+ (infl -1) +"..."); 
-                if((tmp_file = new File(clusters_path)).exists())
-                    tmp_file.delete();
-            }
-            if (infl >= 30 ){
-                System.err.println("Failed to run MCL on group represented by " + group.getFirst().getId());
+            command = "mcl " + graph_path + " --abc -I " + INFLATION + " -o " + clusters_path;
+            if(!executeCommand_for(command, group.size())){
+                System.out.println("Failed to run MCL on group represented by " + group.getFirst().getId());
+                homology_group = graphDb.createNode(homology_group_lable); 
+                num_members = 0;
+                while (!group.isEmpty()){
+                    homology_group.createRelationshipTo(group.remove(), RelTypes.has_homolog);
+                    ++num_members;
+                }
+                homology_group.setProperty("num_members", num_members);
+                homology_group_nodes.add(homology_group);
+                num_groups++;
             } else {
-                new File(graph_path).delete();
                 try{
                     clusters_file = new BufferedReader(new FileReader(clusters_path));
                     while (clusters_file.ready()){
@@ -1177,6 +1185,7 @@ public class AnnotationLayer {
                 }         
                 new File(clusters_path).delete();
             }
+            new File(graph_path).delete();
         }
         return num_groups;
     }   
@@ -1265,7 +1274,7 @@ public class AnnotationLayer {
         for (Relationship rel: homology_group_node.getRelationships(Direction.OUTGOING, RelTypes.has_homolog)){
             protein_node = rel.getEndNode();
             ++copy_number[(int)protein_node.getProperty("genome")];
-            groups_file.write(" " + protein_node.getProperty("protein_ID"));
+            groups_file.write(" " + ((String)protein_node.getProperty("protein_ID")).replace(' ', '_'));
         }
         groups_file.write("\n");
         homology_group_node.setProperty("copy_number_variation", copy_number);
