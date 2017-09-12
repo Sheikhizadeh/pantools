@@ -42,6 +42,8 @@ public class Pantools {
     public static int K;
     public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
     public static int cores = Math.max(Runtime.getRuntime().availableProcessors() / 2, 2); 
+    public static boolean DEBUG;
+    public static boolean SHOW_KMERS;
 
     public static Label pangenome_label = DynamicLabel.label("pangenome");
     public static Label genome_label = DynamicLabel.label("genome");
@@ -96,7 +98,7 @@ public class Pantools {
      * @param args Command line arguments
      */
     public static void main(String[] args) {
-        int K, L;
+        int K, L, i;
         if (args.length < 2 || args[1].equals("--help") || args[1].equals("-h")) {
             print_help_comment();
             System.exit(1);
@@ -104,6 +106,18 @@ public class Pantools {
         seqLayer = new SequenceLayer();
         annLayer = new AnnotationLayer();
         System.out.println("\n------------------------------- PanTools -------------------------------");
+        for (i = 2; i < args.length; ++i){
+            switch (args[i]){
+                case "-D": case "-d":
+                    DEBUG = true;
+                    break;
+                case "-S":
+                    SHOW_KMERS = true;
+                    break;
+                default:
+                    DEBUG = SHOW_KMERS = false;
+            }  
+        }
         switch (args[0]) {
             case "build":
                 if (args.length < 4) {

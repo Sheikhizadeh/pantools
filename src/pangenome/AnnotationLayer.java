@@ -87,7 +87,7 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
-    private double FRACTION;
+    private double INTERSECTION;
     private double CONTRAST;
     private double INFLATION;
     private int THRESHOLD;
@@ -109,10 +109,10 @@ public class AnnotationLayer {
     private String pangenome_path;
     
     public AnnotationLayer(){
-        FRACTION = 0.06;
+        INTERSECTION = 0.055;
         CONTRAST = 11;
         INFLATION = 16;
-        THRESHOLD = 90;
+        THRESHOLD = 80;
         MAX_ALIGNMENT_LENGTH  = 1000;
         MAX_INTERSECTIONS  = 10000000;
         THREADS = cores;
@@ -172,7 +172,7 @@ public class AnnotationLayer {
 
     public class Find_intersections implements Runnable {
         int total;
-        double frac = FRACTION;
+        double frac = INTERSECTION;
         int max_intersection = MAX_INTERSECTIONS;
         public Find_intersections(int t) {
             total = t;
@@ -801,10 +801,10 @@ public class AnnotationLayer {
         startTime = System.currentTimeMillis();
         for (i = 2; i < args.length; ++i){
             switch (args[i]){
-                case "-f":
+                case "-i":
                     x = Double.parseDouble(args[i + 1]);
                     if (x >= 0.001 && x <= 0.1)
-                        FRACTION = x;
+                        INTERSECTION = x;
                     ++i;
                     break;
                 case "-t":
@@ -813,7 +813,7 @@ public class AnnotationLayer {
                         THRESHOLD = n;
                     ++i;
                     break;
-                case "-i":
+                case "-m":
                     x = Double.parseDouble(args[i + 1]);
                     if (x > 1 && x < 29)
                         INFLATION = x;
@@ -829,8 +829,8 @@ public class AnnotationLayer {
                     d = Integer.parseInt(args[i + 1]);
                     d = d < 1 ? 1 : d;
                     d = d > 6 ? 6 : d;
-                    FRACTION = new double[] {0, 0.055, 0.045, 0.035, 0.025, 0.015, 0.005}[d];
-                    THRESHOLD = new int[]   {0, 90, 80, 70, 60, 50, 40 }[d];
+                    INTERSECTION = new double[] {0, 0.055, 0.045, 0.035, 0.025, 0.015, 0.005}[d];
+                    THRESHOLD = new int[]   {0, 80, 70, 60, 50, 40, 30 }[d];
                     INFLATION = new double[]{0, 16, 13, 10, 7,  4,  1.2}[d];
                     CONTRAST = new double[] {0, 11, 9,  7,  5,  3,  1  }[d];
                     ++i;
@@ -844,10 +844,10 @@ public class AnnotationLayer {
             }
         }
         System.out.println("Running on " + THREADS + " CPU cores ...");
-        System.out.println("FRACTION = " + FRACTION);
-        System.out.println("THRESHOLD = " + THRESHOLD);
-        System.out.println("INFLATION = " + INFLATION);
-        System.out.println("CONTRAST = " + CONTRAST);
+        System.out.println("Intersection rate = " + INTERSECTION);
+        System.out.println("Threshold = " + THRESHOLD);
+        System.out.println("MCL inflation = " + INFLATION);
+        System.out.println("Contrast = " + CONTRAST);
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);

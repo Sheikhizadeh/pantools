@@ -133,37 +133,20 @@ public final class IndexDatabase {
     public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb, int k) {
         long p;
         IndexPointer null_pointer = new IndexPointer();
-        int i, j, previous_num_digits = 0, num_digits;
-        long num, prev_num = 0, longest_scaffold = 0;
-        String output, cmd;
+        int i, j;
+        long longest_scaffold = 0;
+        String output;
         try {
             Files.createDirectory(Paths.get(index_path));
-            System.out.println("Running KMC2...                      ");
-            if (k == -1){ // K is not given by the user, then calculate the optimal K
-                K = Math.round((float)(Math.log(genomeDb.num_bytes*2)/Math.log(4)));
-                K = K%2==0 ? K+1 : K;
-                while(true){
-                // -m<size> - max amount of RAM in GB (from 1 to 1024); default: 12
-                // -ci<value> - exclude k-mers occurring less than <value> times (default: 2)
-                    cmd = "kmc -r -k" + K + " -t" + cores + " -m" + 
-                    (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
-                    (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path;
-                    output = executeCommand(cmd);      
-                    num = Long.parseLong(output.substring(output.lastIndexOf("unique")).split("\\s+")[4]);
-                    num_digits = (int)Math.log10(num-prev_num+1)+1;
-                    if (num_digits < previous_num_digits)
-                        break;
-                    prev_num = num;
-                    previous_num_digits = num_digits;
-                    K += 2;
-                }
-            } else {
+            System.out.println("Running KMC...                      ");
+            if (k == -1) // K is not given by the user, then calculate the optimal K
+                K = Math.round((float)(Math.log(0.002001/genomeDb.num_bytes)/Math.log(0.25)));
+            else
                 K = k;
-                executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
+            executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
                     (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
                     (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);            
-            }
-            System.out.println("K set to " + K + "\nSorting Kmers...                      ");
+            System.out.println("K = " + K + "\nSorting Kmers...                      ");
             output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
         // Small databases are usually sorted already    
             if (output.startsWith("This database contains sorted k-mers already!")) {

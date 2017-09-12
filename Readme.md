@@ -6,7 +6,7 @@ Wageningen university and research center, the Netherlands.
 
 Requirements
 ------------
-- KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).
+- KMC: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).
         You need to download it and add the path to the appropriate version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.
 
 - Java Virtual Machine version 1.8 or higher: Add the path to the java executable to your OS path environment variable.
@@ -71,18 +71,18 @@ List of commands and examples for the provided sample data :
 4. group:
    To add homology and orthology nodes which point to a groups of homologous or orthologous genes.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-k K_SIZE] [-t THRESHOLD] [-i INFLATION] [-c CONTRAST] [-n NUMBER] 
+   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-i INTERSECTION_RATE] [-t THRESHOLD] [-m MCL_INFLATION] [-c CONTRAST] [-d DIVERGENCE] 
 
-   K_SIZE : Size of peptide k-mers. Should be in range [4-6], otherwise it would be set by default (default = 6)    
-   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 70) 
-   INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 21) 
+   INTERSECTION_RATE : Determines the fraction of kmers needs to be shared by two intersecting proteins (default = 0.055)    
+   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 80) 
+   MCL_INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 16) 
    CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 11) 
-   NUMBER :    The number of pre-cooked parameter set (k,t,i,c). Could be 1 : (6, 70,  21, 11) or
-                                                                          2 : (6, 60,  17,  9) or
-                                                                          3 : (6, 50,  13,  7) or
-                                                                          4 : (6, 40,   9,  5) or
-                                                                          5 : (6, 30,   5,  3) or
-                                                                          6 : (6, 20, 1.2,  1) or
+   DIVERGENCE :    The number of pre-cooked parameter set (i,t,m,c).      1 : (0.055, 80,  21, 11) or
+                                                                          2 : (0.045, 70,  17,  9) or
+                                                                          3 : (0.035, 60,  13,  7) or
+                                                                          4 : (0.025, 50,   9,  5) or
+                                                                          5 : (0.015, 40,   5,  3) or
+                                                                          6 : (0.005, 30, 1.2,  1) or
    
 Example: 
 
