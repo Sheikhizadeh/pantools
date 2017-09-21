@@ -184,10 +184,6 @@ public class SequenceLayer {
                 }
             // Reads the properties of the pangenome    
                 K = (int) db_node.getProperty("k_mer_size");
-                num_nodes = (int) db_node.getProperty("num_nodes");
-                num_edges = (int) db_node.getProperty("num_edges");
-                num_degenerates = (int) db_node.getProperty("num_degenerate_nodes");
-                num_bases = (int) db_node.getProperty("num_bases");
                 previous_num_genomes = (int) db_node.getProperty("num_genomes");
             // if the genome database is not available, reconstruct it.    
                 if (!Files.exists(Paths.get(pangenome_path + GENOME_DATABASE_PATH))) 
@@ -611,7 +607,9 @@ public class SequenceLayer {
                         try {
                             out = new BufferedWriter(new FileWriter(pangenome_path + "/genome_" + genome_number + ".fasta"));
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
+                                System.out.println("Sequence " + address[1] + " length = " + genomeDb.sequence_length[address[0]][address[1]]);
                                 address[2] = 1;
+                                address[3] = (int)genomeDb.sequence_length[address[0]][address[1]];
                                 start = locate(address, K);
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 extract_sequence(seq, start, address);
@@ -763,45 +761,45 @@ public class SequenceLayer {
         Node neighbor, node;
         int[] addr = new int[]{address[0],address[1],address[2],address[3]};
         int begin = addr[2] - 1, end = addr[3] - 1;
-        int loc, node_len, neighbor_len, seq_len, position;
+        int len = 0, node_len, neighbor_len, seq_len, position;
         String rel_name, origin = "a" + address[0] + "_" + address[1];
         seq_len = end - begin + 1;
         seq.setLength(0);
-        loc = begin;
         position = start_ptr.offset;
         node = graphDb.getNodeById(start_ptr.node_id);
         node_len = (int) node.getProperty("length");
     // Takes the part of the region lies in the first node of the path that region takes in the graph    
         if (start_ptr.canonical) {
             if (position + seq_len - 1 <= node_len - 1) { // The whole sequence lies in this node
-                loc += append_fwd(seq, (String) node.getProperty("sequence"), position, position + seq_len - 1);
+                len += append_fwd(seq, (String) node.getProperty("sequence"), position, position + seq_len - 1);
             } else {
-                loc += append_fwd(seq, (String) node.getProperty("sequence"), position, node_len - 1);
+                len += append_fwd(seq, (String) node.getProperty("sequence"), position, node_len - 1);
             }
         } else {
             if (position - (seq_len - 1) >= 0) { // The whole sequence lies in this node
-                loc += append_rev(seq, (String) node.getProperty("sequence"), position - (seq_len - 1), position);
+                len += append_rev(seq, (String) node.getProperty("sequence"), position - (seq_len - 1), position);
             } else {
-                loc += append_rev(seq, (String) node.getProperty("sequence"), 0, position);
+                len += append_rev(seq, (String) node.getProperty("sequence"), 0, position);
             }
         }
     //  traverse the path of the region   
-        while (seq.length() < seq_len ) {
-            addr[2] = loc - K + 1;
+        while (len < seq_len) {
+            //System.out.println(node.getId()+" "+len + " " + seq_len);
+            addr[2] = (begin + len) - K + 1;
             rel = get_outgoing_edge(node, origin, addr[2]);
             neighbor = rel.getEndNode();
             rel_name = rel.getType().name();
             neighbor_len = (int) neighbor.getProperty("length");
             if (rel_name.charAt(1) == 'F') {// Enterring forward side
-                if (seq.length() + neighbor_len - K + 1 > seq_len) // neighbor is the last node of the path
-                    loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), K - 1, seq_len - seq.length() + K - 2);
+                if (len + neighbor_len - K + 1 > seq_len) // neighbor is the last node of the path
+                    len += append_fwd(seq, (String) neighbor.getProperty("sequence"), K - 1, seq_len - len + K - 2);
                 else 
-                    loc += append_fwd(seq, (String) neighbor.getProperty("sequence"), K - 1, neighbor_len - 1);
+                    len += append_fwd(seq, (String) neighbor.getProperty("sequence"), K - 1, neighbor_len - 1);
             }else{ // Enterring reverse side
-                if (seq.length() + neighbor_len - K + 1 > seq_len) // neighbor is the last node of the pat
-                    loc += append_rev(seq, (String) neighbor.getProperty("sequence"), neighbor_len - K - (seq_len - seq.length()) + 1, neighbor_len - K);
+                if (len + neighbor_len - K + 1 > seq_len) // neighbor is the last node of the pat
+                    len += append_rev(seq, (String) neighbor.getProperty("sequence"), neighbor_len - K - (seq_len - len) + 1, neighbor_len - K);
                 else 
-                    loc += append_rev(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
+                    len += append_rev(seq, (String) neighbor.getProperty("sequence"), 0, neighbor_len - K);
             }
             node = neighbor;
         } // while
@@ -1496,11 +1494,11 @@ public class SequenceLayer {
                 }
                 node_side = 'F';
                 count = 0;
-                for (address[2] = 0; address[2] + K - 1 < length && found;) // K-1 bases of the last node not added
+                for (address[2] = 0; address[2] + K - 1 <= length && found;) // K-1 bases of the last node not added
                 {
                     try (Transaction tx = graphDb.beginTx()) {
                         //System.out.println((address[2] + K - 1)+" ? " + length);
-                        for (trsc = 0; trsc < 10 * MAX_TRANSACTION_SIZE && address[2] + K - 1 < length && found; ++trsc) {
+                        for (trsc = 0; trsc < 10 * MAX_TRANSACTION_SIZE && address[2] + K - 1 <= length && found; ++trsc) {
                             found = false;
                             for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
                                 rel_name = r.getType().name();

@@ -94,27 +94,29 @@ public class kmer {
      * @param s_len The new suffix length for the k-mer  
      */
     public void set_suffix(int s_len){
-        int i, j, old_suffix_length = suffix_length;
-        byte[] old_suffix = suffix;
-        suffix = new byte[s_len / 4];
-        
-        for(i = old_suffix_length/4 - 1, j = s_len/4 - 1; i >= 0 && j >= 0; --i, --j)
-            suffix[j] = old_suffix[i];        
-        
-        suffix_length = s_len;
-        
-        for (;i >= 0; --i){
-            prefix = (prefix << 8) | (old_suffix[i] & 0x00FF);
+        if (s_len != suffix_length){
+            int i, j, old_suffix_length = suffix_length;
+            byte[] old_suffix = suffix;
+            suffix = new byte[s_len / 4];
+
+            for(i = old_suffix_length/4 - 1, j = s_len/4 - 1; i >= 0 && j >= 0; --i, --j)
+                suffix[j] = old_suffix[i];        
+
+            suffix_length = s_len;
+
+            for (;i >= 0; --i){
+                prefix = (prefix << 8) | (old_suffix[i] & 0x00FF);
+            }
+
+            for (;j >= 0; --j){
+                suffix[j] = (byte)(prefix & 0x0FF);
+                prefix = prefix >> 8;
+            }
+
+            prefix_length = K - suffix_length;
+            prefix_mask=(1<<(2*prefix_length))-1;
+            shift=2*(prefix_length-1);
         }
-        
-        for (;j >= 0; --j){
-            suffix[j] = (byte)(prefix & 0x0FF);
-            prefix = prefix >> 8;
-        }
-        
-        prefix_length = K - suffix_length;
-        prefix_mask=(1<<(2*prefix_length))-1;
-        shift=2*(prefix_length-1);
     }
     
     /**

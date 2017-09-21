@@ -447,6 +447,7 @@ public class SequenceDatabase {
             sequence_start = new long[num_genomes + 1][];
             num_sequences = new int[num_genomes + 1];
             for (g = 1; g <= previous_num_genomes; ++g) {
+                genome_names[g] = in.readLine();
                 genome_length[g] = Long.valueOf(in.readLine().split(":")[1]);
                 num_sequences[g] = Integer.parseInt(in.readLine().split(":")[1]);
                 sequence_titles[g] = new String[num_sequences[g] + 1];

@@ -6,7 +6,11 @@
 package index;
 
 import genome.SequenceDatabase;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
@@ -38,6 +42,8 @@ public final class IndexDatabase {
     private long[] suf_parts_size;
     private int MAX_BYTE_COUNT = 100000000; // The maximum number of bytes addressable by an integer
     private int header_pos;
+    private final String INFO_FILE = "/index.info";
+    private String db_path;
 
     private static int K;
     private int mode;
@@ -64,33 +70,34 @@ public final class IndexDatabase {
      * @param index_path Path to the index database 
      */
     public IndexDatabase(String index_path) {
-        int k;
+        int i, k;
         long p;
         try {
             pre_file = new RandomAccessFile(index_path + "/sorted.kmc_pre", "r");
-            pre_file.seek(pre_file.length() - 8);
-            header_pos = read_int(pre_file);
-            pre_file.seek(pre_file.length() - 8 - header_pos);
-        // read the index properties    
-            K = read_int(pre_file);
-            mode = read_int(pre_file);
-            ctr_size = read_int(pre_file);
-            pre_len = read_int(pre_file);
-            min_count = read_int(pre_file);
-            max_count = read_int(pre_file);
-            kmers_num = read_long(pre_file);
-            suf_len = K - pre_len;
+            BufferedReader in = new BufferedReader(new FileReader(index_path + INFO_FILE));
+            K = Integer.parseInt(in.readLine().split(":")[1]);
+            mode = Integer.parseInt(in.readLine().split(":")[1]);
+            ctr_size = Integer.parseInt(in.readLine().split(":")[1]);
+            pre_len = Integer.parseInt(in.readLine().split(":")[1]);
+            min_count = Integer.parseInt(in.readLine().split(":")[1]);
+            max_count = Integer.parseInt(in.readLine().split(":")[1]);
+            kmers_num = Long.valueOf(in.readLine().split(":")[1]);
+            suf_len = Integer.parseInt(in.readLine().split(":")[1]);
+            id_len = Integer.parseInt(in.readLine().split(":")[1]);
+            offset_len = Integer.parseInt(in.readLine().split(":")[1]);
+            POINTER_LENGTH = Integer.parseInt(in.readLine().split(":")[1]);
+            in.close();
             key=new kmer(K,pre_len,suf_len);
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
-        // load the prefix file into the memory    
+            // load the prefix file into the memory    
             pre_file.seek(4);
             int q, len = 1 << (2 * pre_len);
             prefix_ptr = new long[len];
             MappedByteBuffer pre_buff;
             for (q = 0, p = 0; p < 8; ++p) {
                 pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
-                for (k = 0; k < len / 8; ++k, ++q) {
-                    prefix_ptr[q] = read_long(pre_buff, 8);
+                for (i = 0; i < len / 8; ++i, ++q) {
+                    prefix_ptr[q] = read_prefix(pre_buff);
                 }
                 pre_buff = null;
             }
@@ -136,13 +143,14 @@ public final class IndexDatabase {
         int i, j;
         long longest_scaffold = 0;
         String output;
+        db_path = index_path;
         try {
             Files.createDirectory(Paths.get(index_path));
-            System.out.println("Running KMC...                      ");
             if (k == -1) // K is not given by the user, then calculate the optimal K
                 K = Math.round((float)(Math.log(0.002001/genomeDb.num_bytes)/Math.log(0.25)));
             else
                 K = k;
+            System.out.println("Running KMC with K = " + K + " ...                      ");
             executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
                     (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
                     (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);            
@@ -222,6 +230,7 @@ public final class IndexDatabase {
             offset_len = (int)Math.round(Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8));
             POINTER_LENGTH = 2 * id_len + offset_len + 1;
             key=new kmer(K,pre_len,suf_len);
+            write_info();
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
             // load the prefix file into the memory    
             pre_file.seek(4);
@@ -278,13 +287,14 @@ public final class IndexDatabase {
      */
     public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb, GraphDatabaseService graphDb, int previous_num_genomes) {
         int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
-        int k, p;
-        long new_kmers_num;
+        int i, j, k, p;
+        long longest_scaffold = 0;
         IndexPointer null_pointer = new IndexPointer();
         long c_index,p_index,l;
         Node node;
         ResourceIterator<Node> nodes;
         kmer k_mer;
+        db_path = index_path;
         // move current index files to directory old_index
         try {
             if (! new File(index_path+"/old_index").exists())
@@ -292,12 +302,12 @@ public final class IndexDatabase {
             Files.move(Paths.get(index_path + "/sorted.kmc_pre"), Paths.get(index_path + "/old_index/sorted.kmc_pre"));
             Files.move(Paths.get(index_path + "/sorted.kmc_suf"), Paths.get(index_path + "/old_index/sorted.kmc_suf"));
             Files.move(Paths.get(index_path + "/pointers.db"), Paths.get(index_path + "/old_index/pointers.db"));
+            Files.move(Paths.get(index_path + "/index.info"), Paths.get(index_path + "/old_index/index.info"));
         // load old_index
             IndexDatabase old_index = new IndexDatabase(index_path + "/old_index");
-            K = old_index.K;
         // make new index for new genomes
-            System.out.println("Running KMC2...                      ");
-            executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + (Runtime.getRuntime().maxMemory() / 1073741824L) + 
+            System.out.println("Running KMC with K = " + old_index.K + " ...                      ");
+            executeCommand("kmc -r -k" + old_index.K + " -t" + cores + " -m" + (Runtime.getRuntime().maxMemory() / 1073741824L) + 
                     " -ci1 -fm " + (genomeDb.num_genomes - previous_num_genomes > 1 ? "@" + 
                     genomes_path_file.trim() : genomeDb.genome_names[previous_num_genomes + 1]) + 
                     " " + index_path + "/new_kmers " + index_path);
@@ -314,9 +324,8 @@ public final class IndexDatabase {
             pre_len = read_int(pre_file);
             min_count = read_int(pre_file);
             max_count = read_int(pre_file);
-            new_kmers_num = read_long(pre_file);
-            kmers_num += new_kmers_num;
-            System.out.println(new_kmers_num + " new kmers generated.                    ");
+            kmers_num = read_long(pre_file);
+            System.out.println((kmers_num - old_index.kmers_num) + " new kmers generated.                    ");
         // load the prefix file into the memory    
             pre_file.seek(4);
             int q, len = 1 << (2 * pre_len);
@@ -324,15 +333,22 @@ public final class IndexDatabase {
             MappedByteBuffer pre_buff;
             for (q = 0, p = 0; p < 8; ++p) {
                 pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
-                for (k = 0; k < len / 8; ++k, ++q) {
-                    prefix_ptr[q] = read_long(pre_buff, 8);
-                    //System.out.println(q+" "+prefix_ptr[q]);
+                for (i = 0; i < len / 8; ++i, ++q) {
+                    prefix_ptr[q] = read_prefix(pre_buff);
                 }
                 pre_buff = null;
             }
             pre_file.close();
         // mapping suffix file into the memory    
             suf_len = K - pre_len;
+            for (i = 1; i <= genomeDb.num_genomes; ++i)
+                for (j = 1; j <= genomeDb.num_sequences[i]; ++j)
+                    if (genomeDb.sequence_length[i][j] > longest_scaffold)
+                        longest_scaffold = genomeDb.sequence_length[i][j];
+            id_len = (int)Math.round(Math.ceil( Math.log(kmers_num) / Math.log(2) / 8));
+            offset_len = (int)Math.round(Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8));
+            POINTER_LENGTH = 2 * id_len + offset_len + 1;
+            write_info();
             suf_rec_size = ctr_size + suf_len / 4;
             MAX_BYTE_COUNT = MAX_BYTE_COUNT / suf_rec_size * suf_rec_size;
             suf_parts_num = (int) ((kmers_num * suf_rec_size) % MAX_BYTE_COUNT == 0 ? (kmers_num * suf_rec_size) / MAX_BYTE_COUNT : (kmers_num * suf_rec_size) / MAX_BYTE_COUNT + 1);
@@ -368,7 +384,7 @@ public final class IndexDatabase {
                 l=(long)node.getProperty("first_kmer");
                 k_mer = old_index.get_kmer(l);
                 k_mer.set_suffix(suf_len);
-                p_index=find(k_mer);
+                p_index = find(k_mer);
                 old_index.get_pointer(ptr,l);
                 put_pointer(ptr,p_index);
                 node.setProperty("first_kmer", p_index);
@@ -376,11 +392,11 @@ public final class IndexDatabase {
                 {
                     k_mer = old_index.get_kmer(l);
                     k_mer.set_suffix(suf_len);
-                    c_index=find(k_mer);
+                    c_index = find(k_mer);
                     old_index.get_pointer(ptr,l);
                     put_pointer(ptr,c_index);
                     put_next_index(c_index,p_index);
-                    p_index=c_index;
+                    p_index = c_index;
                 }
                 put_next_index(-1L,p_index);
                 node.setProperty("last_kmer", p_index);
@@ -395,6 +411,27 @@ public final class IndexDatabase {
             //Files.delete(old_index_folder);
         } catch (IOException e) {
             System.out.println(e.getMessage() + "\nFailed to make index!");
+            System.exit(1);
+        }
+    }
+
+    public void write_info() {
+        try {
+            BufferedWriter out = new BufferedWriter(new FileWriter(db_path + INFO_FILE));
+            out.write("K:" + K + "\n");
+            out.write("mode:" + mode + "\n");
+            out.write("ctr_size:" + ctr_size + "\n");
+            out.write("pre_len:" + pre_len + "\n");
+            out.write("min_count:" + min_count + "\n");
+            out.write("max_count:" + max_count + "\n");
+            out.write("kmers_num:" + kmers_num + "\n");
+            out.write("suf_len:" + suf_len + "\n");
+            out.write("id_len:" + id_len + "\n");
+            out.write("offset_len:" + offset_len + "\n");
+            out.write("POINTER_LENGTH:" + POINTER_LENGTH + "\n");
+            out.close();
+        } catch (IOException ioe) {
+            System.out.println(ioe.getMessage());
             System.exit(1);
         }
     }
@@ -558,7 +595,7 @@ public final class IndexDatabase {
     public kmer get_kmer(long number) {
         kmer k_mer = new kmer(K, pre_len, suf_len);
         boolean found = false;
-        int low = 0, high = (1 << (2 * pre_len)) - 1, mid = 0;
+        int low = 0, high = prefix_ptr.length - 1, mid = 0;
         while (low <= high && !found) {
             mid = (low + high) / 2;
             if (number < prefix_ptr[mid]) {

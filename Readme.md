@@ -77,12 +77,12 @@ List of commands and examples for the provided sample data :
    THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 80) 
    MCL_INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 16) 
    CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 11) 
-   DIVERGENCE :    The number of pre-cooked parameter set (i,t,m,c).      1 : (0.055, 80,  21, 11) or
-                                                                          2 : (0.045, 70,  17,  9) or
-                                                                          3 : (0.035, 60,  13,  7) or
-                                                                          4 : (0.025, 50,   9,  5) or
-                                                                          5 : (0.015, 40,   5,  3) or
-                                                                          6 : (0.005, 30, 1.2,  1) or
+   DIVERGENCE :    The number of pre-cooked parameter set (i,t,m,c).      1 : (0.06, 85,  16, 11) or
+                                                                          2 : (0.05, 75,  13,  9) or
+                                                                          3 : (0.04, 65,  10,  7) or
+                                                                          4 : (0.03, 55,   7,  5) or
+                                                                          5 : (0.02, 45,   4,  3) or
+                                                                          6 : (0.01, 35, 1.2,  1) or
    
 Example: 
 

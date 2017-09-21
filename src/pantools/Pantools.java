@@ -41,7 +41,8 @@ public class Pantools {
     public static SequenceDatabase sequenceDb;
     public static int K;
     public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
-    public static int cores = Math.max(Runtime.getRuntime().availableProcessors() / 2, 2); 
+    public static int cores = Math.max(Runtime.getRuntime().availableProcessors() / 2, 2);
+    public static long heapSize = Runtime.getRuntime().maxMemory();
     public static boolean DEBUG;
     public static boolean SHOW_KMERS;
 
