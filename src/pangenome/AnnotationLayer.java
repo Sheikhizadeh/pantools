@@ -25,7 +25,6 @@ import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.PriorityQueue;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
@@ -104,7 +103,9 @@ public class AnnotationLayer {
     private int[][] count;
     private int num_genomes;
     private int num_proteins;
-    private ConcurrentLinkedQueue[] kmers_proteins_list;
+    private int num_groups;
+    private LinkedList[] kmers_proteins_list;
+    private int[] kmer_frequencies;
     private BlockingQueue<Node> proteins;
     private BlockingQueue<intersection> intersections;
     private BlockingQueue<intersection> similarities;
@@ -115,9 +116,9 @@ public class AnnotationLayer {
     public AnnotationLayer(){
         K_SIZE = 6;
         INTERSECTION = 0.08;
-        CONTRAST = 7;
-        INFLATION = 13;
-        THRESHOLD = 85;
+        CONTRAST = 9;
+        INFLATION = 9;
+        THRESHOLD = 95;
         MAX_ALIGNMENT_LENGTH  = 1000;
         MAX_INTERSECTIONS  = 10000000;
         THREADS = cores;
@@ -147,7 +148,52 @@ public class AnnotationLayer {
                 proteins_iterator = graphDb.findNodes(mRNA_label);
                 while (proteins_iterator.hasNext())
                     proteins.offer(proteins_iterator.next());
+                proteins_iterator.close();
                 tx.success();
+            }
+        }
+    }    
+
+    public class count_kmers implements Runnable {
+        int num_proteins;
+        public count_kmers(int num) {
+            num_proteins = num;
+        }
+
+        @Override
+        public void run() {
+            int i = 0, c;
+            Node protein_node;
+            int protein_length, kmer_index;
+            String protein;
+            int[] code = new int[256];
+            char[] aminoacids = new char[]
+            {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
+            for (i = 0; i < 20; ++i)
+                code[aminoacids[i]] = i;
+            kmer_frequencies = new int[MAX_KMERS_NUM];
+            try{
+                try (Transaction tx = graphDb.beginTx()) {
+                    for (c = 0; c < num_proteins; ++c){
+                        protein_node = proteins.take();
+                        protein = (String)protein_node.getProperty("protein", "");
+                        protein_length = protein.length();
+                        if (protein_length > K_SIZE){
+                            kmer_index = 0;
+                            for (i = 0; i < K_SIZE; ++i)
+                                kmer_index = kmer_index * 20 + code[protein.charAt(i)];
+                            for (; i < protein_length; ++i){// for each kmer of the protein
+                                if (kmer_frequencies[kmer_index] == 0)
+                                    ++num_hexamers;
+                                kmer_frequencies[kmer_index] += 1;
+                                kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
+                            }                            
+                        }
+                    }
+                    tx.success();
+                }
+            } catch(InterruptedException e){
+                System.err.println(e.getMessage());
             }
         }
     }    
@@ -164,6 +210,7 @@ public class AnnotationLayer {
             Node protein_node;
             int protein_length, kmer_index;
             String protein;
+            long protein_id;
             int[] code = new int[256];
             char[] aminoacids = new char[]
             {'A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y'};
@@ -171,20 +218,22 @@ public class AnnotationLayer {
                 code[aminoacids[i]] = i;
             try{
                 try (Transaction tx = graphDb.beginTx()) {
+                    kmers_proteins_list = new LinkedList[MAX_KMERS_NUM];
                     for (c = 0; c < num_proteins; ++c){
                         protein_node = proteins.take();
                         protein = (String)protein_node.getProperty("protein", "");
                         protein_length = protein.length();
+                        protein_id = protein_node.getId();
                         if (protein_length > K_SIZE){
                             kmer_index = 0;
                             for (i = 0; i < K_SIZE; ++i)
                                 kmer_index = kmer_index * 20 + code[protein.charAt(i)];
                             for (; i < protein_length; ++i){// for each kmer of the protein
-                                if (kmers_proteins_list[kmer_index] == null){
-                                    ++num_hexamers;
-                                    kmers_proteins_list[kmer_index] = new ConcurrentLinkedQueue();
+                                if (kmer_frequencies[kmer_index] > 1 + num_genomes / 2 && kmer_frequencies[kmer_index] < MAX_KMER_FREQ){
+                                    if (kmers_proteins_list[kmer_index] == null)
+                                        kmers_proteins_list[kmer_index] = new LinkedList();
+                                    kmers_proteins_list[kmer_index].add(protein_id);
                                 }
-                                kmers_proteins_list[kmer_index].add(protein_node.getId());
                                 kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
                             }                            
                         }
@@ -192,6 +241,7 @@ public class AnnotationLayer {
                             System.out.print("|");
                     }
                     tx.success();
+                    kmer_frequencies = null;
                 }
             } catch(InterruptedException e){
                 System.err.println(e.getMessage());
@@ -237,11 +287,13 @@ public class AnnotationLayer {
                             for (i = 0; i < K_SIZE; ++i)
                                 kmer_index = kmer_index * 20 + code[protein.charAt(i)];
                             for (; i < protein_length && num_ids < max_intersection; ++i){// for each kmer of the protein
-                                proteins_list = kmers_proteins_list[kmer_index].iterator();
-                                while(proteins_list.hasNext() && num_ids < max_intersection){
-                                    crossing_protein_id = proteins_list.next();
-                                    if (crossing_protein_id > protein_id){
-                                        crossing_protein_ids[num_ids++] = crossing_protein_id;
+                                if (kmers_proteins_list[kmer_index] != null){
+                                    proteins_list = kmers_proteins_list[kmer_index].iterator();
+                                    while(proteins_list.hasNext() && num_ids < max_intersection){
+                                        crossing_protein_id = proteins_list.next();
+                                        if (crossing_protein_id > protein_id){
+                                            crossing_protein_ids[num_ids++] = crossing_protein_id;
+                                        }
                                     }
                                 }
                                 kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
@@ -363,7 +415,7 @@ public class AnnotationLayer {
          * Creates homology nodes which connect the homologous coding genes
          */
         public void run(){
-            int i, num_groups = 0, num_grouped_proteins;
+            int i, num_grouped_proteins, chunk = num_proteins / 40;
             Node protein_node, homology_group;
             int[] copy_number;
             BufferedWriter groups_file;
@@ -393,7 +445,8 @@ public class AnnotationLayer {
                                 group.clear();
                                 homology_group_nodes.clear();
                             }
-                            System.out.print("\r" + num_groups + " groups");
+                            if (i % chunk == 0)
+                                System.out.print("|");
                             tx.success();
                         }
                     } // while 
@@ -404,8 +457,6 @@ public class AnnotationLayer {
             } catch(InterruptedException e){
                 System.err.println(e.getMessage());
             }
-            System.out.println("\r" + num_groups + " groups\n");
-
         }
     }      
 
@@ -921,9 +972,9 @@ public class AnnotationLayer {
                     d = d < 1 ? 1 : d;
                     d = d > 7 ? 7 : d;
                     INTERSECTION = new double[] {0, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02}[d];
-                    THRESHOLD = new int[]   {0, 85, 75, 65, 55, 45, 35, 25 }[d];
-                    INFLATION = new double[]{0, 13, 11, 9, 7, 5, 3, 1.2}[d];
-                    CONTRAST = new double[] {0, 7, 6, 5,  4,  3,  2,  1 }[d];
+                    THRESHOLD = new int[]   {0, 95, 90, 85, 60, 35, 30, 25 }[d];
+                    INFLATION = new double[]{0, 9, 8, 7, 5, 3, 2, 1.2}[d];
+                    CONTRAST = new double[] {0, 9, 8, 7, 5, 3, 2, 1 }[d];
                     ++i;
                     break;
                 case "-p":
@@ -942,7 +993,6 @@ public class AnnotationLayer {
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
-        kmers_proteins_list = new ConcurrentLinkedQueue[MAX_KMERS_NUM];
         proteins = new LinkedBlockingQueue<>((int)(heapSize/50));
         intersections = new LinkedBlockingQueue<>((int)(heapSize/200));
         similarities = new LinkedBlockingQueue<>((int)(heapSize/200));
@@ -955,12 +1005,21 @@ public class AnnotationLayer {
             tx.success();
         }
 
-        MAX_KMER_FREQ = num_proteins / 100;
+        MAX_KMER_FREQ = num_proteins / 1000 + 50 * num_genomes; //  because of probability p and copy number of 2
         num_hexamers = 0;
         System.out.println("\nKmerizing proteins :");
         System.out.print("0 ......................................... 100\n  "); 
         try{
-            ExecutorService es = Executors.newCachedThreadPool();
+            ExecutorService es = Executors.newFixedThreadPool(2);
+            es.execute(new Generate_proteins());
+            es.execute(new count_kmers(num_proteins));
+            es.shutdown();
+            es.awaitTermination(10, TimeUnit.DAYS);        
+        } catch (InterruptedException e){
+            
+        }
+        try{
+            ExecutorService es = Executors.newFixedThreadPool(2);
             es.execute(new Generate_proteins());
             es.execute(new Kmerize_proteins(num_proteins));
             es.shutdown();
@@ -968,16 +1027,12 @@ public class AnnotationLayer {
         } catch (InterruptedException e){
             
         }
-        for (i = 0; i < MAX_KMERS_NUM; ++i)
-            if (kmers_proteins_list[i] != null && kmers_proteins_list[i].size() >= MAX_KMER_FREQ)
-                kmers_proteins_list[i].clear(); // to ignore extremely abundant kmers
         
         /*try(Transaction tx = graphDb.beginTx()){
             Node node;
             ResourceIterator<Node> itr = graphDb.findNodes(mRNA_label);
             while(itr.hasNext()){
                 node = itr.next();
-                proteins.add(node);
                 node.removeProperty("group_id");
                 for (Relationship r: node.getRelationships(RelTypes.has_homolog, Direction.INCOMING))
                     r.delete();
@@ -987,7 +1042,7 @@ public class AnnotationLayer {
         System.out.println("\n\nFinding intersections and similarities:");
         System.out.print("0 ......................................... 100\n  "); 
         try{
-            ExecutorService es = Executors.newCachedThreadPool();
+            ExecutorService es = Executors.newFixedThreadPool(THREADS);
             es.execute(new Generate_proteins());
             es.execute(new Find_intersections(num_proteins));
             for(i = 1; i <= THREADS - 2; i++)
@@ -1002,8 +1057,9 @@ public class AnnotationLayer {
         System.gc();
 
         System.out.println("\n\nBuilding homology groups : ");
+        System.out.print("0 ......................................... 100\n  "); 
         try{
-            ExecutorService es = Executors.newCachedThreadPool();
+            ExecutorService es = Executors.newFixedThreadPool(2);
             es.execute(new Generate_proteins());
             es.execute(new build_homology_groups(pangenome_path, num_proteins));
             es.shutdown();
@@ -1011,10 +1067,11 @@ public class AnnotationLayer {
         } catch (InterruptedException e){
             
         }
-        System.out.println("Hexamers = " + num_hexamers);
+        System.out.println("\n\nHexamers = " + num_hexamers);
         System.out.println("Proteins = " + num_proteins);
         System.out.println("Intersections = " + num_intersections.intValue());
         System.out.println("Similarities = " + num_similarities.intValue());
+        System.out.println("Groups = " + num_groups);
         System.out.println("Database size = " + getFolderSize(new File(pangenome_path + GRAPH_DATABASE_PATH)) + " MB");        
 
         File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
@@ -1164,7 +1221,7 @@ public class AnnotationLayer {
      * divides the pre-calculated homology groups into homology groups using MCL algorithm 
      */   
     int break_group(LinkedList<Node> homology_group_nodes, LinkedList<Node> group, String pangenome_path){
-        int i, num_groups = 0, num_members, group_size, wating_time;
+        int i, num_groups = 0, num_members, group_size, wating_time, time;
         double infl;
         Node homology_group;
         String graph_path, clusters_path, line, command;
@@ -1182,7 +1239,7 @@ public class AnnotationLayer {
             graph_path = pangenome_path + "/" + group.getFirst().getId() + ".graph";
             clusters_path = pangenome_path + "/" + group.getFirst().getId() + ".clusters";
             write_similaity_matrix(group, graph_path);
-            wating_time = 1 + (int)Math.round(group_size / 100000000.0 * group_size);
+            time = wating_time = 1 + (int)Math.round(group_size / 100000000.0 * group_size);
             for( infl = INFLATION; infl < 30; infl += 0.5){
                 command = "mcl " + graph_path + " --abc -I " + infl + " -o " + clusters_path;
                 if(executeCommand_for(command, wating_time))
@@ -1190,7 +1247,7 @@ public class AnnotationLayer {
                System.out.println("\nRetrying MCL with I = "+ (infl + 0.5) +" on "+group_size+" proteins..."); 
                 if((tmp_file = new File(clusters_path)).exists())
                     tmp_file.delete();
-                wating_time += wating_time;
+                wating_time += time;
             }
             if (infl >= 30 ){
                 System.err.println("Failed to split group ID = " + group.getFirst().getId());

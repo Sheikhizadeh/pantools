@@ -11,7 +11,6 @@ import genome.SequenceDatabase;
 import index.IndexDatabase;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
@@ -86,10 +85,10 @@ public class Pantools {
 
     public static long startTime;
     public static long phaseTime;
-    public static int num_nodes;
+    public static long num_nodes;
     public static int num_degenerates;
-    public static int num_edges;
-    public static int num_bases;
+    public static long num_edges;
+    public static long num_bases;
 
     public static SequenceLayer seqLayer;
     public static AnnotationLayer annLayer;

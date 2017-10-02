@@ -49,8 +49,6 @@ import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.complement;
-import static pantools.Pantools.cores;
-import static pantools.Pantools.executeCommand;
 import static pantools.Pantools.reverse_complement;
 import static pantools.Pantools.write_fasta;
 import static index.IndexDatabase.get_K;
