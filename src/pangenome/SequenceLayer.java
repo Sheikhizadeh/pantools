@@ -1411,6 +1411,7 @@ public class SequenceLayer {
             }
             //sequence_ids = new long[genomeDb.num_sequences[genome] + 1];
             for (sequence = 1; sequence <= genomeDb.num_sequences[genome]; ++sequence) {
+                finish = false;
                 System.out.println("sequence " + sequence + "/" + genomeDb.num_sequences[genome] + " of genome " + genome + "\tlength=" + genomeDb.sequence_length[genome][sequence]);
                 try (Transaction tx = graphDb.beginTx()) {
                     sequence_node = curr_node = graphDb.createNode(sequence_label);
@@ -1426,26 +1427,27 @@ public class SequenceLayer {
                     initial_kmers(genomeDb);
                     tx.success();
                 }
-                curr_index = indexDb.find(k_mer);
-                indexDb.get_pointer(pointer, curr_index);
-                finish = false;
-                while (!finish) {
-                    try (Transaction tx = graphDb.beginTx()) {
-                        for (i = 0; i < MAX_TRANSACTION_SIZE && !finish; ++i) {
-                            if (pointer.node_id == -1L) // kmer is new
-                            {
-                                create();
-                                extend(curr_node);
-                            } else if (fwd_kmer.get_canonical() ^ pointer.canonical)// if sides don't agree
-                            {
-                                follow_reverse();
-                            } else {
-                                follow_forward();
+                if (!finish){
+                    curr_index = indexDb.find(k_mer);
+                    indexDb.get_pointer(pointer, curr_index);
+                    while (!finish) {
+                        try (Transaction tx = graphDb.beginTx()) {
+                            for (i = 0; i < MAX_TRANSACTION_SIZE && !finish; ++i) {
+                                if (pointer.node_id == -1L) // kmer is new
+                                {
+                                    create();
+                                    extend(curr_node);
+                                } else if (fwd_kmer.get_canonical() ^ pointer.canonical)// if sides don't agree
+                                {
+                                    follow_reverse();
+                                } else {
+                                    follow_forward();
+                                }
                             }
+                            tx.success();
                         }
-                        tx.success();
-                    }
-                }//while position<n
+                    }//while position<n
+                }
                 try (Transaction tx = graphDb.beginTx()) {
                     connect(curr_node, sequence_node, RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
                     ++num_edges;
