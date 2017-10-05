@@ -1318,11 +1318,13 @@ public class SequenceLayer {
             if (j == K - 1) {
                 fwd_kmer.set_canonical ( fwd_kmer.compare(rev_kmer) == -1);
                 k_mer = fwd_kmer.get_canonical() ? fwd_kmer : rev_kmer;
-            } else if (position == seq_len - 1) {
-                finish = true;
-                ++position; // to acheive the right length for the degenerate node
             }
         } while (fwd_code > 3 && position < seq_len - 1);
+        if (position == seq_len - 1){
+        // to acheive the right length for the degenerate node    
+            finish = true;
+            ++position;
+        }
     }
     
     /**

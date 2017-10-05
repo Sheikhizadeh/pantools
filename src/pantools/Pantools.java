@@ -98,7 +98,7 @@ public class Pantools {
      * @param args Command line arguments
      */
     public static void main(String[] args) {
-        int K, L, i;
+        int K = -1, L, i;
         if (args.length < 2 || args[1].equals("--help") || args[1].equals("-h")) {
             print_help_comment();
             System.exit(1);
@@ -111,9 +111,13 @@ public class Pantools {
                 case "-D": case "-d":
                     DEBUG = true;
                     break;
-                case "-S":
+                case "-S": case "-s":
                     SHOW_KMERS = true;
                     break;
+                case "-K": case "-k":
+                    K = Integer.parseInt(args[i + 1]);
+                    if (K < 6 || K > 255)
+                        K = -1;
                 default:
                     DEBUG = SHOW_KMERS = false;
             }  
@@ -124,15 +128,9 @@ public class Pantools {
                     print_help_comment();
                     System.exit(1);
                 }
-                if (args[1].equals("pangenome")){
-                        if (args.length > 4){
-                            K = Integer.parseInt(args[4]);
-                            if (K < 6 || K > 255)
-                                K = -1;
-                        } else
-                           K = -1;
+                if (args[1].equals("pangenome"))
                     seqLayer.initialize_pangenome(args[3],args[2], K);
-                } else if (args[1].equals("panproteome"))
+                else if (args[1].equals("panproteome"))
                         annLayer.initialize_panproteome(args[3], args[2]);
                 else {
                     print_help_comment();

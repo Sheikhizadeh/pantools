@@ -972,7 +972,7 @@ public class AnnotationLayer {
                     d = d < 1 ? 1 : d;
                     d = d > 7 ? 7 : d;
                     INTERSECTION = new double[] {0, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02}[d];
-                    THRESHOLD = new int[]   {0, 95, 90, 85, 60, 35, 30, 25 }[d];
+                    THRESHOLD = new int[]   {0, 95, 85, 75, 60, 45, 35, 25 }[d];
                     INFLATION = new double[]{0, 9, 8, 7, 5, 3, 2, 1.2}[d];
                     CONTRAST = new double[] {0, 9, 8, 7, 5, 3, 2, 1 }[d];
                     ++i;

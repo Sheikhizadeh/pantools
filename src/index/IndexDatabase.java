@@ -23,6 +23,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.cores;
 import static pantools.Pantools.executeCommand;
 
@@ -93,14 +94,10 @@ public final class IndexDatabase {
             pre_file.seek(4);
             int q, len = 1 << (2 * pre_len);
             prefix_ptr = new long[len];
-            MappedByteBuffer pre_buff;
-            for (q = 0, p = 0; p < 8; ++p) {
-                pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
-                for (i = 0; i < len / 8; ++i, ++q) {
-                    prefix_ptr[q] = read_prefix(pre_buff);
-                }
-                pre_buff = null;
-            }
+            MappedByteBuffer pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4, 8 * len);
+            for (i = 0; i < len; ++i) 
+                prefix_ptr[i] = read_prefix(pre_buff);
+            pre_buff = null;
             pre_file.close();
         // mapping suffix file into the memory
             suf_rec_size = ctr_size + suf_len / 4;
@@ -150,11 +147,13 @@ public final class IndexDatabase {
                 K = Math.round((float)(Math.log(0.002001/genomeDb.num_bytes)/Math.log(0.25)));
             else
                 K = k;
+            if (K % 2 == 0) // Even values make localization process problamatic
+                K += 1;
             System.out.println("Running KMC with K = " + K + " ...                      ");
             executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
                     (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
                     (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);            
-            System.out.println("K = " + K + "\nSorting Kmers...                      ");
+            System.out.println("Sorting Kmers...                      ");
             output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
         // Small databases are usually sorted already    
             if (output.startsWith("This database contains sorted k-mers already!")) {
@@ -236,14 +235,10 @@ public final class IndexDatabase {
             pre_file.seek(4);
             int q, len = 1 << (2 * pre_len);
             prefix_ptr = new long[len];
-            MappedByteBuffer pre_buff;
-            for (q = 0, p = 0; p < 8; ++p) {
-                pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
-                for (i = 0; i < len / 8; ++i, ++q) {
-                    prefix_ptr[q] = read_prefix(pre_buff);
-                }
-                pre_buff = null;
-            }
+            MappedByteBuffer pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4, 8 * len);
+            for (i = 0; i < len; ++i) 
+                prefix_ptr[i] = read_prefix(pre_buff);
+            pre_buff = null;
             pre_file.close();
 
             // mapping suffix file into the memory
@@ -292,7 +287,7 @@ public final class IndexDatabase {
         IndexPointer null_pointer = new IndexPointer();
         long c_index,p_index,l;
         Node node;
-        ResourceIterator<Node> nodes;
+        ResourceIterator<Node> nodes_iterator;
         kmer k_mer;
         db_path = index_path;
         // move current index files to directory old_index
@@ -330,14 +325,10 @@ public final class IndexDatabase {
             pre_file.seek(4);
             int q, len = 1 << (2 * pre_len);
             prefix_ptr = new long[len];
-            MappedByteBuffer pre_buff;
-            for (q = 0, p = 0; p < 8; ++p) {
-                pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + p * len, len);
-                for (i = 0; i < len / 8; ++i, ++q) {
-                    prefix_ptr[q] = read_prefix(pre_buff);
-                }
-                pre_buff = null;
-            }
+            MappedByteBuffer pre_buff = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4, 8 * len);
+            for (i = 0; i < len; ++i) 
+                prefix_ptr[i] = read_prefix(pre_buff);
+            pre_buff = null;
             pre_file.close();
         // mapping suffix file into the memory    
             suf_len = K - pre_len;
@@ -376,32 +367,37 @@ public final class IndexDatabase {
         // adjusting available pointers
             System.out.println("Updating kmer index...                    ");
             try(Transaction tx = graphDb.beginTx()){
-            nodes = graphDb.findNodes( DynamicLabel.label( "node" ));
-            IndexPointer ptr = new IndexPointer();
-            for(;nodes.hasNext();)
-            {
-                node=nodes.next();
-                l=(long)node.getProperty("first_kmer");
-                k_mer = old_index.get_kmer(l);
-                k_mer.set_suffix(suf_len);
-                p_index = find(k_mer);
-                old_index.get_pointer(ptr,l);
-                put_pointer(ptr,p_index);
-                node.setProperty("first_kmer", p_index);
-                for(l=old_index.get_next_index(l);l!=-1L;l=old_index.get_next_index(l))
-                {
-                    k_mer = old_index.get_kmer(l);
-                    k_mer.set_suffix(suf_len);
-                    c_index = find(k_mer);
-                    old_index.get_pointer(ptr,l);
-                    put_pointer(ptr,c_index);
-                    put_next_index(c_index,p_index);
-                    p_index = c_index;
-                }
-                put_next_index(-1L,p_index);
-                node.setProperty("last_kmer", p_index);
+                nodes_iterator = graphDb.findNodes( DynamicLabel.label( "node" ));
+                tx.success();
             }
-            tx.success();} 
+            IndexPointer ptr = new IndexPointer();
+            for(;nodes_iterator.hasNext();){
+                try (Transaction tx = graphDb.beginTx()) {
+                    for (i = 0; i < 10 * MAX_TRANSACTION_SIZE && nodes_iterator.hasNext(); ++i){
+                        node=nodes_iterator.next();
+                        l=(long)node.getProperty("first_kmer");
+                        k_mer = old_index.get_kmer(l);
+                        k_mer.set_suffix(suf_len);
+                        p_index = find(k_mer);
+                        old_index.get_pointer(ptr,l);
+                        put_pointer(ptr,p_index);
+                        node.setProperty("first_kmer", p_index);
+                        for(l=old_index.get_next_index(l);l!=-1L;l=old_index.get_next_index(l)){
+                            k_mer = old_index.get_kmer(l);
+                            k_mer.set_suffix(suf_len);
+                            c_index = find(k_mer);
+                            old_index.get_pointer(ptr,l);
+                            put_pointer(ptr,c_index);
+                            put_next_index(c_index,p_index);
+                            p_index = c_index;
+                        }
+                        put_next_index(-1L,p_index);
+                        node.setProperty("last_kmer", p_index);
+                    }
+                    tx.success();
+                }
+            } 
+            nodes_iterator.close();
             old_index.close();
             Files.delete(Paths.get(index_path + "/old_index/sorted.kmc_suf"));
             Files.delete(Paths.get(index_path + "/new_kmers.kmc_pre"));
