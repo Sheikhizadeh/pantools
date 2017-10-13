@@ -1500,7 +1500,7 @@ public class GenomeLayer {
                 {
                     try (Transaction tx = graphDb.beginTx()) {
                         //System.out.println((address[2] + K - 1)+" ? " + length);
-                        for (trsc = 0; trsc < 10 * MAX_TRANSACTION_SIZE && address[2] + K - 1 <= length && found; ++trsc) {
+                        for (trsc = 0; trsc < 1000 * MAX_TRANSACTION_SIZE && address[2] + K - 1 <= length && found; ++trsc) {
                             found = false;
                             for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
                                 rel_name = r.getType().name();

@@ -143,7 +143,7 @@ public final class IndexDatabase {
         try {
             Files.createDirectory(Paths.get(index_path));
             if (k == -1) // K is not given by the user, then calculate the optimal K
-                K = Math.round((float)(Math.log(0.002001/genomeDb.num_bytes)/Math.log(0.25)));
+                K = Math.round((float)((Math.log(0.002001) - Math.log(genomeDb.num_bytes))/Math.log(0.25)));
             else
                 K = k;
             if (K % 2 == 0) // Even values make localization process problamatic
