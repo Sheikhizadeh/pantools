@@ -5,7 +5,6 @@
  */
 package genome;
 
-//import java.util.regex.*;
 import java.util.*;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -22,9 +21,9 @@ import java.nio.file.Paths;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Transaction;
-import static pantools.Pantools.genome_label;
+import static pantools.Pantools.assembly_label;
 import static pantools.Pantools.pangenome_label;
-import static pantools.Pantools.sequence_label;
+import static pantools.Pantools.scaffold_label;
 import static pantools.Pantools.write_fasta;
 
 /**
@@ -229,7 +228,7 @@ public class SequenceDatabase {
             sequence_start = new long[num_genomes + 1][];
             num_sequences = new int[num_genomes + 1];
             for (g = 1; g <= num_genomes; ++g) {
-                gen_node = graphDb.findNode(genome_label, "number", g);
+                gen_node = graphDb.findNode(assembly_label, "number", g);
                 genome_names[g] = (String) gen_node.getProperty("name");
                 num_sequences[g] = (int) gen_node.getProperty("num_sequences");
                 sequence_titles[g] = new String[num_sequences[g] + 1];
@@ -237,7 +236,7 @@ public class SequenceDatabase {
                 sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
-                    seq_node = graphDb.findNode(sequence_label, "number", g + "_" + s);
+                    seq_node = graphDb.findNode(scaffold_label, "number", g + "_" + s);
                     sequence_titles[g][s] = (String) seq_node.getProperty("sequence_title");
                     sequence_length[g][s] = (long) seq_node.getProperty("sequence_length");
                     sequence_offset[g][s] = (long) seq_node.getProperty("sequence_offset");

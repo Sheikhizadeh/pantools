@@ -22,7 +22,8 @@ import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
 import pangenome.AnnotationLayer;
-import pangenome.SequenceLayer;
+import pangenome.ProteomeLayer;
+import pangenome.GenomeLayer;
 
 /**
  * Implements the main and shared functions. 
@@ -46,9 +47,9 @@ public class Pantools {
     public static boolean SHOW_KMERS;
 
     public static Label pangenome_label = DynamicLabel.label("pangenome");
-    public static Label genome_label = DynamicLabel.label("genome");
-    public static Label sequence_label = DynamicLabel.label("sequence");
-    public static Label node_label = DynamicLabel.label("node");
+    public static Label assembly_label = DynamicLabel.label("assembly");
+    public static Label scaffold_label = DynamicLabel.label("scaffold");
+    public static Label nucleotide_label = DynamicLabel.label("nucleotide");
     public static Label degenerate_label = DynamicLabel.label("degenerate");
     public static Label annotation_label = DynamicLabel.label("annotation");
     public static Label variation_label = DynamicLabel.label("variation");
@@ -63,7 +64,6 @@ public class Pantools {
     public static Label intron_label = DynamicLabel.label("intron");
     public static Label feature_label = DynamicLabel.label("feature");
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
-    public static Label orthology_group_lable = DynamicLabel.label("orthology_group");
     public static Label homology_group_lable = DynamicLabel.label("homology_group");
     public static Label kmer_lable = DynamicLabel.label("kmer");
     
@@ -73,7 +73,6 @@ public class Pantools {
         starts,
         stops,
         has_homolog, // for pointing to gene nodes from the homology group
-        has_ortholog, // for pointing to gene nodes from the orthology group
         splits_into,
         codes_for,// for connecting genes to mRNAs
         is_parent_of,
@@ -90,8 +89,9 @@ public class Pantools {
     public static long num_edges;
     public static long num_bases;
 
-    public static SequenceLayer seqLayer;
+    public static GenomeLayer seqLayer;
     public static AnnotationLayer annLayer;
+    public static ProteomeLayer proLayer;
 
     /**
      * The starting point of the PanTools program
@@ -103,8 +103,9 @@ public class Pantools {
             print_help_comment();
             System.exit(1);
         }
-        seqLayer = new SequenceLayer();
+        seqLayer = new GenomeLayer();
         annLayer = new AnnotationLayer();
+        proLayer = new ProteomeLayer();
         System.out.println("\n------------------------------- PanTools -------------------------------");
         for (i = 2; i < args.length; ++i){
             switch (args[i]){
@@ -131,7 +132,7 @@ public class Pantools {
                 if (args[1].equals("pangenome"))
                     seqLayer.initialize_pangenome(args[3],args[2], K);
                 else if (args[1].equals("panproteome"))
-                        annLayer.initialize_panproteome(args[3], args[2]);
+                        proLayer.initialize_panproteome(args[3], args[2]);
                 else {
                     print_help_comment();
                     System.exit(1);
@@ -158,7 +159,7 @@ public class Pantools {
                     print_help_comment();
                     System.exit(1);
                 }
-                annLayer.group(args);
+                proLayer.group(args);
                 break;
             case "retrieve":
                 if (args.length < 4) {
@@ -199,7 +200,7 @@ public class Pantools {
 "\n" +
 "Requirements\n" +
 "------------\n" +
-"- KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).\n" +
+"- KMC: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).\n" +
 "        You need to download it and add the path to the appropriate version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.\n" +
 "\n" +
 "- Java Virtual Machine version 1.8 or higher: Add the path to the java executable to your OS path environment variable.\n" +
@@ -217,7 +218,7 @@ public class Pantools {
 "1. build:\n" +
 "   To build a pan-genome out of a set of genomes or a pan-proteome out of a set of proteins.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  pangenome [or panproteome] PATH_TO_THE_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE [or PATH_TO_THE_PROTEOMES_PATH_FILE] [K_SIZE]\n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  pangenome [or panproteome] PATH_TO_THE_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE [or PATH_TO_THE_PROTEOMES_PATH_FILE] [-k K_SIZE]\n" +
 "\n" +
 "   PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files of genomes; each in a seperated line.\n" +
 "   PATH_TO_THE_PROTEOMES_PATH_FILE : a text file containing paths to FASTA files of proteomes; each in a seperated line.\n" +
@@ -262,19 +263,21 @@ public class Pantools {
 "   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genomes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genome_numbers.txt\n" +
 "\n" +
 "4. group:\n" +
-"   To add homology and orthology nodes which point to a groups of homologous or orthologous genes.\n" +
+"   To add homology nodes which point to a groups of homologous proteins.\n" +
 "\n" +
-"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-k K_SIZE] [-t THRESHOLD] [-i INFLATION] [-c CONTRAST] [-n NUMBER] \n" +
+"   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-i INTERSECTION_RATE] [-t THRESHOLD] [-m MCL_INFLATION] [-c CONTRAST] [-d DIVERGENCE] \n" +
 "\n" +
-"   K_SIZE : Size of peptide k-mers. Should be in range [4-6], otherwise it would be set by default (default = 5)    \n" +
-"   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 70) \n" +
-"   INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 21) \n" +
-"   CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 11) \n" +
-"   NUMBER :    The number of pre-cooked parameter set (k,t,i,c). Could be 1 : (5,70,21,11) or\n" +
-"                                                                          2 : (5,60,19, 9) or\n" +
-"                                                                          3 : (5,40, 6, 7) or\n" +
-"                                                                          4 : (5,20, 2, 3) or\n" +
-"                                                                          5 : (5,10,1.4,2) or\n" +
+"   INTERSECTION_RATE : Determines the fraction of kmers needs to be shared by two intersecting proteins (default = 0.08)    \n" +
+"   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 85) \n" +
+"   MCL_INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 13) \n" +
+"   CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 7) \n" +
+"   DIVERGENCE :    The number of pre-cooked parameter set (i,t,m,c).      1 : (0.08, 85,  13, 7) or\n" +
+"                                                                          2 : (0.07, 75,  11, 6) or\n" +
+"                                                                          3 : (0.06, 65,   9, 5) or\n" +
+"                                                                          4 : (0.05, 55,   7, 4) or\n" +
+"                                                                          5 : (0.04, 45,   5, 3) or\n" +
+"                                                                          6 : (0.03, 35,   3, 2) or\n" +
+"                                                                          7 : (0.02, 25, 1.2, 1) or\n" +
 "   \n" +
 "Example: \n" +
 "\n" +

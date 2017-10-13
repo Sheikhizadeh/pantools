@@ -35,17 +35,17 @@ import pantools.Pantools.RelTypes;
 import static pantools.Pantools.degenerate_label;
 import static pantools.Pantools.gene_label;
 import static pantools.Pantools.genomeDb;
-import static pantools.Pantools.genome_label;
+import static pantools.Pantools.assembly_label;
 import static pantools.Pantools.graphDb;
 import static pantools.Pantools.indexDb;
-import static pantools.Pantools.node_label;
+import static pantools.Pantools.nucleotide_label;
 import static pantools.Pantools.num_bases;
 import static pantools.Pantools.num_degenerates;
 import static pantools.Pantools.num_edges;
 import static pantools.Pantools.num_nodes;
 import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.phaseTime;
-import static pantools.Pantools.sequence_label;
+import static pantools.Pantools.scaffold_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.complement;
@@ -65,7 +65,7 @@ import static pantools.Pantools.variation_label;
  * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
  * University, Netherlands
  */
-public class SequenceLayer {
+public class GenomeLayer {
 
     private kmer fwd_kmer, rev_kmer, k_mer;
     private long seq_len;
@@ -84,7 +84,7 @@ public class SequenceLayer {
     /**
      * The constructor of the class.
      */    
-    public SequenceLayer() {
+    public GenomeLayer() {
         pointer = new IndexPointer();
         finish = false;
     }
@@ -191,7 +191,7 @@ public class SequenceLayer {
                     StringBuilder seq = new StringBuilder();
                     for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
                         for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                            seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
+                            seq_node = graphDb.findNode(scaffold_label, "number", address[0] + "_" + address[1]);
                             start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
                             address[2] = 1;
                             address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
@@ -328,7 +328,7 @@ public class SequenceLayer {
         variation_node = graphDb.createNode(variation_label);
         variation_node.setProperty("genome", genome);
         variation_node.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
-        graphDb.findNodes(genome_label,"number",genome).next().createRelationshipTo(variation_node, RelTypes.has);
+        graphDb.findNodes(assembly_label,"number",genome).next().createRelationshipTo(variation_node, RelTypes.has);
         variation_node_id = variation_node.getId();
         num_genes = num_mRNAs = num_tRNAs = num_rRNAs = 0;
         try (BufferedReader in = new BufferedReader(new FileReader(vcf_file))) {
@@ -867,7 +867,7 @@ public class SequenceLayer {
         int[] anchor_positions;
         int[] address = Arrays.copyOf(addr,addr.length);
         genomic_pos = address[2] - 1;
-        seq_node = graphDb.findNode(sequence_label, "number", address[0]+"_"+address[1]);
+        seq_node = graphDb.findNode(scaffold_label, "number", address[0]+"_"+address[1]);
         anchor_nodes = (long[]) seq_node.getProperty("anchor_nodes");
         anchor_positions = (int[]) seq_node.getProperty("anchor_positions");
         anchor_sides = (String) seq_node.getProperty("anchor_sides");
@@ -943,7 +943,7 @@ public class SequenceLayer {
         loc = address[2];
         node_len = (int) node.getProperty("length");
         ++num_nodes;
-        split_node = graphDb.createNode(node_label);
+        split_node = graphDb.createNode(nucleotide_label);
         address[0] = gen;
         address[1] = seq;
         address[2] = loc + pos;
@@ -1090,7 +1090,7 @@ public class SequenceLayer {
         int[] address;
         address= new int[]{genome,sequence,position - K + 1};
         ++num_nodes;
-        new_node = graphDb.createNode(node_label);
+        new_node = graphDb.createNode(nucleotide_label);
         if (DEBUG) System.out.println("create "+new_node.getId());
         new_node.setProperty("address", address);
         new_node.setProperty("length", K);
@@ -1400,7 +1400,7 @@ public class SequenceLayer {
         rev_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
         for (genome = previous_num_genomes + 1; genome <= genomeDb.num_genomes; ++genome) {
             try (Transaction tx = graphDb.beginTx()) {
-                genome_node = graphDb.createNode(genome_label);
+                genome_node = graphDb.createNode(assembly_label);
                 genome_node.setProperty("name", genomeDb.genome_names[genome]);
                 genome_node.setProperty("number", genome);
                 genome_node.setProperty("num_sequences", genomeDb.num_sequences[genome]);
@@ -1414,7 +1414,7 @@ public class SequenceLayer {
                 finish = false;
                 System.out.println("sequence " + sequence + "/" + genomeDb.num_sequences[genome] + " of genome " + genome + "\tlength=" + genomeDb.sequence_length[genome][sequence]);
                 try (Transaction tx = graphDb.beginTx()) {
-                    sequence_node = curr_node = graphDb.createNode(sequence_label);
+                    sequence_node = curr_node = graphDb.createNode(scaffold_label);
                     sequence_node.setProperty("number", genome + "_" + sequence);
                     sequence_node.setProperty("sequence_title", genomeDb.sequence_titles[genome][sequence]);
                     sequence_node.setProperty("sequence_length", genomeDb.sequence_length[genome][sequence]);
@@ -1491,7 +1491,7 @@ public class SequenceLayer {
                 origin = "a" + address[0] + "_" + address[1];
                 length = genomeDb.sequence_length[address[0]][address[1]] - 1;
                 try (Transaction tx = graphDb.beginTx()) {
-                    node = seq_node = graphDb.findNode(sequence_label, "number", address[0] + "_" + address[1]);
+                    node = seq_node = graphDb.findNode(scaffold_label, "number", address[0] + "_" + address[1]);
                     tx.success();
                 }
                 node_side = 'F';
@@ -1508,7 +1508,7 @@ public class SequenceLayer {
                                     continue;
                                 neighbor = r.getEndNode();
                                 neighbor_side = rel_name.charAt(1);
-                                is_node = neighbor.hasLabel(node_label);
+                                is_node = neighbor.hasLabel(nucleotide_label);
                                 is_degenerate = neighbor.hasLabel(degenerate_label);
                                 if (is_node || is_degenerate){
                                     addr = (int[]) neighbor.getProperty("address");
@@ -1589,7 +1589,7 @@ public class SequenceLayer {
         System.out.println("Adding sequence to the nodes...");
         ResourceIterator<Node> nodes_iterator;
         try (Transaction tx = graphDb.beginTx()) {
-            nodes_iterator = graphDb.findNodes(node_label);
+            nodes_iterator = graphDb.findNodes(nucleotide_label);
             tx.success();
         }
         //num_bases = K - 1; // for the missed overlapped of the last node of each sequence which will not be stored 
@@ -1639,7 +1639,7 @@ public class SequenceLayer {
         ResourceIterator<Node> nodes;
         Node node;
         try (Transaction tx = graphDb.beginTx()) {
-            nodes = graphDb.findNodes(node_label);
+            nodes = graphDb.findNodes(nucleotide_label);
             tx.success();
         }
         while (nodes.hasNext()) {

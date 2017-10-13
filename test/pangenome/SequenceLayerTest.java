@@ -89,7 +89,7 @@ public class SequenceLayerTest {
     @Test
     public void test4_Retrieve_regions() {
         System.out.println("Testing retrieve_regions:");
-        SequenceLayer instance = new SequenceLayer();
+        GenomeLayer instance = new GenomeLayer();
         instance.retrieve_regions(input_path + region_records_file, output_path + "/03");
         if( are_the_same(input_path + region_records_file + ".fasta", regions_file) )
             System.out.println("Regions extracted properly.");
@@ -105,7 +105,7 @@ public class SequenceLayerTest {
     @Test
     public void test5_Reconstruct_genomes() {
         System.out.println("reconstruct_genomes");
-        SequenceLayer instance = new SequenceLayer();
+        GenomeLayer instance = new GenomeLayer();
         instance.retrieve_genomes("all",output_path + "/03");
         String genome_file;
         try {

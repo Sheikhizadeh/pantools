@@ -69,7 +69,7 @@ List of commands and examples for the provided sample data :
    java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genomes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genome_numbers.txt
 
 4. group:
-   To add homology and orthology nodes which point to a groups of homologous or orthologous genes.
+   To add homology nodes which point to a groups of homologous proteins.
 
    java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-i INTERSECTION_RATE] [-t THRESHOLD] [-m MCL_INFLATION] [-c CONTRAST] [-d DIVERGENCE] 
 
