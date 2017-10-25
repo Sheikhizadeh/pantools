@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
+import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.RelationshipType;
 import pangenome.AnnotationLayer;
 import pangenome.ProteomeLayer;
@@ -88,6 +89,7 @@ public class Pantools {
     public static int num_degenerates;
     public static long num_edges;
     public static long num_bases;
+    public static Node db_node;
 
     public static GenomeLayer seqLayer;
     public static AnnotationLayer annLayer;
@@ -267,17 +269,18 @@ public class Pantools {
 "\n" +
 "   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-i INTERSECTION_RATE] [-t THRESHOLD] [-m MCL_INFLATION] [-c CONTRAST] [-d DIVERGENCE] \n" +
 "\n" +
-"   INTERSECTION_RATE : Determines the fraction of kmers needs to be shared by two intersecting proteins (default = 0.08)    \n" +
-"   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 85) \n" +
-"   MCL_INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 13) \n" +
-"   CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 7) \n" +
-"   DIVERGENCE :    The number of pre-cooked parameter set (i,t,m,c).      1 : (0.08, 85,  13, 7) or\n" +
-"                                                                          2 : (0.07, 75,  11, 6) or\n" +
-"                                                                          3 : (0.06, 65,   9, 5) or\n" +
-"                                                                          4 : (0.05, 55,   7, 4) or\n" +
-"                                                                          5 : (0.04, 45,   5, 3) or\n" +
-"                                                                          6 : (0.03, 35,   3, 2) or\n" +
-"                                                                          7 : (0.02, 25, 1.2, 1) or\n" +
+"   INTERSECTION_RATE : Determines the fraction of kmers needs to be shared by two intersecting proteins (default = 0.09)    \n" +
+"   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 95) \n" +
+"   MCL_INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 9.6) \n" +
+"   CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 8) \n" +
+"   DIVERGENCE :    The number of pre-cooked parameter set (i,t,m,c).      1 : (0.09, 95, 9.6, 8) or\n" +
+"                                                                          2 : (0.08, 85, 8.4, 7) or\n" +
+"                                                                          3 : (0.07, 75, 7.2, 6) or\n" +
+"                                                                          4 : (0.06, 65, 6.0, 5) or\n" +
+"                                                                          5 : (0.05, 55, 4.8, 4) or\n" +
+"                                                                          6 : (0.04, 45, 3.6, 3) or\n" +
+"                                                                          7 : (0.03, 35, 2.4, 2) or\n" +
+"                                                                          8 : (0.02, 25, 1.2, 1) or\n" +
 "   \n" +
 "Example: \n" +
 "\n" +

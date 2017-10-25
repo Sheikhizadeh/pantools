@@ -73,17 +73,18 @@ List of commands and examples for the provided sample data :
 
    java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  PATH_TO_THE_PANGENOME_DATABASE [-i INTERSECTION_RATE] [-t THRESHOLD] [-m MCL_INFLATION] [-c CONTRAST] [-d DIVERGENCE] 
 
-   INTERSECTION_RATE : Determines the fraction of kmers needs to be shared by two intersecting proteins (default = 0.08)    
-   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 85) 
-   MCL_INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 13) 
-   CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 7) 
-   DIVERGENCE :    The number of pre-cooked parameter set (i,t,m,c).      1 : (0.08, 85,  13, 7) or
-                                                                          2 : (0.07, 75,  11, 6) or
-                                                                          3 : (0.06, 65,   9, 5) or
-                                                                          4 : (0.05, 55,   7, 4) or
-                                                                          5 : (0.04, 45,   5, 3) or
-                                                                          6 : (0.03, 35,   3, 2) or
-                                                                          7 : (0.02, 25, 1.2, 1) or
+   INTERSECTION_RATE : Determines the fraction of kmers needs to be shared by two intersecting proteins (default = 0.09)    
+   THRESHOLD : The minimum similarity score. Should be in range [1-99], otherwise it would be set by default (default = 95) 
+   MCL_INFLATION : The MCL inflation. Should be in range ]1-29[, otherwise it would be set by default (default = 9.6) 
+   CONTRAST :  The contrast factor. Should be in range ]0-12[, otherwise it would be set by default (default = 8) 
+   DIVERGENCE :    The number of pre-cooked parameter set (i,t,m,c).      1 : (0.09, 95, 9.6, 8) or
+                                                                          2 : (0.08, 85, 8.4, 7) or
+                                                                          3 : (0.07, 75, 7.2, 6) or
+                                                                          4 : (0.06, 65, 6.0, 5) or
+                                                                          5 : (0.05, 55, 4.8, 4) or
+                                                                          6 : (0.04, 45, 3.6, 3) or
+                                                                          7 : (0.03, 35, 2.4, 2) or
+                                                                          8 : (0.02, 25, 1.2, 1) or
    
 Example: 
 

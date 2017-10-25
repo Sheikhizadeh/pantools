@@ -33,6 +33,7 @@ import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
+import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
@@ -160,18 +161,20 @@ public class ProteomeLayer {
                 try (Transaction tx = graphDb.beginTx()) {
                     for (c = 0; c < num_proteins; ++c){
                         protein_node = proteins.take();
-                        protein = (String)protein_node.getProperty("protein", "");
-                        protein_length = protein.length();
-                        if (protein_length > K_SIZE){
-                            kmer_index = 0;
-                            for (i = 0; i < K_SIZE; ++i)
-                                kmer_index = kmer_index * 20 + code[protein.charAt(i)];
-                            for (; i < protein_length; ++i){// for each kmer of the protein
-                                if (kmer_frequencies[kmer_index] == 0)
-                                    ++num_hexamers;
-                                kmer_frequencies[kmer_index] += 1;
-                                kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
-                            }                            
+                        if (protein_node.hasProperty("protein") ){
+                            protein = (String)protein_node.getProperty("protein", "");
+                            protein_length = protein.length();
+                            if (protein_length > K_SIZE){
+                                kmer_index = 0;
+                                for (i = 0; i < K_SIZE; ++i)
+                                    kmer_index = kmer_index * 20 + code[protein.charAt(i)];
+                                for (; i < protein_length; ++i){// for each kmer of the protein
+                                    if (kmer_frequencies[kmer_index] == 0)
+                                        ++num_hexamers;
+                                    kmer_frequencies[kmer_index] += 1;
+                                    kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
+                                }                            
+                            }
                         }
                     }
                     tx.success();
@@ -197,7 +200,7 @@ public class ProteomeLayer {
 
         @Override
         public void run() {
-            int i = 0, c, chunk = num_proteins / 40;
+            int i = 0, c, chunk = num_proteins > 40 ? num_proteins / 40 : 1;
             Node protein_node;
             int protein_length, kmer_index;
             String protein;
@@ -212,25 +215,27 @@ public class ProteomeLayer {
                     kmers_proteins_list = new LinkedList[MAX_KMERS_NUM];
                     for (c = 0; c < num_proteins; ++c){
                         protein_node = proteins.take();
-                        protein = (String)protein_node.getProperty("protein", "");
-                        protein_length = protein.length();
-                        protein_id = protein_node.getId();
-                        if (protein_length > K_SIZE){
-                            kmer_index = 0;
-                            for (i = 0; i < K_SIZE; ++i)
-                                kmer_index = kmer_index * 20 + code[protein.charAt(i)];
-                            for (; i < protein_length; ++i){// for each kmer of the protein
-                            // ignore extremely rare and abundant k-mers    
-                                if (kmer_frequencies[kmer_index] > 1 + num_genomes / 2 && kmer_frequencies[kmer_index] < MAX_KMER_FREQ){
-                                    if (kmers_proteins_list[kmer_index] == null)
-                                        kmers_proteins_list[kmer_index] = new LinkedList();
-                                    kmers_proteins_list[kmer_index].add(protein_id);
-                                }
-                                kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
-                            }                            
+                        if (protein_node.hasProperty("protein") ){
+                            protein = (String)protein_node.getProperty("protein", "");
+                            protein_length = protein.length();
+                            protein_id = protein_node.getId();
+                            if (protein_length > K_SIZE){
+                                kmer_index = 0;
+                                for (i = 0; i < K_SIZE; ++i)
+                                    kmer_index = kmer_index * 20 + code[protein.charAt(i)];
+                                for (; i < protein_length; ++i){// for each kmer of the protein
+                                // ignore extremely rare and abundant k-mers    
+                                    if (kmer_frequencies[kmer_index] > 1 + num_genomes / 2 && kmer_frequencies[kmer_index] < MAX_KMER_FREQ){
+                                        if (kmers_proteins_list[kmer_index] == null)
+                                            kmers_proteins_list[kmer_index] = new LinkedList();
+                                        kmers_proteins_list[kmer_index].add(protein_id);
+                                    }
+                                    kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
+                                }                            
+                            }
+                            if (c % chunk == 0)
+                                System.out.print("|");
                         }
-                        if (c % chunk == 0)
-                            System.out.print("|");
                     }
                     tx.success();
                     kmer_frequencies = null;
@@ -256,7 +261,7 @@ public class ProteomeLayer {
 
         @Override
         public void run() {
-            int i, chunk = num_proteins / 40;
+            int i, chunk = num_proteins > 40 ? num_proteins / 40 : 1;
             int p, counter, num_ids, kmer_index;
             long[] crossing_protein_ids= new long[max_intersection];
             int[] code = new int[256];
@@ -275,58 +280,60 @@ public class ProteomeLayer {
                 try{
                     for (p = 0; p < num_proteins; ++p) {
                         protein_node = proteins.take();
-                        protein = (String)protein_node.getProperty("protein");
-                        protein_length = protein.length();
-                        if (protein_length > K_SIZE){
-                            protein_id = protein_node.getId();
-                            num_ids = 0;
-                            kmer_index = 0;
-                            for (i = 0; i < K_SIZE; ++i)
-                                kmer_index = kmer_index * 20 + code[protein.charAt(i)];
-                            for (; i < protein_length && num_ids < max_intersection; ++i){// for each kmer of the protein
-                                if (kmers_proteins_list[kmer_index] != null){
-                                    proteins_list = kmers_proteins_list[kmer_index].iterator();
-                                    while(proteins_list.hasNext() && num_ids < max_intersection){
-                                        crossing_protein_id = proteins_list.next();
-                                    // Only crossing proteins with a higher ID
-                                        if (crossing_protein_id > protein_id){ 
-                                            crossing_protein_ids[num_ids++] = crossing_protein_id;
+                        if (protein_node.hasProperty("protein") ){
+                            protein = (String)protein_node.getProperty("protein");
+                            protein_length = protein.length();
+                            if (protein_length > K_SIZE){
+                                protein_id = protein_node.getId();
+                                num_ids = 0;
+                                kmer_index = 0;
+                                for (i = 0; i < K_SIZE; ++i)
+                                    kmer_index = kmer_index * 20 + code[protein.charAt(i)];
+                                for (; i < protein_length && num_ids < max_intersection; ++i){// for each kmer of the protein
+                                    if (kmers_proteins_list[kmer_index] != null){
+                                        proteins_list = kmers_proteins_list[kmer_index].iterator();
+                                        while(proteins_list.hasNext() && num_ids < max_intersection){
+                                            crossing_protein_id = proteins_list.next();
+                                        // Only crossing proteins with a higher ID
+                                            if (crossing_protein_id > protein_id){ 
+                                                crossing_protein_ids[num_ids++] = crossing_protein_id;
+                                            }
                                         }
                                     }
+                                    kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
                                 }
-                                kmer_index = kmer_index % (MAX_KMERS_NUM / 20) * 20 + code[protein.charAt(i)];
-                            }
-                        // Sorts the crossing protein IDs to count the number of shared k-mers.    
-                            Arrays.sort(crossing_protein_ids, 0, num_ids);
-                            for (i = 0, counter = 0, crossing_protein_id = crossing_protein_ids[0]; i < num_ids ; ++i){
-                                p_id = crossing_protein_ids[i];
-                            // New run of protein IDs    
-                                if (crossing_protein_id != p_id){
-                                    if(counter > 1){
-                                        crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
-                                        crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                                        shorter_len = Math.min(protein_length, crossing_protein.length());
-                                        if (counter >= frac * (shorter_len - K_SIZE + 1)){
-                                            intersections.offer(new intersection(protein_node, crossing_protein_node,0));
-                                            num_intersections.getAndIncrement();
+                            // Sorts the crossing protein IDs to count the number of shared k-mers.    
+                                Arrays.sort(crossing_protein_ids, 0, num_ids);
+                                for (i = 0, counter = 0, crossing_protein_id = crossing_protein_ids[0]; i < num_ids ; ++i){
+                                    p_id = crossing_protein_ids[i];
+                                // New run of protein IDs    
+                                    if (crossing_protein_id != p_id){
+                                        if(counter > 1){
+                                            crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
+                                            crossing_protein = (String)crossing_protein_node.getProperty("protein");
+                                            shorter_len = Math.min(protein_length, crossing_protein.length());
+                                            if (counter >= frac * (shorter_len - K_SIZE + 1)){
+                                                intersections.offer(new intersection(protein_node, crossing_protein_node,0));
+                                                num_intersections.getAndIncrement();
+                                            }
                                         }
-                                    }
-                                    crossing_protein_id = p_id;
-                                    counter = 1; 
-                                } else
-                                    ++counter;
-                            }
-                            if(counter > 1){
-                                crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
-                                crossing_protein = (String)crossing_protein_node.getProperty("protein");
-                                shorter_len = Math.min(protein_length, crossing_protein.length());
-                                if (counter >= frac * (shorter_len - K_SIZE + 1)){
-                                    intersections.offer(new intersection(protein_node, crossing_protein_node,0));
-                                    num_intersections.getAndIncrement();
+                                        crossing_protein_id = p_id;
+                                        counter = 1; 
+                                    } else
+                                        ++counter;
                                 }
+                                if(counter > 1){
+                                    crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
+                                    crossing_protein = (String)crossing_protein_node.getProperty("protein");
+                                    shorter_len = Math.min(protein_length, crossing_protein.length());
+                                    if (counter >= frac * (shorter_len - K_SIZE + 1)){
+                                        intersections.offer(new intersection(protein_node, crossing_protein_node,0));
+                                        num_intersections.getAndIncrement();
+                                    }
+                                }
+                                if (p % chunk == 0)
+                                    System.out.print("|");
                             }
-                            if (p % chunk == 0)
-                                System.out.print("|");
                         }
                     }// for protein
                 // Signify the end of intersections queue.    
@@ -679,14 +686,14 @@ public class ProteomeLayer {
 
         @Override
         public void run(){
-            int i, trs, p = 0, chunk = num_proteins / 40;
+            int i, trs, p = 0, chunk = num_proteins > 40 ? num_proteins / 40 : 1;
             int[] copy_number = new int[num_genomes + 1];
             LinkedList<Node> homology_group;
             Node homology_node, protein_node;
-            BufferedWriter groups_file;
+            BufferedWriter homology_file;
             try{
                 try{
-                    groups_file = new BufferedWriter(new FileWriter(pangenome_path + "/pantools_homologs.txt"));
+                    homology_file = new BufferedWriter(new FileWriter(pangenome_path + "/pantools_homology_groups.txt"));
                     while (p < num_proteins) {
                         try(Transaction tx = graphDb.beginTx()){
                             for (trs = 0; trs < MAX_TRANSACTION_SIZE && p < num_proteins; ++trs){
@@ -694,17 +701,20 @@ public class ProteomeLayer {
                                 ++num_groups;
                                 homology_node = graphDb.createNode(homology_group_lable); 
                                 homology_node.setProperty("num_members", homology_group.size());
-                                groups_file.write(Long.toString(homology_node.getId()) + ":");
+                                homology_file.write(Long.toString(homology_node.getId()) + ":");
                                 while (!homology_group.isEmpty()){
                                     protein_node = homology_group.remove();
                                     homology_node.createRelationshipTo(protein_node, RelTypes.has_homolog);
                                     ++copy_number[(int)protein_node.getProperty("genome")];
-                                    groups_file.write(" " + ((String)protein_node.getProperty("protein_ID")).replace(' ', '_'));
+                                    if (protein_node.hasProperty("protein_ID") )
+                                        homology_file.write(" " + ((String)protein_node.getProperty("protein_ID")).replace(' ', '_'));
+                                    else
+                                        homology_file.write(" " + protein_node.getId());
                                     if (p % chunk == 0)
                                         System.out.print("|");
                                     ++p;
                                 }
-                                groups_file.write("\n");
+                                homology_file.write("\n");
                                 homology_node.setProperty("copy_number", copy_number);
                                 for (i=0; i < copy_number.length; ++i)
                                     copy_number[i] = 0;
@@ -712,7 +722,7 @@ public class ProteomeLayer {
                             tx.success();
                         }
                     }
-                    groups_file.close();
+                    homology_file.close();
                 }catch (IOException ex){
                     System.out.print(ex.getMessage());
                 }                
@@ -759,7 +769,11 @@ public class ProteomeLayer {
                 if (file_path.equals("")) // if line is empty
                     continue;
                 BufferedReader in = new BufferedReader(new FileReader(file_path));
-                protein_ID = in.readLine().trim().substring(1);
+            // skip lines till get to the first id line   
+                do{
+                    line = in.readLine().trim();
+                } while(line.equals(""));
+                protein_ID = line.substring(1);
                 ++num_proteins;
                 while (in.ready()) {
                     try (Transaction tx = graphDb.beginTx()) {
@@ -786,6 +800,7 @@ public class ProteomeLayer {
                     }
                 }
                 in.close();
+            // For the last protein    
                 try (Transaction tx = graphDb.beginTx()) {
                     protein_node = graphDb.createNode(mRNA_label);
                     protein_node.setProperty("protein_ID", protein_ID);
@@ -884,7 +899,7 @@ public class ProteomeLayer {
             tx.success();
         }
 
-        MAX_KMER_FREQ = num_proteins / 1000 + 50 * num_genomes; //  because of probability p and copy number of 2
+        MAX_KMER_FREQ = num_proteins / 1000 + 50 * num_genomes; //  because of probability p and copy number of 50
         num_hexamers = 0;
         System.out.println("\nKmerizing proteins :");
         System.out.print("0 ......................................... 100\n  "); 

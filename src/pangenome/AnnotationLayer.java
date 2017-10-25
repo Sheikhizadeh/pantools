@@ -51,6 +51,7 @@ import static pantools.Pantools.coding_gene_label;
 import static pantools.Pantools.exon_label;
 import static pantools.Pantools.feature_label;
 import static pantools.Pantools.assembly_label;
+import static pantools.Pantools.db_node;
 import static pantools.Pantools.intron_label;
 import static pantools.Pantools.mRNA_label;
 import static pantools.Pantools.rRNA_label;
@@ -65,6 +66,8 @@ import static pantools.Pantools.write_fasta;
  * University, Netherlands
  */
 public class AnnotationLayer {
+    
+    private int num_proteins;
    
     /**
      * Implements a comparator for integer arrays of size two
@@ -96,7 +99,7 @@ public class AnnotationLayer {
             System.out.println("No database found in " + pangenome_path);
             System.exit(1);
         }
-        Node db_node, annotation_node;
+        Node annotation_node;
         String[] fields;
         String gff_file, line;
         int[] address = new int[4];
@@ -119,6 +122,7 @@ public class AnnotationLayer {
         }
         startTime = System.currentTimeMillis();
         genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
+        num_proteins = 0;
         try (BufferedReader gff_paths = new BufferedReader(new FileReader(gff_paths_file))) {
             log_file = new BufferedWriter(new FileWriter(pangenome_path + "/annotation.log"));
             if (! new File(pangenome_path + "/proteins").exists())
@@ -150,6 +154,10 @@ public class AnnotationLayer {
         } catch (IOException ioe) {
             System.out.println(ioe.getMessage());
             System.out.println("Could not open " + gff_paths_file);
+        }
+        try (Transaction tx = graphDb.beginTx()) {
+            db_node.setProperty("num_proteins", num_proteins);
+            tx.success();
         }
         graphDb.shutdown();
         genomeDb.close();
@@ -305,7 +313,7 @@ public class AnnotationLayer {
             } // while lines
             in.close();
             System.out.println("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
-            set_protein_sequences(gene_nodes, address[0], log_file, pangenome_path);
+            set_protein_sequences(gene_nodes, address[0], log_file, pangenome_path, k);
             log_file.write("Genome "+address[0] + " : " + num_genes + " genes\t" + num_mRNAs + " mRNAs\t" + num_tRNAs + " tRNAs\t" + num_rRNAs + " rRNAs\n");
             log_file.write("----------------------------------------------------\n");
         }catch (IOException ioe) {
@@ -338,14 +346,14 @@ public class AnnotationLayer {
      * @param gff_file Name of the GFF file
      * @param log_file 
      */
-    private void set_protein_sequences(LinkedList<Node> gene_nodes, int genome, BufferedWriter log_file, String pangenome_path){
+    private void set_protein_sequences(LinkedList<Node> gene_nodes, int genome, BufferedWriter log_file, String pangenome_path, int K){
         IntPairComparator comp = new IntPairComparator();
         PriorityQueue<int[]> pq = new PriorityQueue(comp);
         protein_builder pb = new protein_builder();
         Node cds_node, mrna_node, gene_node;
         Relationship start_edge;
         IndexPointer start_ptr = new IndexPointer();
-        int trsc, isoforms_num, gene_start_pos, protein_num = 0;
+        int trsc, isoforms_num, gene_start_pos;
         long annotaion;
         int[] address, begin_end;
         StringBuilder rna_builder = new StringBuilder();
@@ -364,7 +372,7 @@ public class AnnotationLayer {
                         start_ptr.node_id = start_edge.getEndNode().getId();
                         start_ptr.offset = (int)start_edge.getProperty("offset");
                         start_ptr.canonical = (boolean)start_edge.getProperty("forward");
-                        extract_sequence(gene_builder, start_ptr, address);
+                        extract_sequence(gene_builder, start_ptr, address, K);
                         if (gene_builder.length() == 0)
                             continue;
                         isoforms_num =0;
@@ -391,14 +399,14 @@ public class AnnotationLayer {
                                     reverse_complement(rna_builder);
                                 protein = pb.translate(rna_builder);
                                 if (protein.length() > 0){
-                                    ++protein_num;
-                                    if (protein_num % 11 == 1)
-                                        System.out.print("\rAdding protein sequences... " + protein_num);
+                                    ++num_proteins;
+                                    if (num_proteins % 11 == 1)
+                                        System.out.print("\rAdding protein sequences... " + num_proteins);
                                     annotaion = (long)mrna_node.getProperty("annotation_node_id");
-                                    out.write(">G" + genome + "A" + annotaion + "P" + protein_num + "\n");
+                                    out.write(">G" + genome + "A" + annotaion + "P" + num_proteins + "\n");
                                     write_fasta(out, protein, 70);
                                     mrna_node.setProperty("protein", protein.toString());
-                                    mrna_node.setProperty("protein_ID", "G" + genome + "A" + annotaion + "P" + protein_num);
+                                    mrna_node.setProperty("protein_ID", "G" + genome + "A" + annotaion + "P" + num_proteins);
                                     mrna_node.setProperty("protein_length", protein.length());
                                     if (protein.charAt(0) != 'M'  || protein.charAt(protein.length() - 1) != '*'){
                                         log_file.write("Protein ID = " + mrna_node.getProperty("ID")+" miss-annotated!\n");

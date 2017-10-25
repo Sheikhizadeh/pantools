@@ -12,7 +12,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import org.neo4j.graphdb.DynamicLabel;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.ResourceIterator;
@@ -25,6 +24,7 @@ import java.nio.file.Paths;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.cores;
 import static pantools.Pantools.executeCommand;
+import static pantools.Pantools.nucleotide_label;
 
 /**
  * Implements all the functionality to work with a KMC-based kmer index database. 
@@ -366,7 +366,7 @@ public final class IndexDatabase {
         // adjusting available pointers
             System.out.println("Updating kmer index...                    ");
             try(Transaction tx = graphDb.beginTx()){
-                nodes_iterator = graphDb.findNodes( DynamicLabel.label( "node" ));
+                nodes_iterator = graphDb.findNodes(nucleotide_label);
                 tx.success();
             }
             IndexPointer ptr = new IndexPointer();

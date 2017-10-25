@@ -119,6 +119,8 @@ public class GenomeLayer {
         startTime = System.currentTimeMillis();
         num_nodes = 0;
         num_edges = 0;
+        num_bases = 0;
+        num_degenerates = 0;
         genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH, genome_paths_file);
         indexDb = new IndexDatabase(pangenome_path + INDEX_DATABASE_PATH, genome_paths_file, genomeDb, k);
         K = get_K();
@@ -182,6 +184,10 @@ public class GenomeLayer {
                 }
             // Reads the properties of the pangenome    
                 K = (int) db_node.getProperty("k_mer_size");
+                num_nodes = (long) db_node.getProperty("num_nodes");
+                num_edges = (long) db_node.getProperty("num_edges");
+                num_degenerates = (int) db_node.getProperty("num_degenerate_nodes");
+                num_bases = 0;
                 previous_num_genomes = (int) db_node.getProperty("num_genomes");
             // if the genome database is not available, reconstruct it.    
                 if (!Files.exists(Paths.get(pangenome_path + GENOME_DATABASE_PATH))) 
@@ -195,7 +201,7 @@ public class GenomeLayer {
                             start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
                             address[2] = 1;
                             address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
-                            extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1l), address);
+                            extract_sequence(seq, new IndexPointer(start.getId(), true, 0, -1l), address, K);
                             len = seq.length();
                             if (len % 2 == 1) {
                                 --len;
@@ -439,7 +445,7 @@ public class GenomeLayer {
                             begin = address[2];
                             end = address[3];
                             strand = gene.getProperty("strand").toString().equals("+");
-                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address);//
+                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
                             //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
@@ -532,7 +538,7 @@ public class GenomeLayer {
                         if (address[0] <= genomeDb.num_genomes && address[1] <= genomeDb.num_sequences[address[0]] && address[2] >= 1 && address[3] <= genomeDb.sequence_length[address[0]][address[1]]){
                             start_ptr = locate(address, K);
                             proper_regions++;
-                            extract_sequence(seq, start_ptr, address);
+                            extract_sequence(seq, start_ptr, address, K);
                             out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
                             write_fasta(out, seq, 70);
                             seq.setLength(0);
@@ -610,7 +616,7 @@ public class GenomeLayer {
                                 address[3] = (int)genomeDb.sequence_length[address[0]][address[1]];
                                 start = locate(address, K);
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
-                                extract_sequence(seq, start, address);
+                                extract_sequence(seq, start, address, K);
                                 write_fasta(out, seq, 80);
                                 seq.setLength(0);
                             }
@@ -754,7 +760,7 @@ public class GenomeLayer {
      * @param start_ptr A pangenome pointer which points to the node where the sequence starts.
      * @param address An array determining {genome, sequence, begin, end}properties of the sequence.
      */
-    public static void extract_sequence(StringBuilder seq, IndexPointer start_ptr, int[] address) {
+    public static void extract_sequence(StringBuilder seq, IndexPointer start_ptr, int[] address, int K) {
         Relationship rel;
         Node neighbor, node;
         int[] addr = new int[]{address[0],address[1],address[2],address[3]};
