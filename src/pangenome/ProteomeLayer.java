@@ -49,7 +49,7 @@ import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.cores;
 import static pantools.Pantools.executeCommand_for;
 import static pantools.Pantools.heapSize;
-import static pantools.Pantools.homology_group_lable;
+import static pantools.Pantools.homology_group_label;
 import static pantools.Pantools.mRNA_label;
 
 /**
@@ -85,7 +85,6 @@ public class ProteomeLayer {
     private BlockingQueue<LinkedList> homology_groups_list; 
     private String pangenome_path;
     private Node pangenome_node;
-    
     
     public ProteomeLayer(){
         K_SIZE = 6;
@@ -699,7 +698,7 @@ public class ProteomeLayer {
                             for (trs = 0; trs < MAX_TRANSACTION_SIZE && p < num_proteins; ++trs){
                                 homology_group = homology_groups_list.take();
                                 ++num_groups;
-                                homology_node = graphDb.createNode(homology_group_lable); 
+                                homology_node = graphDb.createNode(homology_group_label); 
                                 homology_node.setProperty("num_members", homology_group.size());
                                 homology_file.write(Long.toString(homology_node.getId()) + ":");
                                 while (!homology_group.isEmpty()){

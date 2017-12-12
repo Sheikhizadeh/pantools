@@ -1,0 +1,2 @@
+/home/sheik005/pantools/example/data/hiv1.fna
+

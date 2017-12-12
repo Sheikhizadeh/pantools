@@ -48,15 +48,14 @@ public class Pantools {
     public static boolean SHOW_KMERS;
 
     public static Label pangenome_label = DynamicLabel.label("pangenome");
-    public static Label assembly_label = DynamicLabel.label("assembly");
-    public static Label scaffold_label = DynamicLabel.label("scaffold");
+    public static Label genome_label = DynamicLabel.label("genome");
+    public static Label sequence_label = DynamicLabel.label("sequence");
     public static Label nucleotide_label = DynamicLabel.label("nucleotide");
     public static Label degenerate_label = DynamicLabel.label("degenerate");
     public static Label annotation_label = DynamicLabel.label("annotation");
     public static Label variation_label = DynamicLabel.label("variation");
     public static Label gene_label = DynamicLabel.label("gene");
     public static Label coding_gene_label = DynamicLabel.label("coding_gene");
-    public static Label RNA_label = DynamicLabel.label("RNA");
     public static Label mRNA_label = DynamicLabel.label("mRNA");
     public static Label tRNA_label = DynamicLabel.label("tRNA");
     public static Label rRNA_label = DynamicLabel.label("rRNA");
@@ -65,8 +64,8 @@ public class Pantools {
     public static Label intron_label = DynamicLabel.label("intron");
     public static Label feature_label = DynamicLabel.label("feature");
     public static Label broken_protein_label = DynamicLabel.label("broken_protein");
-    public static Label homology_group_lable = DynamicLabel.label("homology_group");
-    public static Label kmer_lable = DynamicLabel.label("kmer");
+    public static Label homology_group_label = DynamicLabel.label("homology_group");
+    public static Label low_complexity_label = DynamicLabel.label("low_complexity");
     
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
@@ -74,13 +73,12 @@ public class Pantools {
         starts,
         stops,
         has_homolog, // for pointing to gene nodes from the homology group
-        splits_into,
         codes_for,// for connecting genes to mRNAs
         is_parent_of,
         contributes_to,// for connecting CDSs to mRNA
-        visits,
-        precedes, 
-        is_similar_to
+        is_similar_to,
+        annotates,
+        varies
     }
 
     public static long startTime;
@@ -169,7 +167,7 @@ public class Pantools {
                     System.exit(1);
                 }
                 if (args[1].equals("genes"))
-                    seqLayer.retrieve_genes(args[3],args[2]);
+                    annLayer.retrieve_genes(args[3],args[2]);
                 else if (args[1].equals("regions"))
                     seqLayer.retrieve_regions(args[3],args[2]);
                 else if (args[1].equals("genomes"))
@@ -335,7 +333,7 @@ public class Pantools {
      * @param seq The sequence to be written in the file.
      * @param length Length of the lines.
      */    
-    public static void write_fasta(BufferedWriter fasta_file, StringBuilder seq, int length) {
+    public static void write_fasta(BufferedWriter fasta_file, String seq, int length) {
         int i;
         try {
             for (i = 1; i <= seq.length(); ++i) {

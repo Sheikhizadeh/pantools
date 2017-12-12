@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.cores;
+import static pantools.Pantools.degenerate_label;
 import static pantools.Pantools.executeCommand;
 import static pantools.Pantools.nucleotide_label;
 
@@ -374,24 +375,26 @@ public final class IndexDatabase {
                 try (Transaction tx = graphDb.beginTx()) {
                     for (i = 0; i < 10 * MAX_TRANSACTION_SIZE && nodes_iterator.hasNext(); ++i){
                         node=nodes_iterator.next();
-                        l=(long)node.getProperty("first_kmer");
-                        k_mer = old_index.get_kmer(l);
-                        k_mer.set_suffix(suf_len);
-                        p_index = find(k_mer);
-                        old_index.get_pointer(ptr,l);
-                        put_pointer(ptr,p_index);
-                        node.setProperty("first_kmer", p_index);
-                        for(l=old_index.get_next_index(l);l!=-1L;l=old_index.get_next_index(l)){
+                        if (!node.hasLabel(degenerate_label)){
+                            l=(long)node.getProperty("first_kmer");
                             k_mer = old_index.get_kmer(l);
                             k_mer.set_suffix(suf_len);
-                            c_index = find(k_mer);
+                            p_index = find(k_mer);
                             old_index.get_pointer(ptr,l);
-                            put_pointer(ptr,c_index);
-                            put_next_index(c_index,p_index);
-                            p_index = c_index;
+                            put_pointer(ptr,p_index);
+                            node.setProperty("first_kmer", p_index);
+                            for(l=old_index.get_next_index(l);l!=-1L;l=old_index.get_next_index(l)){
+                                k_mer = old_index.get_kmer(l);
+                                k_mer.set_suffix(suf_len);
+                                c_index = find(k_mer);
+                                old_index.get_pointer(ptr,l);
+                                put_pointer(ptr,c_index);
+                                put_next_index(c_index,p_index);
+                                p_index = c_index;
+                            }
+                            put_next_index(-1L,p_index);
+                            node.setProperty("last_kmer", p_index);
                         }
-                        put_next_index(-1L,p_index);
-                        node.setProperty("last_kmer", p_index);
                     }
                     tx.success();
                 }

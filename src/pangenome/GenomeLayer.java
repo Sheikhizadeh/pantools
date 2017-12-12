@@ -35,7 +35,7 @@ import pantools.Pantools.RelTypes;
 import static pantools.Pantools.degenerate_label;
 import static pantools.Pantools.gene_label;
 import static pantools.Pantools.genomeDb;
-import static pantools.Pantools.assembly_label;
+import static pantools.Pantools.genome_label;
 import static pantools.Pantools.graphDb;
 import static pantools.Pantools.indexDb;
 import static pantools.Pantools.nucleotide_label;
@@ -45,7 +45,7 @@ import static pantools.Pantools.num_edges;
 import static pantools.Pantools.num_nodes;
 import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.phaseTime;
-import static pantools.Pantools.scaffold_label;
+import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.complement;
@@ -54,9 +54,11 @@ import static pantools.Pantools.write_fasta;
 import static index.IndexDatabase.get_K;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.LinkedList;
 import static pantools.Pantools.DEBUG;
 import static pantools.Pantools.K;
 import static pantools.Pantools.SHOW_KMERS;
+import static pantools.Pantools.low_complexity_label;
 import static pantools.Pantools.variation_label;
 
 /**
@@ -79,7 +81,7 @@ public class GenomeLayer {
     private IndexPointer pointer;
     private int fwd_code, rev_code;
     private boolean finish;
-    private static int ANCHOR_DISTANCES = 100; // Distance between two anchor nodes
+    private static int ANCHORS = 10000; // The number of anchor nodes
 
     /**
      * The constructor of the class.
@@ -197,7 +199,7 @@ public class GenomeLayer {
                     StringBuilder seq = new StringBuilder();
                     for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
                         for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
-                            seq_node = graphDb.findNode(scaffold_label, "number", address[0] + "_" + address[1]);
+                            seq_node = graphDb.findNode(sequence_label, "identifier", address[0] + "_" + address[1]);
                             start = seq_node.getRelationships(Direction.OUTGOING).iterator().next().getEndNode();
                             address[2] = 1;
                             address[3] = (int) genomeDb.sequence_length[address[0]][address[1]];
@@ -292,8 +294,8 @@ public class GenomeLayer {
             System.out.println("............................................");
             while (vcf_paths.ready() && address[0] <= genomeDb.num_genomes) // for each gff file
             {
-                line = vcf_paths.readLine();
-                if (line.trim().equals(""))
+                line = vcf_paths.readLine().trim();
+                if (line.equals(""))
                     continue;
                 fields = line.split(" ");
                 address[0] = Integer.parseInt(fields[0]);
@@ -334,7 +336,7 @@ public class GenomeLayer {
         variation_node = graphDb.createNode(variation_label);
         variation_node.setProperty("genome", genome);
         variation_node.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
-        graphDb.findNodes(assembly_label,"number",genome).next().createRelationshipTo(variation_node, RelTypes.has);
+        variation_node.createRelationshipTo(graphDb.findNodes(genome_label,"number",genome).next(), RelTypes.varies);
         variation_node_id = variation_node.getId();
         num_genes = num_mRNAs = num_tRNAs = num_rRNAs = 0;
         try (BufferedReader in = new BufferedReader(new FileReader(vcf_file))) {
@@ -343,7 +345,7 @@ public class GenomeLayer {
             {
                 try (Transaction tx2 = graphDb.beginTx()) {
                     for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && in.ready(); ++trsc) {
-                        line = in.readLine();
+                        line = in.readLine().trim();
                         if (line.equals("") || line.charAt(0) == '#') // if line is empty or a comment skip it
                             continue;
                         fields = line.split("\\t");
@@ -366,124 +368,6 @@ public class GenomeLayer {
     }
     
     /**
-     * Retrieves sequence of the genes sequence from the pangenome and stores them in a FASTA file. 
-     * 
-     * @param annotation_records_file a text file containing annotation records of the genes to be retrieved.
-     * @param pangenome_path Path to the database folder
-     */
-    public void retrieve_genes(String annotation_records_file, String pangenome_path) {
-        if (new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
-            BufferedReader in;
-            ResourceIterator<Node> gene_nodes;
-            Relationship rstart;
-            Node start, gene;
-            String record;
-            String line;
-            boolean strand;
-            int i, j, num_genes, begin,end;
-            int[] address;
-            String[] fields;
-            StringBuilder gene_seq;
-
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
-                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
-            registerShutdownHook(graphDb);
-            startTime = System.currentTimeMillis();
-            try (Transaction tx = graphDb.beginTx()) {
-                K = (int) graphDb.findNodes(pangenome_label).next().getProperty("k_mer_size");
-                tx.success();
-            }
-            num_genes = 0;
-            gene_seq = new StringBuilder();
-            try {
-                in = new BufferedReader(new FileReader(annotation_records_file));
-                while (in.ready()) {
-                    line = in.readLine();
-                    if (line.equals("")) {
-                        continue;
-                    }
-                    num_genes++;
-                }
-                in.close();
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
-                System.exit(1);
-            }
-            String[] records = new String[num_genes];
-            try (Transaction tx = graphDb.beginTx()) {
-                try {
-                    in = new BufferedReader(new FileReader(annotation_records_file));
-                    // fill all the records in an array to be sorted    
-                    for (i = 0; in.ready();) {
-                        line = in.readLine();
-                        if (line.equals("")) {
-                            continue;
-                        }
-                        fields = line.trim().split("\\t");
-                        records[i] = fields[fields.length - 1]; // attribute field
-                        ++i;
-                    }
-                    in.close();
-                    Arrays.sort(records);
-                } catch (IOException ioe) {
-                    System.out.println("Failed to read file names!");
-                    System.exit(1);
-                }
-                try {
-                    BufferedWriter out = new BufferedWriter(new FileWriter(annotation_records_file + ".fasta"));
-                    // for all the genes in the database    
-                    for (i = j = 0, gene_nodes = graphDb.findNodes(gene_label); gene_nodes.hasNext();) {
-                        gene = gene_nodes.next();
-                        record = (String) gene.getProperty("attribute");
-                        if (record != null && Arrays.binarySearch(records, record) >= 0) // gene is in the records
-                        {
-                            ++i;
-                            //System.out.println(record);
-                            rstart = gene.getSingleRelationship(RelTypes.starts, Direction.OUTGOING);
-                            start = rstart.getEndNode();
-                            address = (int[]) gene.getProperty("address");
-                            begin = address[2];
-                            end = address[3];
-                            strand = gene.getProperty("strand").toString().equals("+");
-                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
-                            //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
-                            //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
-                            //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
-                            if (gene_seq.length() == end - begin + 1) {
-                                ++j;
-                                out.write(">" + record + "\n");
-                                if (strand) {
-                                    write_fasta(out, gene_seq, 70);
-                                } else {
-                                    reverse_complement(gene_seq);
-                                    write_fasta(out, gene_seq, 70);
-                                }
-                            } else {
-                                System.out.println("Failed to assemble:\n" + record);
-                            }
-                            gene_seq.setLength(0);
-                        }
-                        if (i % (num_genes / 100 + 1) == 0) {
-                            System.out.print((long) i * 100 / num_genes + 1 + "%\r");
-                        }
-                    }//for i
-                    System.out.println(j + " out of " + i + " genes found and retrieved successfully.");
-                    System.out.println("See " + annotation_records_file + ".fasta");
-                    out.close();
-                } catch (IOException ioe) {
-                    System.out.println("Failed to read file names!");
-                    System.exit(1);
-                }
-                tx.success();
-            }
-            graphDb.shutdown();
-        } else {
-            System.out.println("No database found in " + pangenome_path);
-            System.exit(1);
-        }
-    }
-
-    /**
      * Retrieves the sequence of a number of genomic regions from the pangenome and stores them in a FASTA file.
      * 
      * @param region_records_file a text file with lines containing genome number, sequence number, start and stop positions
@@ -493,7 +377,7 @@ public class GenomeLayer {
     public void retrieve_regions(String region_records_file, String pangenome_path) {
         if (new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
             String[] fields;
-            String line;
+            String line, out_file_name;
             IndexPointer start_ptr;
             StringBuilder seq;
             int c, num_regions = 0, proper_regions = 0;
@@ -509,7 +393,7 @@ public class GenomeLayer {
             try {
                 BufferedReader in = new BufferedReader(new FileReader(region_records_file));
                 while (in.ready()) {
-                    line = in.readLine();
+                    line = in.readLine().trim();
                     if (line.equals("")) {
                         continue;
                     }
@@ -524,9 +408,11 @@ public class GenomeLayer {
             genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
             try (Transaction tx = graphDb.beginTx()) {
                 try (BufferedReader in = new BufferedReader(new FileReader(region_records_file))) {
-                    BufferedWriter out = new BufferedWriter(new FileWriter(region_records_file + ".fasta"));
+                    fields = region_records_file.split("\\/");
+                    out_file_name = pangenome_path + fields[fields.length - 1].split("\\.")[0] + ".fasta";
+                    BufferedWriter out = new BufferedWriter(new FileWriter(out_file_name));
                     for (c = 0; in.ready();) {
-                        line = in.readLine();
+                        line = in.readLine().trim();
                         if (line.equals("")) {
                             continue;
                         }
@@ -540,7 +426,7 @@ public class GenomeLayer {
                             proper_regions++;
                             extract_sequence(seq, start_ptr, address, K);
                             out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
-                            write_fasta(out, seq, 70);
+                            write_fasta(out, seq.toString(), 70);
                             seq.setLength(0);
                             ++c;
                             if (c % (num_regions / 100 + 1) == 0) {
@@ -551,8 +437,7 @@ public class GenomeLayer {
                     }
                     in.close();
                     out.close();
-                    System.out.println(proper_regions + " out of " + num_regions + " genomic regions found and retrieved successfully.");
-                    System.out.println("See " + region_records_file + ".fasta");
+                    System.out.println(proper_regions + " out of " + num_regions + " genomic regions found and retrieved successfully (See " + out_file_name + ")");
                 } catch (IOException ioe) {
                     System.out.println("Failed to read file names!");
                     System.exit(1);
@@ -609,7 +494,7 @@ public class GenomeLayer {
                         }
                         System.out.println("Reconstructing genome " + genome_number + "...");
                         try {
-                            out = new BufferedWriter(new FileWriter(pangenome_path + "/genome_" + genome_number + ".fasta"));
+                            out = new BufferedWriter(new FileWriter(pangenome_path + "/Genome_" + genome_number + ".fasta"));
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                                 System.out.println("Sequence " + address[1] + " length = " + genomeDb.sequence_length[address[0]][address[1]]);
                                 address[2] = 1;
@@ -617,7 +502,7 @@ public class GenomeLayer {
                                 start = locate(address, K);
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 extract_sequence(seq, start, address, K);
-                                write_fasta(out, seq, 80);
+                                write_fasta(out, seq.toString(), 80);
                                 seq.setLength(0);
                             }
                             out.close();
@@ -633,7 +518,7 @@ public class GenomeLayer {
                 }
                 tx.success();
             }
-            System.out.println("Genomes are ready in " + pangenome_path);
+            System.out.println("Genomes were stored in the database directory.");
             graphDb.shutdown();
             genomeDb.close();
         } else {
@@ -663,7 +548,6 @@ public class GenomeLayer {
             try {
                 try {
                     g = Integer.parseInt(genome.trim());
-                    //g2 = Integer.parseInt(in.readLine().trim());
                     System.out.println("Reconstructing synteny map between genome " + g + " and the rest :");
                     extract_synteny(pangenome_path, g);
                 }catch(NumberFormatException e){
@@ -766,7 +650,7 @@ public class GenomeLayer {
         int[] addr = new int[]{address[0],address[1],address[2],address[3]};
         int begin = addr[2] - 1, end = addr[3] - 1;
         int len = 0, node_len, neighbor_len, seq_len, position;
-        String rel_name, origin = "a" + address[0] + "_" + address[1];
+        String rel_name, origin = "G" + address[0] + "S" + address[1];
         seq_len = end - begin + 1;
         seq.setLength(0);
         position = start_ptr.offset;
@@ -868,12 +752,12 @@ public class GenomeLayer {
         boolean forward;
         Node node, neighbor, seq_node;
         Relationship rel;
-        String anchor_sides, origin = "a" + addr[0] + "_" + addr[1];
+        String anchor_sides, origin = "G" + addr[0] + "S" + addr[1];
         long[] anchor_nodes;
         int[] anchor_positions;
         int[] address = Arrays.copyOf(addr,addr.length);
         genomic_pos = address[2] - 1;
-        seq_node = graphDb.findNode(scaffold_label, "number", address[0]+"_"+address[1]);
+        seq_node = graphDb.findNode(sequence_label, "identifier", address[0]+"_"+address[1]);
         anchor_nodes = (long[]) seq_node.getProperty("anchor_nodes");
         anchor_positions = (int[]) seq_node.getProperty("anchor_positions");
         anchor_sides = (String) seq_node.getProperty("anchor_sides");
@@ -1339,7 +1223,9 @@ public class GenomeLayer {
      */
     private void create_degenerate(int[] address) {
         ++num_degenerates;
+        ++num_nodes;
         degenerate_node = graphDb.createNode(degenerate_label);
+        degenerate_node.addLabel(nucleotide_label);
         if (DEBUG) System.out.println("create_degenerate:"+degenerate_node.getId()+" position:"+position+" begin:"+address[2]);
         degenerate_node.setProperty("address", address);
         degenerate_node.setProperty("length", position - address[2]);
@@ -1380,8 +1266,11 @@ public class GenomeLayer {
                 ++position;
                 jump();
                 int[] add = new int[]{genome,sequence,0};
-                create_degenerate(add);
-                connect(curr_node ,degenerate_node, RelTypes.values()[curr_side*2]);
+                try (Transaction tx = graphDb.beginTx()) {
+                    create_degenerate(add);
+                    connect(curr_node ,degenerate_node, RelTypes.values()[curr_side*2]);
+                    tx.success();
+                }
                 ++num_edges;
                 curr_node = degenerate_node;
                 break;
@@ -1398,74 +1287,71 @@ public class GenomeLayer {
      Constructs the pangenome out of the provided input sequences.
      */
     void construct_pangenome(int previous_num_genomes) {
-        int i;
-        Node genome_node, sequence_node;
-        //long[] sequence_ids;
+        int trsc = 0;
+        Node genome_node;
+        Node[][] sequence_nodes = new Node[genomeDb.num_genomes + 1][];
         phaseTime = System.currentTimeMillis();
         fwd_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
         rev_kmer = new kmer(K, indexDb.get_pre_len(), indexDb.get_suf_len());
-        for (genome = previous_num_genomes + 1; genome <= genomeDb.num_genomes; ++genome) {
-            try (Transaction tx = graphDb.beginTx()) {
-                genome_node = graphDb.createNode(assembly_label);
-                genome_node.setProperty("name", genomeDb.genome_names[genome]);
+        Transaction tx = graphDb.beginTx();
+        try {
+            for (genome = previous_num_genomes + 1; genome <= genomeDb.num_genomes; ++genome) {
+                System.out.println("Processing genome " + genome + " :             ");
+                genome_node = graphDb.createNode(genome_label);
+                genome_node.setProperty("path", genomeDb.genome_names[genome]);
                 genome_node.setProperty("number", genome);
                 genome_node.setProperty("num_sequences", genomeDb.num_sequences[genome]);
                 genome_node.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
                 db_node.createRelationshipTo(genome_node, RelTypes.has);
-                System.out.println("Processing genome " + genome + " :             ");
-                tx.success();
-            }
-            //sequence_ids = new long[genomeDb.num_sequences[genome] + 1];
-            for (sequence = 1; sequence <= genomeDb.num_sequences[genome]; ++sequence) {
-                finish = false;
-                System.out.println("sequence " + sequence + "/" + genomeDb.num_sequences[genome] + " of genome " + genome + "\tlength=" + genomeDb.sequence_length[genome][sequence]);
-                try (Transaction tx = graphDb.beginTx()) {
-                    sequence_node = curr_node = graphDb.createNode(scaffold_label);
-                    sequence_node.setProperty("number", genome + "_" + sequence);
-                    sequence_node.setProperty("sequence_title", genomeDb.sequence_titles[genome][sequence]);
-                    sequence_node.setProperty("sequence_length", genomeDb.sequence_length[genome][sequence]);
-                    sequence_node.setProperty("sequence_offset", genomeDb.sequence_offset[genome][sequence]);
-                    genome_node.createRelationshipTo(sequence_node, RelTypes.has);
-                    //sequence_ids[sequence] = curr_node.getId();
+                sequence_nodes[genome] = new Node[genomeDb.num_sequences[genome] + 1];
+                for (sequence = 1; sequence <= genomeDb.num_sequences[genome]; ++sequence) {
+                    sequence_nodes[genome][sequence] = curr_node = graphDb.createNode(sequence_label);
+                    sequence_nodes[genome][sequence].setProperty("genome", genome);
+                    sequence_nodes[genome][sequence].setProperty("number", sequence);
+                    sequence_nodes[genome][sequence].setProperty("identifier", genome + "_" + sequence);
+                    sequence_nodes[genome][sequence].setProperty("title", genomeDb.sequence_titles[genome][sequence]);
+                    sequence_nodes[genome][sequence].setProperty("length", genomeDb.sequence_length[genome][sequence]);
+                    sequence_nodes[genome][sequence].setProperty("offset", genomeDb.sequence_offset[genome][sequence]);
+                    genome_node.createRelationshipTo(sequence_nodes[genome][sequence], RelTypes.has);
+                    finish = false;
+                    System.out.println("sequence " + sequence + "/" + genomeDb.num_sequences[genome] + " of genome " + genome + "\tlength=" + genomeDb.sequence_length[genome][sequence]);
+                    curr_node = sequence_nodes[genome][sequence];
                     curr_side = 0;
                     position = -1;
                     seq_len = genomeDb.sequence_length[genome][sequence];
                     initial_kmers(genomeDb);
-                    tx.success();
-                }
-                if (!finish){
-                    curr_index = indexDb.find(k_mer);
-                    indexDb.get_pointer(pointer, curr_index);
-                    while (!finish) {
-                        try (Transaction tx = graphDb.beginTx()) {
-                            for (i = 0; i < MAX_TRANSACTION_SIZE && !finish; ++i) {
-                                if (pointer.node_id == -1L) // kmer is new
-                                {
-                                    create();
-                                    extend(curr_node);
-                                } else if (fwd_kmer.get_canonical() ^ pointer.canonical)// if sides don't agree
-                                {
-                                    follow_reverse();
-                                } else {
-                                    follow_forward();
-                                }
+                    if (!finish){
+                        curr_index = indexDb.find(k_mer);
+                        indexDb.get_pointer(pointer, curr_index);
+                        while (!finish) {
+                            if (pointer.node_id == -1L) // kmer is new
+                            {
+                                create();
+                                extend(curr_node);
+                            } else if (fwd_kmer.get_canonical() ^ pointer.canonical)// if sides don't agree
+                            {
+                                follow_reverse();
+                            } else {
+                                follow_forward();
                             }
-                            tx.success();
+                            ++trsc;
+                            if (trsc >= MAX_TRANSACTION_SIZE){    
+                                tx.success();
+                                tx.close();
+                                tx = graphDb.beginTx();
+                                trsc = 0;
+                            }
                         }
-                    }//while position<n
-                }
-                try (Transaction tx = graphDb.beginTx()) {
-                    connect(curr_node, sequence_node, RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
+                    }
+                    connect(curr_node, sequence_nodes[genome][sequence], RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
                     ++num_edges;
-                    tx.success();
-                }
-            }//sequences
-            try (Transaction tx = graphDb.beginTx()) {
-                //genome_node.setProperty("sequence_ids", sequence_ids);
-                tx.success();
-            }
-            System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");
-        }//genomes
+                }//sequences
+                System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");
+            }//genomes
+            tx.success();
+        } finally {
+            tx.close();
+        }
         add_sequence_properties();
         localize_nodes();
     }
@@ -1475,13 +1361,13 @@ public class GenomeLayer {
      * These are used for locating genomic regions very quickly. 
      */
     void localize_nodes() {
-        int trsc, i, len, m, neighbor_length = 0, count;
+        int anchors_distance, trsc = 0, i, len, m, neighbor_length = 0, count;
         char node_side, neighbor_side;
         long length;
         long[] anchor_nodes;
         int[] anchor_positions;
         int[] initial_coordinate = new int[1];
-        Node node, neighbor = null, seq_node;
+        Node node, neighbor = null, sequence_node;
         StringBuilder nds = new StringBuilder();
         StringBuilder pos = new StringBuilder();
         StringBuilder sds = new StringBuilder();
@@ -1491,71 +1377,77 @@ public class GenomeLayer {
         int[] new_positions;
         int[] address = new int[3], addr = null;
         boolean is_node = false, is_degenerate = false, found = true;
-        for (address[0] = 1; address[0] <= genomeDb.num_genomes; ++address[0]) {
-            for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
+        Transaction tx = graphDb.beginTx();
+        try {
+            ResourceIterator<Node> sequence_iterator = graphDb.findNodes(sequence_label);
+            while (sequence_iterator.hasNext()){
+                sequence_node = sequence_iterator.next();
+                origin = "G" + ((String)sequence_node.getProperty("identifier")).replace('_', 'S');
+                address[0] = (int)sequence_node.getProperty("genome");
+                address[1] = (int)sequence_node.getProperty("number");
                 System.out.println("\rLocalizing sequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
-                origin = "a" + address[0] + "_" + address[1];
                 length = genomeDb.sequence_length[address[0]][address[1]] - 1;
-                try (Transaction tx = graphDb.beginTx()) {
-                    node = seq_node = graphDb.findNode(scaffold_label, "number", address[0] + "_" + address[1]);
-                    tx.success();
-                }
+                anchors_distance = (int)num_nodes / ANCHORS + 1;
+                node = sequence_node;
                 node_side = 'F';
                 count = 0;
-                for (address[2] = 0; address[2] + K - 1 <= length && found;) // K-1 bases of the last node not added
-                {
-                    try (Transaction tx = graphDb.beginTx()) {
-                        //System.out.println((address[2] + K - 1)+" ? " + length);
-                        for (trsc = 0; trsc < 1000 * MAX_TRANSACTION_SIZE && address[2] + K - 1 <= length && found; ++trsc) {
-                            found = false;
-                            for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
-                                rel_name = r.getType().name();
-                                if (rel_name.charAt(0) != node_side)
-                                    continue;
-                                neighbor = r.getEndNode();
-                                neighbor_side = rel_name.charAt(1);
-                                is_node = neighbor.hasLabel(nucleotide_label);
-                                is_degenerate = neighbor.hasLabel(degenerate_label);
-                                if (is_node || is_degenerate){
-                                    addr = (int[]) neighbor.getProperty("address");
-                                    neighbor_length = (int) neighbor.getProperty("length");
-                                }
-                                //System.out.println(node.getId()+" "+address[2]+" "+node_side);
-                                //System.out.println(neighbor.getId()+" "+addr[2]+" "+neighbor_side);
-                                if ((is_node && genomeDb.compare(genomeDb, address, addr, K - 1,
-                                        neighbor_side == 'F' ? K - 1 : neighbor_length - K, 1, neighbor_side == 'F'))
-                                        || (is_degenerate && Arrays.equals(addr, address))) {
-                                    //System.out.println("found "+address[2]+" "+neighbor.getId());
-                                    found = true;
-                                    positions = (int[]) r.getProperty(origin, null);
-                                    if (positions != null) {
-                                        len = positions.length;
-                                        new_positions = new int[len + 1];
-                                        for (i = 0; i < len; ++i) {
-                                            new_positions[i] = positions[i];
-                                        }
-                                        new_positions[i] = address[2];
-                                        r.setProperty(origin, new_positions);
-                                    } else {
-                                        initial_coordinate[0] = address[2];
-                                        r.setProperty(origin, initial_coordinate);
-                                    }
-                                    if (count % ANCHOR_DISTANCES == 0) {
-                                        nds.append(neighbor.getId()).append(" ");
-                                        sds.append(neighbor_side);
-                                        pos.append(address[2]).append(" ");
-                                    }
-                                    count++;
-                                    address[2] = address[2] + neighbor_length - K + 1;
-                                    node = neighbor;
-                                    node_side = neighbor_side;
-                                    break;
-                                }
-                            }
+                for (address[2] = 0; address[2] + K - 1 <= length && found;){ // K-1 bases of the last node not added
+                    //System.out.println((address[2] + K - 1)+" ? " + length);
+                    found = false;
+                    for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
+                        rel_name = r.getType().name();
+                        if (rel_name.charAt(0) != node_side)
+                            continue;
+                        neighbor = r.getEndNode();
+                        neighbor_side = rel_name.charAt(1);
+                        is_node = neighbor.hasLabel(nucleotide_label) && !neighbor.hasLabel(degenerate_label);
+                        is_degenerate = neighbor.hasLabel(degenerate_label);
+                        if (is_node || is_degenerate){
+                            addr = (int[]) neighbor.getProperty("address");
+                            neighbor_length = (int) neighbor.getProperty("length");
                         }
-                        System.out.print("%" + address[2]/length*100 + "\t\r");
-                        tx.success();
+                        //System.out.println(node.getId()+" "+address[2]+" "+node_side);
+                        //System.out.println(neighbor.getId()+" "+addr[2]+" "+neighbor_side);
+                        if ((is_node && genomeDb.compare(genomeDb, address, addr, K - 1,
+                                neighbor_side == 'F' ? K - 1 : neighbor_length - K, 1, neighbor_side == 'F'))
+                                || (is_degenerate && Arrays.equals(addr, address))) {
+                            //System.out.println("found "+address[2]+" "+neighbor.getId());
+                            found = true;
+                            positions = (int[]) r.getProperty(origin, null);
+                            if (positions != null) {
+                                len = positions.length;
+                                new_positions = new int[len + 1];
+                                for (i = 0; i < len; ++i) {
+                                    new_positions[i] = positions[i];
+                                }
+                                new_positions[i] = address[2];
+                                r.setProperty(origin, new_positions);
+                                if (len > 1000)
+                                    neighbor.addLabel(low_complexity_label);
+                            } else {
+                                initial_coordinate[0] = address[2];
+                                r.setProperty(origin, initial_coordinate);
+                            }
+                            if (count % anchors_distance == 0) {
+                                nds.append(neighbor.getId()).append(" ");
+                                sds.append(neighbor_side);
+                                pos.append(address[2]).append(" ");
+                            }
+                            count++;
+                            address[2] = address[2] + neighbor_length - K + 1;
+                            node = neighbor;
+                            node_side = neighbor_side;
+                            break;
+                        }
                     }
+                    ++trsc;
+                    if (trsc >= 1000 * MAX_TRANSACTION_SIZE){
+                        tx.success();
+                        tx.close();
+                        tx = graphDb.beginTx();
+                        trsc = 0;
+                    }
+                    System.out.print("%" + address[2] * 100 / length + "\t\r");
                 }
                 if (!found) {
                     System.out.println("Could not locate position " + address[2] + " from node ID=" + node.getId());
@@ -1570,18 +1462,18 @@ public class GenomeLayer {
                     anchor_nodes[i] = Long.valueOf(ids_list[i]);
                     anchor_positions[i] = Integer.valueOf(posis_list[i]);
                 }
-                try (Transaction tx = graphDb.beginTx()) {
-                    seq_node.setProperty("anchor_nodes", anchor_nodes);
-                    seq_node.setProperty("anchor_positions", anchor_positions);
-                    seq_node.setProperty("anchor_sides", sds.toString());
-                    tx.success();
-                }
+                sequence_node.setProperty("anchor_nodes", anchor_nodes);
+                sequence_node.setProperty("anchor_positions", anchor_positions);
+                sequence_node.setProperty("anchor_sides", sds.toString());
                 nds.setLength(0);
                 pos.setLength(0);
                 sds.setLength(0);
-            }//sequences
+            }//while
             System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");
-        }//genomes
+            tx.success();
+        } finally {
+           tx.close();
+        }
         System.out.println();
     }
 
@@ -1589,50 +1481,43 @@ public class GenomeLayer {
      * Extracts the sequence of the nodes from the genome database and store it as a property of the node.
      */
     void add_sequence_properties() {
-        int trsc, node_length;
-        Node node;
+        int trsc = 0, node_length;
         int[] addr;
-        System.out.println("Adding sequence to the nodes...");
+        Node node;
         ResourceIterator<Node> nodes_iterator;
-        try (Transaction tx = graphDb.beginTx()) {
+        LinkedList<Node> nodes = new LinkedList();
+        System.out.println("Adding sequence to the nodes...");
+        try(Transaction tx = graphDb.beginTx()){
             nodes_iterator = graphDb.findNodes(nucleotide_label);
+            while (nodes_iterator.hasNext()){
+                nodes.add(nodes_iterator.next());
+            }
             tx.success();
+            nodes_iterator.close();
         }
+        Transaction tx = graphDb.beginTx();
+        try {
         //num_bases = K - 1; // for the missed overlapped of the last node of each sequence which will not be stored 
-        while (nodes_iterator.hasNext()){
-            try (Transaction tx = graphDb.beginTx()) {
-                for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && nodes_iterator.hasNext() ; ++trsc) {
-                    node = nodes_iterator.next();
-                    addr = (int[]) node.getProperty("address");
-                    node_length = (int) node.getProperty("length");
-                    num_bases += node_length;
-                    //num_bases += node_length - K + 1;
-                    //node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length - K + 1, true).toString());
-                    node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
+            while (!nodes.isEmpty()){
+                node = nodes.remove();
+                addr = (int[]) node.getProperty("address");
+                node_length = (int) node.getProperty("length");
+                num_bases += node_length;
+                //num_bases += node_length - K + 1;
+                //node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length - K + 1, true).toString());
+                node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
+                ++trsc;
+                if (trsc >= MAX_TRANSACTION_SIZE){
+                    tx.success();
+                    tx.close();
+                    tx = graphDb.beginTx();
+                    trsc = 0;
                 }
-                tx.success();
             }
-        }
-        nodes_iterator.close();
-        try (Transaction tx = graphDb.beginTx()) {
-            nodes_iterator = graphDb.findNodes(degenerate_label);
             tx.success();
+        } finally {
+            tx.close();
         }
-        while (nodes_iterator.hasNext()){
-            try (Transaction tx = graphDb.beginTx()) {
-                for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && nodes_iterator.hasNext() ; ++trsc) {
-                    node = nodes_iterator.next();
-                    addr = (int[]) node.getProperty("address");
-                    node_length = (int) node.getProperty("length");
-                    num_bases += node_length;
-                    //num_bases += node_length - K + 1;
-                    //node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length - K + 1, true).toString());
-                    node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length, true).toString());
-                }
-                tx.success();
-            }
-        }
-        nodes_iterator.close();
     }
 
     /**
@@ -1641,37 +1526,26 @@ public class GenomeLayer {
      */    
     void drop_nodes_property(String property) {
         int i;
-        byte[] sequence;
-        ResourceIterator<Node> nodes;
+        ResourceIterator<Node> nodes_iterator;
+        LinkedList<Node> nodes = new LinkedList();
         Node node;
-        try (Transaction tx = graphDb.beginTx()) {
-            nodes = graphDb.findNodes(nucleotide_label);
+        try(Transaction tx = graphDb.beginTx()){
+            nodes_iterator = graphDb.findNodes(nucleotide_label);
+            while (nodes_iterator.hasNext()){
+                nodes.add(nodes_iterator.next());
+            }
             tx.success();
+            nodes_iterator.close();
         }
-        while (nodes.hasNext()) {
+        while (!nodes.isEmpty()) {
             try (Transaction tx = graphDb.beginTx()) {
-                for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
-                    node = nodes.next();
+                for (i = 0; i < MAX_TRANSACTION_SIZE && !nodes.isEmpty(); ++i) {
+                    node = nodes.remove();
                     node.removeProperty(property);
                 }
                 tx.success();
             }
         }
-        nodes.close();
-        try (Transaction tx = graphDb.beginTx()) {
-            nodes = graphDb.findNodes(degenerate_label);
-            tx.success();
-        }
-        while (nodes.hasNext()) {
-            try (Transaction tx = graphDb.beginTx()) {
-                for (i = 0; i < MAX_TRANSACTION_SIZE && nodes.hasNext(); ++i) {
-                    node = nodes.next();
-                    node.removeProperty(property);
-                }
-                tx.success();
-            }
-        }
-        nodes.close();
     }
 
     /**

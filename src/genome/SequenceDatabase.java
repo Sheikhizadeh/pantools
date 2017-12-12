@@ -21,9 +21,9 @@ import java.nio.file.Paths;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Transaction;
-import static pantools.Pantools.assembly_label;
+import static pantools.Pantools.genome_label;
 import static pantools.Pantools.pangenome_label;
-import static pantools.Pantools.scaffold_label;
+import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.write_fasta;
 
 /**
@@ -155,7 +155,7 @@ public class SequenceDatabase {
         try {
             in = new BufferedReader(new FileReader(genome_paths_file));
             while (in.ready()) {
-                line = in.readLine();
+                line = in.readLine().trim();
                 if (line.equals("")) {
                     continue;
                 }
@@ -182,7 +182,7 @@ public class SequenceDatabase {
             try {
                 in = new BufferedReader(new FileReader(genome_names[g]));
                 while (in.ready()) {
-                    line = in.readLine();
+                    line = in.readLine().trim();
                     if (line.equals("")) {
                         continue;
                     }
@@ -228,18 +228,18 @@ public class SequenceDatabase {
             sequence_start = new long[num_genomes + 1][];
             num_sequences = new int[num_genomes + 1];
             for (g = 1; g <= num_genomes; ++g) {
-                gen_node = graphDb.findNode(assembly_label, "number", g);
-                genome_names[g] = (String) gen_node.getProperty("name");
+                gen_node = graphDb.findNode(genome_label, "number", g);
+                genome_names[g] = (String) gen_node.getProperty("path");
                 num_sequences[g] = (int) gen_node.getProperty("num_sequences");
                 sequence_titles[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
                 sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
-                    seq_node = graphDb.findNode(scaffold_label, "number", g + "_" + s);
-                    sequence_titles[g][s] = (String) seq_node.getProperty("sequence_title");
-                    sequence_length[g][s] = (long) seq_node.getProperty("sequence_length");
-                    sequence_offset[g][s] = (long) seq_node.getProperty("sequence_offset");
+                    seq_node = graphDb.findNode(sequence_label, "identifier", g + "_" + s);
+                    sequence_titles[g][s] = (String) seq_node.getProperty("title");
+                    sequence_length[g][s] = (long) seq_node.getProperty("length");
+                    sequence_offset[g][s] = (long) seq_node.getProperty("offset");
                     sequence_start[g][s] = num_bytes;
                     num_bytes += sequence_length[g][s] % 2 == 0 ? sequence_length[g][s] / 2 : sequence_length[g][s] / 2 + 1;
                 }
@@ -290,7 +290,7 @@ public class SequenceDatabase {
                 sequence_offset[g][0] = 0;
                 sequence_length[g][0] = 0;
                 while (in.ready()) {
-                    line = in.readLine();
+                    line = in.readLine().trim();
                     if (line.equals("")) {
                         continue;
                     }
@@ -345,7 +345,7 @@ public class SequenceDatabase {
                 havecarry = false;
                 s = 0;
                 while (in.ready()) {
-                    line = in.readLine().toUpperCase();
+                    line = in.readLine().trim().toUpperCase();
                     if (line.equals("")) {
                         continue;
                     }
@@ -359,7 +359,7 @@ public class SequenceDatabase {
                         }
                         havecarry = false;
                         ++s;
-                        System.out.print("Sequence " + s + "/" + num_sequences[g] + " of genome " + g + " : " + genome_names[g]+"\t\t\t\t\t\r");
+                        System.out.println("Reading sequence " + s + "/" + num_sequences[g] + " of genome " + g + " : " + genome_names[g]);
                     } else {
                         len = line.length();
                         havecarry = (len % 2 == 1);
@@ -427,7 +427,7 @@ public class SequenceDatabase {
             // count number of new genomes
             in = new BufferedReader(new FileReader(genome_paths_file));
             while (in.ready()) {
-                line = in.readLine();
+                line = in.readLine().trim();
                 if (line.equals("")) {
                     continue;
                 }
@@ -468,7 +468,7 @@ public class SequenceDatabase {
                 // count number of sequences
                 in = new BufferedReader(new FileReader(genome_names[g]));
                 while (in.ready()) {
-                    line = in.readLine();
+                    line = in.readLine().trim();
                     if (line.equals("")) {
                         continue;
                     }
@@ -631,7 +631,7 @@ public class SequenceDatabase {
      * @param direction specifies the direction, True for forward and False for reverse
      * @return The genomic region
      */
-    public StringBuilder get_sequence(int g, int s, int p, int l, boolean direction) {
+    public String get_sequence(int g, int s, int p, int l, boolean direction) {
         int i;
         StringBuilder seq = new StringBuilder();
         if (p < 0) // take the part is available at the start of the sequence
@@ -652,7 +652,7 @@ public class SequenceDatabase {
                 seq.append(get_complement_symbol(g, s, p + i));
             }
         }
-        return seq;
+        return seq.toString();
     }
 
     /**
