@@ -33,7 +33,7 @@ List of commands and examples for the provided sample data :
 
    Example: 
    
-   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  pangenome /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar build  pangenome /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt
              
 2. add:
    To add new genomes and annotations to an available pan-genome. 
@@ -46,11 +46,15 @@ List of commands and examples for the provided sample data :
    PATH_TO_THE_ANNOTATION_PATH_FILE : a text file each line of which contains genome number and path to the corresponding GFF file seperated by one space.
 
    Example: 
+   Before adding a new genome we first make a pangenome: 
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar build  pangenome /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path_1.txt
+   java  -jar  /home/sheik005/pantools/dist/pantools.jar  add genomes /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotations_path_2.txt
 
+   Then we annotate the pangenome. All the annotated proteins will be also stored in the folder "proteins" in the same path as the pangenome. 
    java  -jar  /home/sheik005/pantools/dist/pantools.jar  add annotations /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotations_path.txt
 
 3. retrieve:
-   To retrieve the sequence of annotated genes, genomic regios or constituent genomes. 
+   To retrieve the sequence of annotated genes, genomic regios or constituent genomes. The results will be stored in the same folder as the pangenome itself.
 
    java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  genes [or regions or genomes]  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_RECORDS_FILE [or PATH_TO_THE_GENOMIC_REGIONS_FILE or PATH_TO_THE_GENOME_NUMBERS_FILE]
 

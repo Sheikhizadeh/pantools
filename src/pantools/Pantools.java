@@ -147,8 +147,20 @@ public class Pantools {
                     seqLayer.add_genomes(args[3],args[2]);
                 else if (args[1].equals("annotations"))
                     annLayer.add_annotaions(args[3],args[2]);
-                else if (args[1].equals("variations"))
-                    seqLayer.add_variations(args[3],args[2]);
+                else {
+                    print_help_comment();
+                    System.exit(1);
+                }
+                break;
+            case "remove":
+                if (args.length < 4) {
+                    print_help_comment();
+                    System.exit(1);
+                }
+                if (args[1].equals("genomes"))
+                    seqLayer.remove_genomes(args[3],args[2]);
+                else if (args[1].equals("annotations"))
+                    annLayer.remove_annotaions(args[3],args[2]);
                 else {
                     print_help_comment();
                     System.exit(1);

@@ -263,66 +263,10 @@ public class GenomeLayer {
         }
     }
 
-    public void add_variations(String vcf_paths_file, String pangenome_path) {
-        if (! new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
-            System.out.println("No database found in " + pangenome_path);
-            System.exit(1);
-        }
-        String[] fields;
-        String vcf_file, line;
-        int[] address = new int[4];
-        BufferedWriter log_file;
-        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
-                .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
-        registerShutdownHook(graphDb);
-        try (Transaction tx1 = graphDb.beginTx()) {
-            db_node = graphDb.findNodes(pangenome_label).next();
-            if (db_node == null) {
-                System.out.println("Can not locate database node!");
-                System.exit(1);
-            }
-            // Read the pangenome information    
-            K = (int) db_node.getProperty("k_mer_size");
-            num_nodes = (int) db_node.getProperty("num_nodes");
-            num_edges = (int) db_node.getProperty("num_edges");
-            tx1.success();
-        }
-        startTime = System.currentTimeMillis();
-        genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
-        try (BufferedReader vcf_paths = new BufferedReader(new FileReader(vcf_paths_file))) {
-            log_file = new BufferedWriter(new FileWriter(pangenome_path + "/variations.log"));
-            System.out.println("............................................");
-            while (vcf_paths.ready() && address[0] <= genomeDb.num_genomes) // for each gff file
-            {
-                line = vcf_paths.readLine().trim();
-                if (line.equals(""))
-                    continue;
-                fields = line.split(" ");
-                address[0] = Integer.parseInt(fields[0]);
-                vcf_file = fields[1];
-                if (! new File(vcf_file).exists()){
-                    log_file.write("Annotaion file for genome " + address[0]+" not found.");
-                    continue;
-                }
-                parse_vcf(address[0],log_file, vcf_file);
-            } // for genomes
-            vcf_paths.close();
-            log_file.close();
-        } catch (IOException ioe) {
-            System.out.println(ioe.getMessage());
-            System.out.println("Could not open " + vcf_paths_file);
-        }
-        graphDb.shutdown();
-        genomeDb.close();
-        // delete the database transaction files
-        File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
-        for (File f : directory.listFiles())
-            if (f.getName().startsWith("neostore.transaction.db."))
-                f.delete();
-        System.out.println("Annotation finished. See "+pangenome_path + "/annotation.log");
-        System.out.println("Annotated proteins available in "+pangenome_path + "/proteins");
+    public void remove_genomes(String genome_paths_file, String pangenome_path) {
+        
     }
-
+    
     private void parse_vcf(int genome, BufferedWriter log_file, String vcf_file){
         int i, trsc, num_genes, num_mRNAs, num_tRNAs, num_rRNAs, feature_len, offset, node_len;
         String sequence_id, current_sequence_id=null, attribute;
@@ -1361,6 +1305,8 @@ public class GenomeLayer {
      * These are used for locating genomic regions very quickly. 
      */
     void localize_nodes() {
+        ResourceIterator<Node> sequence_iterator;
+        LinkedList<Node> sequence_nodes;
         int anchors_distance, trsc = 0, i, len, m, neighbor_length = 0, count;
         char node_side, neighbor_side;
         long length;
@@ -1377,11 +1323,19 @@ public class GenomeLayer {
         int[] new_positions;
         int[] address = new int[3], addr = null;
         boolean is_node = false, is_degenerate = false, found = true;
+        try (Transaction tx = graphDb.beginTx()){
+            sequence_iterator = graphDb.findNodes(sequence_label);
+            sequence_nodes = new LinkedList();
+            while (sequence_iterator.hasNext())
+                sequence_nodes.add(sequence_iterator.next());
+            sequence_iterator.close();
+            tx.success();
+        }
+
         Transaction tx = graphDb.beginTx();
         try {
-            ResourceIterator<Node> sequence_iterator = graphDb.findNodes(sequence_label);
-            while (sequence_iterator.hasNext()){
-                sequence_node = sequence_iterator.next();
+            while (!sequence_nodes.isEmpty()){
+                sequence_node = sequence_nodes.remove();
                 origin = "G" + ((String)sequence_node.getProperty("identifier")).replace('_', 'S');
                 address[0] = (int)sequence_node.getProperty("genome");
                 address[1] = (int)sequence_node.getProperty("number");

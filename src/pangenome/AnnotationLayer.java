@@ -656,6 +656,9 @@ public class AnnotationLayer {
         return protein_builder.toString();
     }    
 
+    public void remove_annotaions(String gff_paths_file, String pangenome_path) {
+    }
+    
     /**
      * Shuts down the graph database if the program halts unexpectedly.
      * 

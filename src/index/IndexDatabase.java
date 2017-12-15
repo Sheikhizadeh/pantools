@@ -41,7 +41,7 @@ public final class IndexDatabase {
     private long[] ptr_parts_size;
     private int suf_parts_num;
     private long[] suf_parts_size;
-    private int MAX_BYTE_COUNT = 100000000; // The maximum number of bytes addressable by an integer
+    private int MAX_BYTE_COUNT = 100000000; 
     private int header_pos;
     private final String INFO_FILE = "/index.info";
     private String db_path;
