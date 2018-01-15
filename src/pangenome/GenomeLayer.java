@@ -442,12 +442,13 @@ public class GenomeLayer {
                             out = new BufferedWriter(new FileWriter(pangenome_path + "/Genome_" + genome_number + ".fasta"));
                             for (address[1] = 1; address[1] <= genomeDb.num_sequences[address[0]]; ++address[1]) {
                                 System.out.println("Sequence " + address[1] + " length = " + genomeDb.sequence_length[address[0]][address[1]]);
-                                address[2] = 1;
-                                address[3] = (int)genomeDb.sequence_length[address[0]][address[1]];
+                                //address[2] = 1;
+                                //address[3] = (int)genomeDb.sequence_length[address[0]][address[1]];
                                 //start = locate(address, K);
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                                 //extract_sequence(seq, start, address, K);
                                 address[2] = 0;
+                                address[3] = (int)genomeDb.sequence_length[address[0]][address[1]] - 1;
                                 genomeDb.get_sequence(seq, address, true);
                                 write_fasta(out, seq.toString(), 80);
                             }

@@ -435,6 +435,7 @@ public class AnnotationLayer {
                         //start_ptr.canonical = (boolean)start_edge.getProperty("forward");
                         //extract_sequence(gene_builder, start_ptr, address, K);
                         address[2] -= 1;
+                        address[3] -= 1;
                         genomeDb.get_sequence(gene_builder, address, (boolean)start_edge.getProperty("forward"));
                         if (gene_builder.length() == 0)
                             continue;
@@ -619,6 +620,7 @@ public class AnnotationLayer {
                             strand = gene.getProperty("strand").toString().equals("+");
                             //extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
                             address[2] -= 1;
+                            address[3] -= 1;
                             genomeDb.get_sequence(gene_seq, address, strand);
                             //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
