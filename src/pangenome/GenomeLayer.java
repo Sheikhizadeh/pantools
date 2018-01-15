@@ -353,7 +353,7 @@ public class GenomeLayer {
             try (Transaction tx = graphDb.beginTx()) {
                 try (BufferedReader in = new BufferedReader(new FileReader(region_records_file))) {
                     fields = region_records_file.split("\\/");
-                    out_file_name = pangenome_path + fields[fields.length - 1].split("\\.")[0] + ".fasta";
+                    out_file_name = pangenome_path + "/" + fields[fields.length - 1] + ".fasta";
                     BufferedWriter out = new BufferedWriter(new FileWriter(out_file_name));
                     for (c = 0; in.ready();) {
                         line = in.readLine().trim();
@@ -390,6 +390,7 @@ public class GenomeLayer {
                 tx.success();
             }
             graphDb.shutdown();
+            genomeDb.close();
         }
     }
     

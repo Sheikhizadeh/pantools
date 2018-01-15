@@ -552,6 +552,7 @@ public class AnnotationLayer {
                     .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
+            genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
             try (Transaction tx = graphDb.beginTx()) {
                 K = (int) graphDb.findNodes(pangenome_label).next().getProperty("k_mer_size");
                 tx.success();
@@ -602,7 +603,7 @@ public class AnnotationLayer {
                 }
                 try {
                     fields = annotation_records_file.split("\\/");
-                    out_file_name = pangenome_path + fields[fields.length - 1].split("\\.")[0] + ".fasta";
+                    out_file_name = pangenome_path + "/" + fields[fields.length - 1] + ".fasta";
                     BufferedWriter out = new BufferedWriter(new FileWriter(out_file_name));
                     // for all the genes in the database    
                     for (i = j = 0, gene_nodes = graphDb.findNodes(gene_label); gene_nodes.hasNext();) {
@@ -652,6 +653,7 @@ public class AnnotationLayer {
                 tx.success();
             }
             graphDb.shutdown();
+            genomeDb.close();
         } else {
             System.out.println("No database found in " + pangenome_path);
             System.exit(1);
