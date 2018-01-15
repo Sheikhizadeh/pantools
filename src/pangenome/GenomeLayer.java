@@ -366,9 +366,10 @@ public class GenomeLayer {
                         address[2] = Integer.parseInt(fields[2]);
                         address[3] = Integer.parseInt(fields[3]);
                         if (address[0] <= genomeDb.num_genomes && address[1] <= genomeDb.num_sequences[address[0]] && address[2] >= 1 && address[3] <= genomeDb.sequence_length[address[0]][address[1]]){
-                            start_ptr = locate(address, K);
                             proper_regions++;
-                            extract_sequence(seq, start_ptr, address, K);
+                            //start_ptr = locate(address, K);
+                            //extract_sequence(seq, start_ptr, address, K);
+                            genomeDb.get_sequence(seq, address, true);
                             out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
                             write_fasta(out, seq.toString(), 70);
                             seq.setLength(0);
@@ -443,11 +444,12 @@ public class GenomeLayer {
                                 System.out.println("Sequence " + address[1] + " length = " + genomeDb.sequence_length[address[0]][address[1]]);
                                 address[2] = 1;
                                 address[3] = (int)genomeDb.sequence_length[address[0]][address[1]];
-                                start = locate(address, K);
+                                //start = locate(address, K);
                                 out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
-                                extract_sequence(seq, start, address, K);
+                                //extract_sequence(seq, start, address, K);
+                                address[2] = 0;
+                                genomeDb.get_sequence(seq, address, true);
                                 write_fasta(out, seq.toString(), 80);
-                                seq.setLength(0);
                             }
                             out.close();
                         } catch (IOException e) {

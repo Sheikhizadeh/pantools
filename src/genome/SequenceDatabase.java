@@ -655,6 +655,33 @@ public class SequenceDatabase {
         return seq.toString();
     }
 
+    public void get_sequence(StringBuilder seq, int[] address, boolean direction) {
+        int i, g, s, p, l;
+        g = address[0];
+        s = address[1];
+        p = address[2];
+        l = address[3] - address[2] + 1;
+        seq.setLength(0);
+        if (p < 0) // take the part is available at the start of the sequence
+        {
+            l += p;
+            p = 0;
+        }
+        if (p + l > sequence_length[g][s]) // take the part is available at the end of the sequence
+        {
+            l = (int) sequence_length[g][s] - p;
+        }
+        if (direction) {
+            for (i = 0; i < l; ++i) {
+                seq.append(get_symbol(g, s, p + i));
+            }
+        } else {
+            for (i = l - 1; i >= 0 && p + i < sequence_length[g][s]; --i) {
+                seq.append(get_complement_symbol(g, s, p + i));
+            }
+        }
+    }
+
     /**
      * Determines the identity of two genomic regions.
      * 

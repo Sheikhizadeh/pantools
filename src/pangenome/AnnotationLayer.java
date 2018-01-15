@@ -126,6 +126,15 @@ public class AnnotationLayer {
         }
     }
 
+    public class feature{
+        Node node;
+        String ID;
+        public feature(Node n, String id){
+            node = n;
+            ID = id;
+        }
+    }
+    
     /**
      * Adds nodes related to different genomic features to the pangenome.
      * 
@@ -221,9 +230,9 @@ public class AnnotationLayer {
         Node node, gene_node, rna_node, feature_node, parent_node = null;
         Relationship rel;
         String[] fields,parent_ids;
-        String strand, line;
-        LinkedList<Node> gene_nodes = new LinkedList();
-        LinkedList<Node> rna_nodes = new LinkedList();
+        String strand, line, ID;
+        LinkedList<feature> gene_nodes = new LinkedList();
+        LinkedList<feature> rna_nodes = new LinkedList();
         StringBuilder attr = new StringBuilder();
         IndexPointer start_ptr, stop_ptr;
         num_genes = num_mRNAs = num_tRNAs = num_rRNAs = 0;
@@ -275,7 +284,8 @@ public class AnnotationLayer {
                         feature_node.setProperty("address", address);
                         feature_node.setProperty("strand", strand);
                         feature_node.setProperty("length", feature_len);
-                        feature_node.setProperty("ID", get_property(attribute,"ID"));
+                        ID = get_property(attribute,"ID");
+                        feature_node.setProperty("ID", ID);
                         feature_node.setProperty("attribute", attribute);
                         feature_node.setProperty("type", fields[2]);
                         feature_node.setProperty("name", get_property(attribute,"Name"));
@@ -299,7 +309,7 @@ public class AnnotationLayer {
                         if (fields[2].endsWith("gene")) {
                             // create new gene node
                             feature_node.addLabel(gene_label);
-                            gene_nodes.add(feature_node);
+                            gene_nodes.addFirst(new feature(feature_node, ID));
                             // adding gene_node id to the sequence node
                             //genes_list[address[0]][address[1]].add(gene_node.getId());
                             ++num_genes;
@@ -309,7 +319,7 @@ public class AnnotationLayer {
                                         feature_node.addLabel(mRNA_label);
                                         if (parent_node != null)
                                             parent_node.createRelationshipTo(feature_node, RelTypes.codes_for);
-                                        rna_nodes.addFirst(feature_node);
+                                        rna_nodes.addFirst(new feature(feature_node, ID));
                                         break;
                                     case "tRNA":
                                         ++num_tRNAs;
@@ -341,7 +351,7 @@ public class AnnotationLayer {
                                                     rna_node.setProperty("annotation_id", annotation_id);
                                                     rna_node.setProperty("genome",address[0]);
                                                     ++num_mRNAs;
-                                                    rna_nodes.addFirst(rna_node);                                           
+                                                    rna_nodes.addFirst(new feature(rna_node, ID));                                           
                                                     gene_node.createRelationshipTo(rna_node, RelTypes.is_parent_of);
                                                     gene_node.createRelationshipTo(rna_node, RelTypes.codes_for);
                                                     feature_node.createRelationshipTo(rna_node, RelTypes.contributes_to);
@@ -380,13 +390,13 @@ public class AnnotationLayer {
      * @param id ID of the query feature
      * @return The annotation node (gene or RNA) of the query feature
      */
-    private Node get_node_by_id(LinkedList<Node> nodes, String id){
-        ListIterator<Node> itr = nodes.listIterator();
-        Node node;
+    private Node get_node_by_id(LinkedList<feature> features, String id){
+        ListIterator<feature> itr = features.listIterator();
+        feature f;
         while (itr.hasNext()){
-            node = itr.next();
-            if (((String)node.getProperty("ID")).equals(id.toLowerCase())){
-                return node;
+            f = itr.next();
+            if (f.ID.equals(id.toLowerCase())){
+                return f.node;
             }
         }
         return null;
@@ -398,7 +408,7 @@ public class AnnotationLayer {
      * @param gff_file Name of the GFF file
      * @param log_file 
      */
-    private void set_protein_sequences(LinkedList<Node> gene_nodes, int genome, BufferedWriter log_file, String pangenome_path, int K){
+    private void set_protein_sequences(LinkedList<feature> gene_nodes, int genome, BufferedWriter log_file, String pangenome_path, int K){
         IntPairComparator comp = new IntPairComparator();
         PriorityQueue<int[]> pq = new PriorityQueue(comp);
         Node cds_node, mrna_node, gene_node;
@@ -414,16 +424,18 @@ public class AnnotationLayer {
             while (!gene_nodes.isEmpty()){
                 try (Transaction tx = graphDb.beginTx()) {
                     for (trsc = 0; !gene_nodes.isEmpty()&& trsc < 2 * MAX_TRANSACTION_SIZE; ++trsc){
-                        gene_node = gene_nodes.remove();
+                        gene_node = gene_nodes.remove().node;
                         address = (int[])gene_node.getProperty("address");
                         gene_start_pos = address[2];
                         // extract gene sequence as appears in the sequence and connects it to its nodes
-                        gene_builder.setLength(0);
+                        //gene_builder.setLength(0);
                         start_edge = gene_node.getSingleRelationship(RelTypes.starts, Direction.OUTGOING);
-                        start_ptr.node_id = start_edge.getEndNode().getId();
-                        start_ptr.offset = (int)start_edge.getProperty("offset");
-                        start_ptr.canonical = (boolean)start_edge.getProperty("forward");
-                        extract_sequence(gene_builder, start_ptr, address, K);
+                        //start_ptr.node_id = start_edge.getEndNode().getId();
+                        //start_ptr.offset = (int)start_edge.getProperty("offset");
+                        //start_ptr.canonical = (boolean)start_edge.getProperty("forward");
+                        //extract_sequence(gene_builder, start_ptr, address, K);
+                        address[2] -= 1;
+                        genomeDb.get_sequence(gene_builder, address, (boolean)start_edge.getProperty("forward"));
                         if (gene_builder.length() == 0)
                             continue;
                         isoforms_num =0;
@@ -605,7 +617,9 @@ public class AnnotationLayer {
                             begin = address[2];
                             end = address[3];
                             strand = gene.getProperty("strand").toString().equals("+");
-                            extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
+                            //extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
+                            address[2] -= 1;
+                            genomeDb.get_sequence(gene_seq, address, strand);
                             //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
