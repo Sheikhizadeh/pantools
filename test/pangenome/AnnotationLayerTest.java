@@ -62,7 +62,7 @@ public class AnnotationLayerTest {
         instance.add_annotaions(test_directory + gff_paths_file, database_path);
         instance.retrieve_genes(test_directory + gene_records_file, database_path);
         String [] fields = gene_records_file.split("\\/");
-        if( are_the_same(database_path + fields[fields.length - 1].split("\\.")[0] + ".fasta", test_directory + genes_file) )
+        if( are_the_same(database_path + "/" + fields[fields.length - 1] + ".fasta", test_directory + genes_file) )
             System.out.println("Genes extracted properly.");
         else
             System.out.println("Test failed.");

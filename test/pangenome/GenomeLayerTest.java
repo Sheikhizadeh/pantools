@@ -97,7 +97,7 @@ public class GenomeLayerTest {
         GenomeLayer instance = new GenomeLayer();
         instance.retrieve_regions(test_directory + region_records_file, database_path);
         String[] fields = region_records_file.split("\\/");
-        if( are_the_same(database_path + fields[fields.length - 1].split("\\.")[0] + ".fasta", test_directory + regions_file) )
+        if( are_the_same(database_path + "/" + fields[fields.length - 1] + ".fasta", test_directory + regions_file) )
             System.out.println("Regions extracted properly.");
         else
             System.out.println("Test failed.");

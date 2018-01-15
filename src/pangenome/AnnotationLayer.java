@@ -612,13 +612,12 @@ public class AnnotationLayer {
                         if (record != null && Arrays.binarySearch(records, record) >= 0) // gene is in the records
                         {
                             ++i;
-                            //System.out.println(record);
                             rstart = gene.getSingleRelationship(RelTypes.starts, Direction.OUTGOING);
                             start = rstart.getEndNode();
                             address = (int[]) gene.getProperty("address");
                             begin = address[2];
                             end = address[3];
-                            strand = gene.getProperty("strand").toString().equals("+");
+                            strand = ((String)gene.getProperty("strand")).equals("+");
                             //extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
                             address[2] -= 1;
                             address[3] -= 1;
@@ -629,12 +628,12 @@ public class AnnotationLayer {
                             if (gene_seq.length() == end - begin + 1) {
                                 ++j;
                                 out.write(">" + record + "\n");
-                                if (strand) {
+                                //if (strand) {
                                     write_fasta(out, gene_seq.toString(), 70);
-                                } else {
-                                    reverse_complement(gene_seq);
-                                    write_fasta(out, gene_seq.toString(), 70);
-                                }
+                                //} else {
+                                //    reverse_complement(gene_seq);
+                                //    write_fasta(out, gene_seq.toString(), 70);
+                                //}
                             } else {
                                 System.out.println("Failed to assemble:\n" + record);
                             }

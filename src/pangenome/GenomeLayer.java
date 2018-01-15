@@ -369,8 +369,10 @@ public class GenomeLayer {
                             proper_regions++;
                             //start_ptr = locate(address, K);
                             //extract_sequence(seq, start_ptr, address, K);
+                            out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + (address[3] - address[2] + 1) + "\n");
+                            address[2] -= 1;
+                            address[3] -= 1;
                             genomeDb.get_sequence(seq, address, true);
-                            out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + seq.length() + "\n");
                             write_fasta(out, seq.toString(), 70);
                             seq.setLength(0);
                             ++c;
