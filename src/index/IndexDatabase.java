@@ -5,7 +5,9 @@
  */
 package index;
 
-import genome.SequenceDatabase;
+import sequence.SequenceDatabase;
+import static index.kmer.adjust_fwd_kmer;
+import static index.kmer.compare_suffix;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -88,7 +90,7 @@ public final class IndexDatabase {
             offset_len = Integer.parseInt(in.readLine().split(":")[1]);
             POINTER_LENGTH = Integer.parseInt(in.readLine().split(":")[1]);
             in.close();
-            key=new kmer(K,pre_len,suf_len);
+            key=new kmer(K,pre_len);
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
             // load the prefix file into the memory    
             pre_file.seek(4);
@@ -228,7 +230,7 @@ public final class IndexDatabase {
             id_len = (int)Math.round(Math.ceil( Math.log(kmers_num) / Math.log(2) / 8));
             offset_len = (int)Math.round(Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8));
             POINTER_LENGTH = 2 * id_len + offset_len + 1;
-            key=new kmer(K,pre_len,suf_len);
+            key=new kmer(K,pre_len);
             write_info();
             System.out.println("Indexing " + kmers_num + " kmers...                    ");
             // load the prefix file into the memory    
@@ -288,7 +290,6 @@ public final class IndexDatabase {
         long c_index,p_index,l;
         Node node;
         ResourceIterator<Node> nodes_iterator;
-        kmer k_mer;
         db_path = index_path;
         // move current index files to directory old_index
         try {
@@ -346,7 +347,7 @@ public final class IndexDatabase {
             suf_parts_size = new long[suf_parts_num];
             suf_file = new RandomAccessFile(index_path + "/sorted.kmc_suf", "r");
             suf_buff = new MappedByteBuffer[suf_parts_num];
-            key=new kmer(K,pre_len,suf_len);
+            key=new kmer(K,pre_len);
             for (k = 0; k < suf_parts_num; ++k) {
                 suf_parts_size[k] = (int) (k == suf_parts_num - 1 ? (kmers_num * suf_rec_size) % MAX_BYTE_COUNT : MAX_BYTE_COUNT);
                 suf_buff[k] = suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, 4 + k * suf_parts_size[0], suf_parts_size[k]);
@@ -370,6 +371,8 @@ public final class IndexDatabase {
                 nodes_iterator = graphDb.findNodes(nucleotide_label);
                 tx.success();
             }
+            kmer old_kmer = new kmer(K,old_index.pre_len);
+            kmer new_kmer = new kmer(K,pre_len);
             IndexPointer ptr = new IndexPointer();
             for(;nodes_iterator.hasNext();){
                 try (Transaction tx = graphDb.beginTx()) {
@@ -377,16 +380,16 @@ public final class IndexDatabase {
                         node=nodes_iterator.next();
                         if (!node.hasLabel(degenerate_label)){
                             l=(long)node.getProperty("first_kmer");
-                            k_mer = old_index.get_kmer(l);
-                            k_mer.set_suffix(suf_len);
-                            p_index = find(k_mer);
+                            old_index.get_kmer(old_kmer, l);
+                            adjust_fwd_kmer(new_kmer, old_kmer);
+                            p_index = find(new_kmer);
                             old_index.get_pointer(ptr,l);
                             put_pointer(ptr,p_index);
                             node.setProperty("first_kmer", p_index);
-                            for(l=old_index.get_next_index(l);l!=-1L;l=old_index.get_next_index(l)){
-                                k_mer = old_index.get_kmer(l);
-                                k_mer.set_suffix(suf_len);
-                                c_index = find(k_mer);
+                            for(l = old_index.get_next_index(l); l != -1L; l = old_index.get_next_index(l)){
+                                old_index.get_kmer(old_kmer, l);
+                                adjust_fwd_kmer(new_kmer, old_kmer);
+                                c_index = find(new_kmer);
                                 old_index.get_pointer(ptr,l);
                                 put_pointer(ptr,c_index);
                                 put_next_index(c_index,p_index);
@@ -590,8 +593,7 @@ public final class IndexDatabase {
      * @param number The number of kmer in the index
      * @return The kmer object
      */
-    public kmer get_kmer(long number) {
-        kmer k_mer = new kmer(K, pre_len, suf_len);
+    public void get_kmer(kmer key, long number) {
         boolean found = false;
         int low = 0, high = prefix_ptr.length - 1, mid = 0;
         while (low <= high && !found) {
@@ -609,11 +611,16 @@ public final class IndexDatabase {
         } else {
             for (; mid < prefix_ptr.length - 1 && prefix_ptr[mid + 1] == prefix_ptr[mid]; ++mid);
         }
-        k_mer.set_prefix(mid);
+        key.set_fwd_prefix(mid);
         suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].position((int) (number * suf_rec_size % suf_parts_size[0]));
-        suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].get(k_mer.get_suffix(), 0, suf_len / 4);
-        return k_mer;
+        suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].get(key.get_fwd_suffix(), 0, suf_len / 4);
     }
+
+    public int get_kmer_count(long number) {
+        suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].position((int) (number * suf_rec_size % suf_parts_size[0]) + suf_len / 4);
+        return suf_buff[(int) (number * suf_rec_size / suf_parts_size[0])].get() & 0x00FF;
+    }
+
 
     /**
      * Reads a pointer from the kmer index.
@@ -643,6 +650,16 @@ public final class IndexDatabase {
         write_long(buff, poniter.next_index, id_len);
     }
 
+    public void put_pointer(long node_id, int offset, boolean canonical,long next_index, long number){
+        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / ptr_parts_size[0])];
+        buff.position((int)(number * POINTER_LENGTH % ptr_parts_size[0]));
+        write_long(buff, node_id, id_len);
+        write_int(buff, offset, offset_len);
+        buff.put((byte) (canonical ? 0 : 1));
+        write_long(buff, next_index, id_len);
+    }
+
+    
     /**
      * Reads the node id of a kmer from the index database.
      * @param number Number of the kmer in the index
@@ -728,8 +745,8 @@ public final class IndexDatabase {
      */
     public long find(kmer k_mer) {
         long low, mid, high;
-        int j, comp, prefix;
-        prefix = k_mer.get_prefix();
+        int j, comp, prefix = k_mer.get_canonical_prefix();;
+        byte[] suffix = k_mer.get_canonical_suffix();
         low = prefix_ptr[(int)prefix];
         if (prefix == prefix_ptr.length - 1) {
             high = kmers_num - 1;
@@ -740,8 +757,8 @@ public final class IndexDatabase {
             mid = (low + high) / 2;
             j = (int) (mid * suf_rec_size / suf_parts_size[0]);
             suf_buff[j].position((int) (mid * suf_rec_size % suf_parts_size[0]));
-            suf_buff[j].get(key.get_suffix(), 0, suf_len / 4);
-            comp = k_mer.compare_suffix(key);
+            suf_buff[j].get(key.get_canonical_suffix(), 0, suf_len / 4);
+            comp = compare_suffix(suffix, key.get_canonical_suffix());
             if (comp == -1) {
                 high = mid - 1;
             } else if (comp == 1) {
@@ -811,7 +828,7 @@ public final class IndexDatabase {
         data[7] = (byte) (value & 0x00FF);
     }
     
-    public static int get_K(){
+    public int get_K(){
         return K;
     }
 }

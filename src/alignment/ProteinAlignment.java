@@ -1,7 +1,7 @@
 package alignment;
 
 /**
- * Implements required functionalities for nucleotide pairwise alignment 
+ * Implements required functionalities for amino acid pairwise alignment 
  * 
  * @author Siavash Sheikhizadeh, Bioinformatics chairgroup, Wageningen
  * University, Netherlands
@@ -658,38 +658,6 @@ public class ProteinAlignment {
         match['*']['*'] = 1;
     }
 
-    /**
-     * Generates the alignment of two nucleotide sequences.
-     * 
-     * @param s1 First sequence
-     * @param s2 Second sequence
-     * @return The aligned sequences
-     */
-    public AlignmentBlock get_alignment(String s1, String s2) {
-        int i, j;
-        int m = s1.length(), n = s2.length();
-        AlignmentBlock alignment = new AlignmentBlock();
-        alignment.score = get_similarity(s1, s2);
-        i = m;
-        j = n;
-        while (i > 0 && j > 0) {
-            if (matrix[i][j] == up[i][j]) {
-                alignment.one.append( s1.charAt(i-1) );
-                alignment.two.append( '-' );
-                i = i - 1;
-            } else if (matrix[i][j] == left[i][j]) {
-                alignment.one.append( '-' );
-                alignment.two.append( s2.charAt(j-1) );
-                j = j - 1;
-            } else {
-                alignment.one.append( s1.charAt(i-1) );
-                alignment.two.append( s2.charAt(j-1) );
-                i = i - 1;
-                j = j - 1;
-            }
-        }
-        return alignment;
-    }
 
     /**
      * Calculates the similarity score of two nucleotide sequences (score is not greater than 1).

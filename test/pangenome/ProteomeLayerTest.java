@@ -48,7 +48,7 @@ public class ProteomeLayerTest {
         PATH_TO_THE_PANGENOME_DATABASE = System.getProperty("user.home") + "/test";
         String[] args = new String[]{"", PATH_TO_THE_PANGENOME_DATABASE, "-d", "8"};
         ProteomeLayer instance = new ProteomeLayer();
-        instance.group(args);
+        instance.group();
         System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
         print_peak_memory();
         System.out.println("-----------------------------------------------------------------------");

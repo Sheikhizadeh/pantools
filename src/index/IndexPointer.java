@@ -54,7 +54,7 @@ public class IndexPointer {
     
     @Override
     public String toString(){
-        return Long.toString(node_id)+Boolean.toString(canonical)+Integer.toString(offset);
+        return Long.toString(node_id) + " " + Boolean.toString(canonical) + " " + Integer.toString(offset);
     }
 
 }

@@ -5,7 +5,8 @@
  */
 package pangenome;
 
-import genome.SequenceDatabase;
+import index.IndexDatabase;
+import sequence.SequenceDatabase;
 import index.IndexPointer;
 
 import java.io.BufferedReader;
@@ -46,6 +47,7 @@ import static pantools.Pantools.startTime;
 import static pangenome.GenomeLayer.locate;
 import static pantools.Pantools.CDS_label;
 import static pantools.Pantools.GRAPH_DATABASE_PATH;
+import static pantools.Pantools.INDEX_DATABASE_PATH;
 import static pantools.Pantools.K_SIZE;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.PATH_TO_THE_ANNOTATIONS_FILE;
@@ -60,14 +62,17 @@ import static pantools.Pantools.genome_label;
 import static pantools.Pantools.db_node;
 import static pantools.Pantools.gene_label;
 import static pantools.Pantools.graphDb;
+import static pantools.Pantools.indexDb;
 import static pantools.Pantools.intron_label;
 import static pantools.Pantools.mRNA_label;
 import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.rRNA_label;
 import static pantools.Pantools.reverse_complement;
+import static pantools.Pantools.scanner;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.tRNA_label;
 import static pantools.Pantools.write_fasta;
+import sequence.SequenceScanner;
 
 /**
  * Implements all the functionalities related to the annotation layer of the pangenome
@@ -172,6 +177,8 @@ public class AnnotationLayer {
         }
         startTime = System.currentTimeMillis();
         genomeDb = new SequenceDatabase(PATH_TO_THE_PANGENOME_DATABASE + GENOME_DATABASE_PATH);
+        indexDb = new IndexDatabase(PATH_TO_THE_PANGENOME_DATABASE + INDEX_DATABASE_PATH);
+        scanner = new SequenceScanner(genomeDb, 1, genomeDb.num_genomes, 1, genomeDb.num_sequences[1], K_SIZE, indexDb.get_pre_len());
         num_proteins = 0;
         try (BufferedReader gff_paths = new BufferedReader(new FileReader(PATH_TO_THE_ANNOTATIONS_FILE))) {
             log_file = new BufferedWriter(new FileWriter(PATH_TO_THE_PANGENOME_DATABASE + "/annotation.log"));
@@ -203,7 +210,7 @@ public class AnnotationLayer {
                     annotation_node.setProperty("identifier", address[0] + "_" + degree);
                     tx.success();
                 }
-                parse_gff(address, address[0] + "_" + degree, log_file, gff_path, K_SIZE);
+                parse_gff(address, address[0] + "_" + degree, log_file, gff_path);
             } // for genomes
             gff_paths.close();
             log_file.close();
@@ -226,7 +233,7 @@ public class AnnotationLayer {
         System.out.println("Annotated proteins available in directory proteins.");
     }
 
-    private void parse_gff(int[] address, String annotation_id, BufferedWriter log_file, String gff_path, int k){
+    private void parse_gff(int[] address, String annotation_id, BufferedWriter log_file, String gff_path){
         int i, trsc, num_genes, num_mRNAs, num_tRNAs, num_rRNAs, feature_len, offset;
         long seq_len;
         String sequence_id, current_sequence_id=null, attribute;
@@ -297,14 +304,14 @@ public class AnnotationLayer {
                         parent_node = get_node_by_id(gene_nodes,get_property(attribute,"Parent"));
                         if (parent_node != null)
                             parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
-                        start_ptr = locate(address, k);
+                        start_ptr = locate(address);
                         offset = start_ptr.offset;
                         node = graphDb.getNodeById(start_ptr.node_id);
                         rel = feature_node.createRelationshipTo(node, RelTypes.starts);
                         rel.setProperty("offset", offset);
                         rel.setProperty("genomic_position", address[2]);
                         rel.setProperty("forward", start_ptr.canonical);
-                        stop_ptr = locate(new int[]{address[0], address[1], address[3]}, k);
+                        stop_ptr = locate(new int[]{address[0], address[1], address[3]});
                         rel = feature_node.createRelationshipTo(graphDb.getNodeById(stop_ptr.node_id), RelTypes.stops);
                         rel.setProperty("offset", stop_ptr.offset);
                         rel.setProperty("genomic_position", address[2] + feature_len - 1);
@@ -370,15 +377,15 @@ public class AnnotationLayer {
                                         feature_node.addLabel(intron_label);
                                         break;
                         }
-                        //if (trsc % 500 == 1)
-                        //    System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
+                        if (trsc % 987 == 1)
+                            System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
                     }// for trsc
                     tx2.success();
                 } // tx2
             } // while lines
             in.close();
-            System.out.println(address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
-            set_protein_sequences(gene_nodes, address[0], log_file, PATH_TO_THE_PANGENOME_DATABASE, k);
+            System.out.println("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
+            set_protein_sequences(gene_nodes, address[0], log_file, PATH_TO_THE_PANGENOME_DATABASE);
             log_file.write("Genome "+address[0] + " : " + num_genes + " genes\t" + num_mRNAs + " mRNAs\t" + num_tRNAs + " tRNAs\t" + num_rRNAs + " rRNAs\n");
             log_file.write("----------------------------------------------------\n");
         }catch (IOException ioe) {
@@ -411,7 +418,7 @@ public class AnnotationLayer {
      * @param gff_file Name of the GFF file
      * @param log_file 
      */
-    private void set_protein_sequences(LinkedList<feature> gene_nodes, int genome, BufferedWriter log_file, String pangenome_path, int K){
+    private void set_protein_sequences(LinkedList<feature> gene_nodes, int genome, BufferedWriter log_file, String pangenome_path){
         IntPairComparator comp = new IntPairComparator();
         PriorityQueue<int[]> pq = new PriorityQueue(comp);
         Node cds_node, mrna_node, gene_node;
@@ -423,7 +430,7 @@ public class AnnotationLayer {
         StringBuilder gene_builder = new StringBuilder();
         StringBuilder rna_builder = new StringBuilder();
         try (BufferedWriter out = new BufferedWriter(new FileWriter(pangenome_path + "/proteins/proteins_" + genome + ".fasta"))) {
-            System.out.print("Adding protein sequences...");
+            //System.out.print("Adding protein sequences...");
             while (!gene_nodes.isEmpty()){
                 try (Transaction tx = graphDb.beginTx()) {
                     for (trsc = 0; !gene_nodes.isEmpty()&& trsc < 2 * MAX_TRANSACTION_SIZE; ++trsc){
@@ -439,7 +446,7 @@ public class AnnotationLayer {
                         //extract_sequence(gene_builder, start_ptr, address, K);
                         address[2] -= 1;
                         address[3] -= 1;
-                        genomeDb.get_sequence(gene_builder, address, (boolean)start_edge.getProperty("forward"));
+                        scanner.get_sequence_string(gene_builder, address, (boolean)start_edge.getProperty("forward"));
                         if (gene_builder.length() == 0)
                             continue;
                         isoforms_num =0;
@@ -556,10 +563,9 @@ public class AnnotationLayer {
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
             genomeDb = new SequenceDatabase(PATH_TO_THE_PANGENOME_DATABASE + GENOME_DATABASE_PATH);
-            try (Transaction tx = graphDb.beginTx()) {
-                K_SIZE = (int) graphDb.findNodes(pangenome_label).next().getProperty("k_mer_size");
-                tx.success();
-            }
+            indexDb = new IndexDatabase(PATH_TO_THE_PANGENOME_DATABASE + INDEX_DATABASE_PATH);
+            K_SIZE = indexDb.get_K();
+            scanner = new SequenceScanner(genomeDb, 1, genomeDb.num_genomes, 1, genomeDb.num_sequences[1], K_SIZE, indexDb.get_pre_len());
             num_genes = 0;
             gene_seq = new StringBuilder();
             try {
@@ -624,7 +630,7 @@ public class AnnotationLayer {
                             //extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
                             address[2] -= 1;
                             address[3] -= 1;
-                            genomeDb.get_sequence(gene_seq, address, strand);
+                            scanner.get_sequence_string(gene_seq, address, strand);
                             //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//

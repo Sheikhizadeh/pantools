@@ -7,7 +7,7 @@
 
 package pantools;
 
-import genome.SequenceDatabase;
+import sequence.SequenceDatabase;
 import index.IndexDatabase;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -25,6 +25,7 @@ import org.neo4j.graphdb.RelationshipType;
 import pangenome.AnnotationLayer;
 import pangenome.ProteomeLayer;
 import pangenome.GenomeLayer;
+import sequence.SequenceScanner;
 
 /**
  * Implements the main and shared functions. 
@@ -36,6 +37,8 @@ public class Pantools {
     public static String GRAPH_DATABASE_PATH = "/databases/graph.db/";
     public static String INDEX_DATABASE_PATH = "/databases/index.db/";
     public static String GENOME_DATABASE_PATH = "/databases/genome.db/";
+    public static String READS_DATABASE_PATH = "/databases/read.db/";
+
     public static String PATH_TO_THE_PANGENOME_DATABASE;
     public static String PATH_TO_THE_GENOMES_FILE;
     public static String PATH_TO_THE_PROTEOMES_FILE;
@@ -43,16 +46,26 @@ public class Pantools {
     public static String PATH_TO_THE_GENE_RECORDS;
     public static String PATH_TO_THE_REGIONS_FILE;
     public static String PATH_TO_THE_GENOME_NUMBERS_FILE;
+    public static String PATH_TO_THE_SRAS_FILE;
+    public static double INTERSECTION = 0.09;
+    public static double CONTRAST = 8;
+    public static double INFLATION = 9.6;
+    public static int K_SIZE = -1;
+    public static int THRESHOLD = 95;
+
     public static GraphDatabaseService graphDb;
     public static IndexDatabase indexDb;
     public static SequenceDatabase genomeDb;
-    public static SequenceDatabase sequenceDb;
-    public static int K_SIZE;
+    public static SequenceDatabase sequencingDb;
+    public static SequenceScanner scanner;
+    public static int ANCHORS = 10000; // The number of anchor nodes
     public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
     public static int cores = Math.max(Runtime.getRuntime().availableProcessors() / 2, 2);
     public static long heapSize = Runtime.getRuntime().maxMemory();
     public static boolean DEBUG;
     public static boolean SHOW_KMERS;
+    public static int THREADS = 1;
+    public static int MIN_QUALITY;
 
     public static Label pangenome_label = DynamicLabel.label("pangenome");
     public static Label genome_label = DynamicLabel.label("genome");
@@ -105,7 +118,8 @@ public class Pantools {
      * @param args Command line arguments
      */
     public static void main(String[] args) {
-        int K = -1, L, i;
+        int x, i;
+        double y;
         if (args.length < 1) {
             print_help_comment();
             System.exit(1);
@@ -114,121 +128,126 @@ public class Pantools {
         annLayer = new AnnotationLayer();
         proLayer = new ProteomeLayer();
         System.out.println("\n------------------------------- PanTools ------------------------------");
-        for (i = 2; i < args.length; ++i){
+        for (i = 1; i < args.length; i += 2){
             switch (args[i]){
-                case "-debug":
-                    DEBUG = true;
-                    break;
-                case "-show":
-                    SHOW_KMERS = true;
-                    break;
                 case "-K": case "-k":
-                    K = Integer.parseInt(args[i + 1]);
-                    if (K < 6 || K > 255)
-                        K = -1;
+                    x = Integer.parseInt(args[i + 1]);
+                    if (x >= 6 && x <= 255)
+                        K_SIZE = x;
+                    break;
                 case "-D": case "-d":
                     PATH_TO_THE_PANGENOME_DATABASE = args[i + 1];
+                    break;
                 case "-G": case "-g":
                     PATH_TO_THE_GENOMES_FILE = args[i + 1];
+                    break;
                 case "-P": case "-p":
                     PATH_TO_THE_PROTEOMES_FILE = args[i + 1];
+                    break;
                 case "-A": case "-a":
                     PATH_TO_THE_ANNOTATIONS_FILE = args[i + 1];
+                    break;
                 case "-E": case "-e":
                     PATH_TO_THE_GENE_RECORDS = args[i + 1];
+                    break;
                 case "-R": case "-r":
                     PATH_TO_THE_REGIONS_FILE = args[i + 1];
+                    break;
                 case "-N": case "-n":
                     PATH_TO_THE_GENOME_NUMBERS_FILE = args[i + 1];
-                default:
-                    DEBUG = SHOW_KMERS = false;
+                    break;
+                case "-S": case "-s":
+                    PATH_TO_THE_SRAS_FILE = args[i + 1];
+                    break;
+                case "-I": case "-i": 
+                    y = Double.parseDouble(args[i + 1]);
+                    if (y >= 0.001 && y <= 0.1)
+                        INTERSECTION = y;
+                    break;
+                case "-L": case "-l": 
+                    x = Integer.parseInt(args[i + 1]);
+                    if (x > 0 && x < 100)
+                        THRESHOLD = x;
+                    break;
+                case "-M": case "-m": 
+                    y = Double.parseDouble(args[i + 1]);
+                    if (y > 1 && y < 19)
+                        INFLATION = y;
+                    break;
+                case "-C": case "-c": 
+                    y = Double.parseDouble(args[i + 1]);
+                    if (y > 0 && y < 10)
+                        CONTRAST = y;
+                    break;
+                case "-X": case "-x": 
+                    x = Integer.parseInt(args[i + 1]);
+                    if (x >= 1 && x <= 8){
+                        INTERSECTION = new double[] {0, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02}[x];
+                        THRESHOLD = new int[]   {0, 95, 85, 75, 65, 55, 45, 35, 25 }[x];
+                        INFLATION = new double[]{0, 9.6, 8.4, 7.2, 6.0, 4.8, 3.6, 2.4, 1.2}[x];
+                        CONTRAST = new double[] {0, 8, 7, 6, 5, 4, 3, 2, 1 }[x];
+                    }
+                    break;
+                case "-Q": case "-q":
+                    x = Integer.parseInt(args[i + 1]);
+                    if (x >= 0)
+                        MIN_QUALITY = x;
+                    ++i;
+                    break;
+                case "-T": case "-t":
+                    x = Integer.parseInt(args[i + 1]);
+                    if (x >= 1 && x <= cores)
+                        THREADS = x;
+                    ++i;
+                    break;
             }  
         }
         switch (args[0]) {
-            case "build":
-                if (args.length < 4) {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                if (args[1].equals("pangenome"))
-                    seqLayer.initialize_pangenome();
-                else if (args[1].equals("panproteome"))
-                        proLayer.initialize_panproteome(args[3], args[2]);
-                else {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
-                print_peak_memory();
+            case "build_pangenome":
+                seqLayer.initialize_pangenome();
                 break;
-            case "add":
-                if (args.length < 4) {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                if (args[1].equals("genomes"))
-                    seqLayer.add_genomes();
-                else if (args[1].equals("annotations"))
-                    annLayer.add_annotaions();
-                else {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
-                print_peak_memory();
+            case "build_panproteome":
+                proLayer.initialize_panproteome(args[3], args[2]);
                 break;
-            case "remove":
-                if (args.length < 4) {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                if (args[1].equals("genomes"))
-                    seqLayer.remove_genomes();
-                else if (args[1].equals("annotations"))
-                    annLayer.remove_annotaions();
-                else {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
-                print_peak_memory();
+            case "add_genomes":
+                seqLayer.add_genomes();
+                break;
+            case "add_annotations":
+                annLayer.add_annotaions();
+                break;
+            case "remove_genomes":
+                seqLayer.remove_genomes();
+                break;
+            case "remove_annotations":
+                annLayer.remove_annotaions();
                 break;
             case "group":
-                if (args.length < 2) {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                proLayer.group(args);
-                System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
-                print_peak_memory();
+                proLayer.group();
                 break;
-            case "retrieve":
-                if (args.length < 4) {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                if (args[1].equals("genes"))
-                    annLayer.retrieve_genes();
-                else if (args[1].equals("regions"))
-                    seqLayer.retrieve_regions();
-                else if (args[1].equals("genomes"))
-                    seqLayer.retrieve_genomes();
-                else if (args[1].equals("synteny"))
-                    seqLayer.retrieve_synteny(args[2]);
-                        else {
-                    print_help_comment();
-                    System.exit(1);
-                }
-                System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
-                print_peak_memory();
+            case "retrieve_genes":
+                annLayer.retrieve_genes();
                 break;
-            case "version":
+            case "retrieve_regions":
+                seqLayer.retrieve_regions();
+                break;
+            case "retrieve_genomes":
+                seqLayer.retrieve_genomes();
+                break;
+            case "retrieve_synteny":
+                seqLayer.retrieve_synteny(args[2]);
+                break;
+            case "map":
+                seqLayer.map_reads();
+                break;
+            case "version": case "-version": case "--version":
                 System.out.println("PanTools version 1.1\nNeo4j community edition 3.3.1");
-                break;
+                System.exit(1);
             default:
                 print_help_comment();
                 System.exit(1);
         }
+        System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
+        print_peak_memory();
         System.out.println("-----------------------------------------------------------------------");
     }
 

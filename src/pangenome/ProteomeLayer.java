@@ -33,7 +33,6 @@ import org.neo4j.graphdb.Direction;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
-import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.ResourceIterator;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
@@ -46,7 +45,12 @@ import static pantools.Pantools.graphDb;
 import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
-import static pantools.Pantools.cores;
+import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
+import static pantools.Pantools.THRESHOLD;
+import static pantools.Pantools.INTERSECTION;
+import static pantools.Pantools.CONTRAST;
+import static pantools.Pantools.INFLATION;
+import static pantools.Pantools.THREADS;
 import static pantools.Pantools.executeCommand_for;
 import static pantools.Pantools.heapSize;
 import static pantools.Pantools.homology_group_label;
@@ -59,15 +63,10 @@ import static pantools.Pantools.mRNA_label;
  * University, Netherlands
  */
 public class ProteomeLayer {
-    private double INTERSECTION;
-    private double CONTRAST;
-    private double INFLATION;
-    private int K_SIZE;
-    private int THRESHOLD;
+    private int PEPTIDE_SIZE = 6;
     private int MAX_ALIGNMENT_LENGTH;
     private int MAX_INTERSECTIONS;
     private int MAX_KMER_FREQ;
-    private int THREADS;
     private int MAX_KMERS_NUM;
     private AtomicInteger num_intersections;
     private AtomicInteger num_similarities;
@@ -83,19 +82,12 @@ public class ProteomeLayer {
     private BlockingQueue<intersection> similarities;
     private BlockingQueue<LinkedList> components; 
     private BlockingQueue<LinkedList> homology_groups_list; 
-    private String pangenome_path;
     private Node pangenome_node;
     
     public ProteomeLayer(){
-        K_SIZE = 6;
-        INTERSECTION = 0.09;
-        CONTRAST = 8;
-        INFLATION = 9.6;
-        THRESHOLD = 95;
         MAX_ALIGNMENT_LENGTH  = 1000;
         MAX_INTERSECTIONS  = 10000000;
-        THREADS = cores;
-        MAX_KMERS_NUM = (int)Math.round(Math.pow(20, K_SIZE));
+        MAX_KMERS_NUM = (int)Math.round(Math.pow(20, PEPTIDE_SIZE));
     }
 
     public class intersection{
@@ -163,9 +155,9 @@ public class ProteomeLayer {
                         if (protein_node.hasProperty("protein") ){
                             protein = (String)protein_node.getProperty("protein", "");
                             protein_length = protein.length();
-                            if (protein_length > K_SIZE){
+                            if (protein_length > PEPTIDE_SIZE){
                                 kmer_index = 0;
-                                for (i = 0; i < K_SIZE; ++i)
+                                for (i = 0; i < PEPTIDE_SIZE; ++i)
                                     kmer_index = kmer_index * 20 + code[protein.charAt(i)];
                                 for (; i < protein_length; ++i){// for each kmer of the protein
                                     if (kmer_frequencies[kmer_index] == 0)
@@ -218,9 +210,9 @@ public class ProteomeLayer {
                             protein = (String)protein_node.getProperty("protein", "");
                             protein_length = protein.length();
                             protein_id = protein_node.getId();
-                            if (protein_length > K_SIZE){
+                            if (protein_length > PEPTIDE_SIZE){
                                 kmer_index = 0;
-                                for (i = 0; i < K_SIZE; ++i)
+                                for (i = 0; i < PEPTIDE_SIZE; ++i)
                                     kmer_index = kmer_index * 20 + code[protein.charAt(i)];
                                 for (; i < protein_length; ++i){// for each kmer of the protein
                                 // ignore extremely rare and abundant k-mers    
@@ -282,11 +274,11 @@ public class ProteomeLayer {
                         if (protein_node.hasProperty("protein") ){
                             protein = (String)protein_node.getProperty("protein");
                             protein_length = protein.length();
-                            if (protein_length > K_SIZE){
+                            if (protein_length > PEPTIDE_SIZE){
                                 protein_id = protein_node.getId();
                                 num_ids = 0;
                                 kmer_index = 0;
-                                for (i = 0; i < K_SIZE; ++i)
+                                for (i = 0; i < PEPTIDE_SIZE; ++i)
                                     kmer_index = kmer_index * 20 + code[protein.charAt(i)];
                                 for (; i < protein_length && num_ids < max_intersection; ++i){// for each kmer of the protein
                                     if (kmers_proteins_list[kmer_index] != null){
@@ -311,7 +303,7 @@ public class ProteomeLayer {
                                             crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
                                             crossing_protein = (String)crossing_protein_node.getProperty("protein");
                                             shorter_len = Math.min(protein_length, crossing_protein.length());
-                                            if (counter >= frac * (shorter_len - K_SIZE + 1)){
+                                            if (counter >= frac * (shorter_len - PEPTIDE_SIZE + 1)){
                                                 intersections.offer(new intersection(protein_node, crossing_protein_node,0));
                                                 num_intersections.getAndIncrement();
                                             }
@@ -325,7 +317,7 @@ public class ProteomeLayer {
                                     crossing_protein_node = graphDb.getNodeById(crossing_protein_id);
                                     crossing_protein = (String)crossing_protein_node.getProperty("protein");
                                     shorter_len = Math.min(protein_length, crossing_protein.length());
-                                    if (counter >= frac * (shorter_len - K_SIZE + 1)){
+                                    if (counter >= frac * (shorter_len - PEPTIDE_SIZE + 1)){
                                         intersections.offer(new intersection(protein_node, crossing_protein_node,0));
                                         num_intersections.getAndIncrement();
                                     }
@@ -828,61 +820,13 @@ public class ProteomeLayer {
      * Groups the similar proteins into homology groups
      * @param args The command line arguments, args[1] Path to the database folder
      */
-    public void group(String[] args) {
-        pangenome_path = args[1];
-        int i, n, d, p;
-        double x;
+    public void group() {
         startTime = System.currentTimeMillis();
-        for (i = 2; i < args.length; ++i){
-            switch (args[i]){
-                case "-i":
-                    x = Double.parseDouble(args[i + 1]);
-                    if (x >= 0.001 && x <= 0.1)
-                        INTERSECTION = x;
-                    ++i;
-                    break;
-                case "-t":
-                    n = Integer.parseInt(args[i + 1]);
-                    if (n > 0 && n < 100)
-                        THRESHOLD = n;
-                    ++i;
-                    break;
-                case "-m":
-                    x = Double.parseDouble(args[i + 1]);
-                    if (x > 1 && x < 19)
-                        INFLATION = x;
-                    ++i;
-                    break;
-                case "-c":
-                    x = Double.parseDouble(args[i + 1]);
-                    if (x > 0 && x < 10)
-                        CONTRAST = x;
-                    ++i;
-                    break;
-                case "-d":
-                    d = Integer.parseInt(args[i + 1]);
-                    d = d < 1 ? 1 : d;
-                    d = d > 8 ? 8 : d;
-                    INTERSECTION = new double[] {0, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02}[d];
-                    THRESHOLD = new int[]   {0, 95, 85, 75, 65, 55, 45, 35, 25 }[d];
-                    INFLATION = new double[]{0, 9.6, 8.4, 7.2, 6.0, 4.8, 3.6, 2.4, 1.2}[d];
-                    CONTRAST = new double[] {0, 8, 7, 6, 5, 4, 3, 2, 1 }[d];
-                    ++i;
-                    break;
-                case "-p":
-                    p = Integer.parseInt(args[i + 1]);
-                    if (p >= 1 && p <= cores)
-                        THREADS = p;
-                    ++i;
-                    break;
-            }
-        }
-        System.out.println("Running on " + THREADS + " CPU cores ...");
         System.out.println("Intersection rate = " + INTERSECTION);
         System.out.println("Threshold = " + THRESHOLD);
         System.out.println("MCL inflation = " + INFLATION);
         System.out.println("Contrast = " + CONTRAST);
-        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
+        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
         proteins = new LinkedBlockingQueue<>((int)(heapSize/50));
@@ -897,6 +841,7 @@ public class ProteomeLayer {
             num_proteins = (int)pangenome_node.getProperty("num_proteins");
             tx.success();
         }
+        System.out.println("Grouping " + num_proteins + " proteins using " + THREADS + " threads:");
 
         MAX_KMER_FREQ = num_proteins / 1000 + 50 * num_genomes; //  because of probability p and copy number of 50
         num_hexamers = 0;
@@ -938,7 +883,7 @@ public class ProteomeLayer {
             ExecutorService es = Executors.newFixedThreadPool(THREADS);
             es.execute(new Generate_proteins());
             es.execute(new Find_intersections(num_proteins));
-            for(i = 1; i <= THREADS - 2; i++)
+            for(int i = 1; i <= THREADS - 2; i++)
                 es.execute(new Find_similarities());;
             es.execute(new Write_similarities());
             es.shutdown();
@@ -958,10 +903,10 @@ public class ProteomeLayer {
         try{
             ExecutorService es = Executors.newFixedThreadPool(2);
             es.execute(new Generate_proteins());
-            es.execute(new build_similarity_components(pangenome_path, num_proteins));
-            for(i = 1; i <= THREADS - 2; i++)
-                es.execute(new build_homology_groups(pangenome_path, num_proteins));
-            es.execute(new write_homology_groups(pangenome_path, num_proteins));
+            es.execute(new build_similarity_components(PATH_TO_THE_PANGENOME_DATABASE, num_proteins));
+            for(int i = 1; i <= THREADS - 2; i++)
+                es.execute(new build_homology_groups(PATH_TO_THE_PANGENOME_DATABASE, num_proteins));
+            es.execute(new write_homology_groups(PATH_TO_THE_PANGENOME_DATABASE, num_proteins));
             es.shutdown();
             es.awaitTermination(10, TimeUnit.DAYS);        
         } catch (InterruptedException e){
@@ -973,9 +918,9 @@ public class ProteomeLayer {
         System.out.println("Similarities = " + num_similarities.intValue());
         System.out.println("Components = " + num_components);
         System.out.println("Groups = " + num_groups);
-        System.out.println("Database size = " + getFolderSize(new File(pangenome_path + GRAPH_DATABASE_PATH)) + " MB");        
+        System.out.println("Database size = " + getFolderSize(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH)) + " MB");        
 
-        File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
+        File directory = new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH);
         for (File f : directory.listFiles()) {
             if (f.getName().startsWith("neostore.transaction.db.")) {
                 f.delete();

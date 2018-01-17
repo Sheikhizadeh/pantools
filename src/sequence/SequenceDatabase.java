@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package genome;
+package sequence;
 
 import java.util.*;
 import java.io.BufferedReader;
@@ -40,6 +40,7 @@ public class SequenceDatabase {
     public int num_genomes;
     public int num_sequences[];        // Number of sequences in each genome    
     public String[][] sequence_titles; // Name of sequences for each genome
+    public String[][] sequence_qualities; // FASTQ quality strings
     public String[] genome_names;     // Paths to the genome FASTA files
     public long genome_length[];    // Length of sequences for each genome
     public long sequence_length[][];    // Length of sequences for each genome
@@ -98,6 +99,7 @@ public class SequenceDatabase {
             genome_names = new String[num_genomes + 1];
             genome_length = new long[num_genomes + 1];
             sequence_titles = new String[num_genomes + 1][];
+            sequence_qualities = new String[num_genomes + 1][];
             sequence_length = new long[num_genomes + 1][];
             sequence_offset = new long[num_genomes + 1][];
             sequence_start = new long[num_genomes + 1][];
@@ -107,11 +109,13 @@ public class SequenceDatabase {
                 genome_length[g] = Long.valueOf(in.readLine().split(":")[1]);
                 num_sequences[g] = Integer.parseInt(in.readLine().split(":")[1]);
                 sequence_titles[g] = new String[num_sequences[g] + 1];
+                sequence_qualities[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
                 sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
                     sequence_titles[g][s] = in.readLine().split(":")[1];
+                    sequence_qualities[g][s] = in.readLine().split(":")[1];
                     sequence_length[g][s] = Long.valueOf(in.readLine().split(":")[1]);
                     sequence_offset[g][s] = Long.valueOf(in.readLine().split(":")[1]);
                     sequence_start[g][s] = Long.valueOf(in.readLine().split(":")[1]);
@@ -144,7 +148,8 @@ public class SequenceDatabase {
     public SequenceDatabase(String path, String genome_paths_file) {
         int g;
         BufferedReader in;
-        String line;
+        String line, file_type;
+        String[] fields;
         List<String> genome_list = new LinkedList();
         db_path = path;
         initalize();
@@ -170,6 +175,7 @@ public class SequenceDatabase {
         genome_names = new String[num_genomes + 1];
         genome_length = new long[num_genomes + 1];
         sequence_titles = new String[num_genomes + 1][];
+        sequence_qualities = new String[num_genomes + 1][];
         sequence_length = new long[num_genomes + 1][];
         sequence_offset = new long[num_genomes + 1][];
         sequence_start = new long[num_genomes + 1][];
@@ -181,14 +187,24 @@ public class SequenceDatabase {
             genome_names[g] = itr.next();
             try {
                 in = new BufferedReader(new FileReader(genome_names[g]));
-                while (in.ready()) {
-                    line = in.readLine().trim();
-                    if (line.equals("")) {
-                        continue;
+                fields = genome_names[g].split("\\.");
+                file_type = fields[fields.length - 1].toLowerCase();
+                if (file_type.equals("fasta") || file_type.equals("fa") || file_type.equals("fna") || file_type.equals("fn")){
+                    while (in.ready()) {
+                        line = in.readLine().trim();
+                        if (line.equals("")) 
+                            continue;
+                        if (line.charAt(0) == '>' || line.charAt(0) == '+') 
+                            num_sequences[g]++;
                     }
-                    if (line.charAt(0) == '>') {
+                }else if (file_type.equals("fastq") || file_type.equals("fq") || file_type.equals("fnq") || file_type.equals("q")){
+                    while (in.ready()) {
+                        line = in.readLine().trim();
+                        if (line.equals(""))
+                            continue;
                         num_sequences[g]++;
                     }
+                    num_sequences[g] /= 4;
                 }
                 in.close();
             } catch (IOException e) {
@@ -196,6 +212,7 @@ public class SequenceDatabase {
                 System.exit(1);
             }
             sequence_titles[g] = new String[num_sequences[g] + 1];
+            sequence_qualities[g] = new String[num_sequences[g] + 1];
             sequence_length[g] = new long[num_sequences[g] + 1];
             sequence_offset[g] = new long[num_sequences[g] + 1];
             sequence_start[g] = new long[num_sequences[g] + 1];
@@ -223,6 +240,7 @@ public class SequenceDatabase {
             genome_names = new String[num_genomes + 1];
             genome_length = new long[num_genomes + 1];
             sequence_titles = new String[num_genomes + 1][];
+            sequence_qualities = new String[num_genomes + 1][];
             sequence_length = new long[num_genomes + 1][];
             sequence_offset = new long[num_genomes + 1][];
             sequence_start = new long[num_genomes + 1][];
@@ -232,12 +250,14 @@ public class SequenceDatabase {
                 genome_names[g] = (String) gen_node.getProperty("path");
                 num_sequences[g] = (int) gen_node.getProperty("num_sequences");
                 sequence_titles[g] = new String[num_sequences[g] + 1];
+                sequence_qualities[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
                 sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
                     seq_node = graphDb.findNode(sequence_label, "identifier", g + "_" + s);
                     sequence_titles[g][s] = (String) seq_node.getProperty("title");
+                    sequence_qualities[g][s] = (String) seq_node.getProperty("quality","*");
                     sequence_length[g][s] = (long) seq_node.getProperty("length");
                     sequence_offset[g][s] = (long) seq_node.getProperty("offset");
                     sequence_start[g][s] = num_bytes;
@@ -274,7 +294,8 @@ public class SequenceDatabase {
      * @param previous_num_genomes The number of the genomes were already in the genome database
      */
     public void code_genomes(String path, int previous_num_genomes) {
-        String line;
+        String line, file_type;
+        String[] fields;
         char carry;
         boolean havecarry;
         long size = 0, byte_number;
@@ -283,84 +304,140 @@ public class SequenceDatabase {
         byte_number = previous_num_genomes == 0 ? 0 : num_bytes;
         initalize();
         System.out.println("Reading " + (num_genomes - previous_num_genomes) + " genome(s)...");
-        for (g = previous_num_genomes + 1; g <= num_genomes; ++g) {
-            try {
+        try {
+            for (g = previous_num_genomes + 1; g <= num_genomes; ++g) {
                 in = new BufferedReader(new FileReader(genome_names[g]));
-                s = 0;
-                sequence_offset[g][0] = 0;
-                sequence_length[g][0] = 0;
-                while (in.ready()) {
-                    line = in.readLine().trim();
-                    if (line.equals("")) {
-                        continue;
+                fields = genome_names[g].split("\\.");
+                file_type = fields[fields.length - 1].toLowerCase();
+                if (file_type.equals("fasta") || file_type.equals("fa") || file_type.equals("fna") || file_type.equals("fn")){
+                    s = 0;
+                    sequence_offset[g][0] = 0;
+                    sequence_length[g][0] = 0;
+                    while (in.ready()) {
+                        line = in.readLine().trim();
+                        if (line.equals("")) {
+                            continue;
+                        }
+                        if (line.charAt(0) == '>') {
+                            ++s;
+                            sequence_titles[g][s] = line.substring(1);
+                            sequence_qualities[g][s] = "*";
+                            sequence_offset[g][s] = sequence_offset[g][s - 1] + sequence_length[g][s - 1];
+                            if (size % 2 == 1) {
+                                ++size;
+                            }
+                            sequence_start[g][s] = num_bytes + size / 2;
+                        } else {
+                            len = line.length();
+                            sequence_length[g][s] += len;
+                            genome_length[g] += len;
+                            size += len;
+                        }
                     }
-                    if (line.charAt(0) == '>') {
-                        ++s;
+                    if (size % 2 == 1) {
+                        ++size;
+                    }
+                }else if (file_type.equals("fastq") || file_type.equals("fq") || file_type.equals("fnq") || file_type.equals("q")){
+                    
+                    sequence_offset[g][0] = 0;
+                    sequence_length[g][0] = 0;
+                    for (s = 1; in.ready(); ++s) {
+                    // read title    
+                        line = in.readLine().trim();
                         sequence_titles[g][s] = line.substring(1);
                         sequence_offset[g][s] = sequence_offset[g][s - 1] + sequence_length[g][s - 1];
                         if (size % 2 == 1) {
                             ++size;
                         }
                         sequence_start[g][s] = num_bytes + size / 2;
-                    } else {
-                        len = line.length();
-                        sequence_length[g][s] += len;
-                        genome_length[g] += len;
-                        size += len;
+                    // read sequence
+                        line = in.readLine().trim();
+                        sequence_length[g][s] += line.length();
+                        genome_length[g] += line.length();
+                        size += line.length();
+                    // read +    
+                        in.readLine();
+                    // read quality    
+                        sequence_qualities[g][s] = in.readLine().trim();
                     }
-                }
-                if (size % 2 == 1) {
-                    ++size;
+                    if (size % 2 == 1)
+                        ++size;
+                }else{
+                    System.err.println(genome_names[g] + " should have one of these extensions: fasta, fa, fna, fn for FATSA or"
+                            + "fastq, fq, fnq, q for FASTQ.");
+                    continue;
                 }
                 in.close();
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
+            }
+            num_bytes += size / 2;
+            try {
+                genomes_file = new RandomAccessFile(path + DB_FILE, "rw");
+            } catch (FileNotFoundException ioe) {
+                System.out.println(ioe.getMessage());
                 System.exit(1);
             }
-        }
-        num_bytes += size / 2;
-        try {
-            genomes_file = new RandomAccessFile(path + DB_FILE, "rw");
-        } catch (FileNotFoundException ioe) {
-            System.out.println(ioe.getMessage());
-            System.exit(1);
-        }
-        parts_num = (int) (num_bytes % max_byte == 0 ? num_bytes / max_byte : num_bytes / max_byte + 1);
-        parts_size = new long[parts_num];
-        genomes_buff = new MappedByteBuffer[parts_num];
-        try {
+            parts_num = (int) (num_bytes % max_byte == 0 ? num_bytes / max_byte : num_bytes / max_byte + 1);
+            parts_size = new long[parts_num];
+            genomes_buff = new MappedByteBuffer[parts_num];
             for (k = 0; k < parts_num; ++k) {
                 parts_size[k] = (int) (k == parts_num - 1 ? num_bytes % max_byte : max_byte);
                 genomes_buff[k] = genomes_file.getChannel().map(FileChannel.MapMode.READ_WRITE, k * parts_size[0], parts_size[k]);
             }
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-            System.exit(1);
-        }
-        genomes_buff[(int) (byte_number / parts_size[0])].position((int) (byte_number % parts_size[0]));
-        for (g = previous_num_genomes + 1; g <= num_genomes; ++g) {
-            try {
+            genomes_buff[(int) (byte_number / parts_size[0])].position((int) (byte_number % parts_size[0]));
+            for (g = previous_num_genomes + 1; g <= num_genomes; ++g) {
                 in = new BufferedReader(new FileReader(genome_names[g]));
-                carry = ' ';
-                havecarry = false;
-                s = 0;
-                while (in.ready()) {
-                    line = in.readLine().trim().toUpperCase();
-                    if (line.equals("")) {
-                        continue;
+                fields = genome_names[g].split("\\.");
+                file_type = fields[fields.length - 1].toLowerCase();
+                if (file_type.equals("fasta") || file_type.equals("fa") || file_type.equals("fna") || file_type.equals("fn")){
+                    carry = ' ';
+                    havecarry = false;
+                    s = 0;
+                    while (in.ready()) {
+                        line = in.readLine().trim().toUpperCase();
+                        if (line.equals("")) {
+                            continue;
+                        }
+                        if (line.charAt(0) != '>' && havecarry) {
+                            line = carry + line;
+                        }
+                        if (line.charAt(0) == '>') {
+                            if (havecarry) {
+                                genomes_buff[(int) (byte_number / parts_size[0])].put((byte) (binary[carry] << 4));
+                                ++byte_number;
+                            }
+                            havecarry = false;
+                            ++s;
+                            //System.out.println("Reading sequence " + s + "/" + num_sequences[g] + " of genome " + g + " : " + genome_names[g]);
+                        } else {
+                            len = line.length();
+                            havecarry = (len % 2 == 1);
+                            if (havecarry) {
+                                carry = line.charAt(len - 1);
+                                --len;
+                            }
+                            for (j = 0; j < len; j += 2, ++byte_number) {
+                                genomes_buff[(int) (byte_number / parts_size[0])].put((byte)((binary[line.charAt(j)] << 4) | binary[line.charAt(j + 1)]));
+                            }
+                        }
                     }
-                    if (line.charAt(0) != '>' && havecarry) {
-                        line = carry + line;
+                    if (havecarry) {
+                        genomes_buff[(int) (byte_number / parts_size[0])].put((byte) (binary[carry] << 4));
+                        ++byte_number;
                     }
-                    if (line.charAt(0) == '>') {
+                    havecarry = false;
+                }else if (file_type.equals("fastq") || file_type.equals("fq") || file_type.equals("fnq") || file_type.equals("q")){
+                    carry = ' ';
+                    havecarry = false;
+                    while (in.ready()) {
+                    // read title
+                        in.readLine();
                         if (havecarry) {
                             genomes_buff[(int) (byte_number / parts_size[0])].put((byte) (binary[carry] << 4));
                             ++byte_number;
                         }
                         havecarry = false;
-                        ++s;
-                        System.out.println("Reading sequence " + s + "/" + num_sequences[g] + " of genome " + g + " : " + genome_names[g]);
-                    } else {
+                    //read sequence    
+                        line = in.readLine().trim().toUpperCase();
                         len = line.length();
                         havecarry = (len % 2 == 1);
                         if (havecarry) {
@@ -370,19 +447,26 @@ public class SequenceDatabase {
                         for (j = 0; j < len; j += 2, ++byte_number) {
                             genomes_buff[(int) (byte_number / parts_size[0])].put((byte)((binary[line.charAt(j)] << 4) | binary[line.charAt(j + 1)]));
                         }
+                    // read +
+                        in.readLine();
+                    // read quality
+                        in.readLine();
                     }
+                    if (havecarry) {
+                        genomes_buff[(int) (byte_number / parts_size[0])].put((byte) (binary[carry] << 4));
+                        ++byte_number;
+                    }
+                    havecarry = false;
+                }else{
+                    System.err.println(genome_names[g] + " should have one of these extensions: fasta, fa, fna, fn for FATSA or"
+                            + "fastq, fq, fnq, q for FASTQ.");
+                    continue;
                 }
-                if (havecarry) {
-                    genomes_buff[(int) (byte_number / parts_size[0])].put((byte) (binary[carry] << 4));
-                    ++byte_number;
-                }
-                havecarry = false;
                 in.close();
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
-                System.exit(1);
             }
-            System.out.println();
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+            System.exit(1);
         }
     }
 
@@ -393,7 +477,7 @@ public class SequenceDatabase {
      * @param genome_number Number of the genome in the database
      * @param genome_name Name of the resulting FASTA file
      */
-    public void decode_genome(String path, int genome_number, String genome_name) {
+    /*public void decode_genome(String path, int genome_number, String genome_name) {
         int s;
         BufferedWriter out;
         initalize();
@@ -409,7 +493,7 @@ public class SequenceDatabase {
             System.out.println(e.getMessage());
             System.exit(1);
         }
-    }
+    }*/
 
     /**
      * Adds new genomes to the genome database.
@@ -441,6 +525,7 @@ public class SequenceDatabase {
             genome_names = new String[num_genomes + 1];
             genome_length = new long[num_genomes + 1];
             sequence_titles = new String[num_genomes + 1][];
+            sequence_qualities = new String[num_genomes + 1][];
             sequence_length = new long[num_genomes + 1][];
             sequence_offset = new long[num_genomes + 1][];
             sequence_start = new long[num_genomes + 1][];
@@ -450,11 +535,13 @@ public class SequenceDatabase {
                 genome_length[g] = Long.valueOf(in.readLine().split(":")[1]);
                 num_sequences[g] = Integer.parseInt(in.readLine().split(":")[1]);
                 sequence_titles[g] = new String[num_sequences[g] + 1];
+                sequence_qualities[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
                 sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
                 for (s = 1; s <= num_sequences[g]; ++s) {
                     sequence_titles[g][s] = in.readLine().split(":")[1];
+                    sequence_qualities[g][s] = in.readLine().split(":")[1];
                     sequence_length[g][s] = Long.valueOf(in.readLine().split(":")[1]);
                     sequence_offset[g][s] = Long.valueOf(in.readLine().split(":")[1]);
                     sequence_start[g][s] = Long.valueOf(in.readLine().split(":")[1]);
@@ -478,6 +565,7 @@ public class SequenceDatabase {
                 }
                 in.close();
                 sequence_titles[g] = new String[num_sequences[g] + 1];
+                sequence_qualities[g] = new String[num_sequences[g] + 1];
                 sequence_length[g] = new long[num_sequences[g] + 1];
                 sequence_offset[g] = new long[num_sequences[g] + 1];
                 sequence_start[g] = new long[num_sequences[g] + 1];
@@ -520,6 +608,7 @@ public class SequenceDatabase {
                 out.write("number_of_sequences:" + num_sequences[g] + "\n");
                 for (s = 1; s <= num_sequences[g]; ++s) {
                     out.write("sequence title:" + sequence_titles[g][s] + "\n");
+                    out.write("sequence quality:" + sequence_qualities[g][s] + "\n");
                     out.write("sequence length:" + sequence_length[g][s] + "\n");
                     out.write("sequence offset:" + sequence_offset[g][s] + "\n");
                     out.write("sequence start:" + sequence_start[g][s] + "\n");
@@ -530,189 +619,5 @@ public class SequenceDatabase {
             System.out.println(ioe.getMessage());
             System.exit(1);
         }
-    }
-
-    /**
-     * Returns the nucleotide at a specified genomic position.
-     * @param g Genome number 
-     * @param s Sequence number
-     * @param p Base position
-     * @return The base 
-     */
-    public char get_symbol(int g, int s, int p) {
-        if (p < sequence_length[g][s]) {
-            byte b;
-            long position = sequence_start[g][s] + p / 2;
-            b = genomes_buff[(int) (position / parts_size[0])].get((int) (position % parts_size[0]));
-            if (p % 2 == 0) {
-                return sym[(b >> 4) & 0x0f];
-            } else {
-                return sym[b & 0x0f];
-            }
-        } else {
-            return 0;
-        }
-    }
-
-    /**
-     * Returns the complement of a nucleotide at a specified genomic position.
-     * @param g Genome number 
-     * @param s Sequence number
-     * @param p Base position
-     * @return The base 
-     */
-    public char get_complement_symbol(int g, int s, int p) {
-        if (p < sequence_length[g][s]) {
-            byte b;
-            long position = sequence_start[g][s] + p / 2;
-            b = genomes_buff[(int) (position / parts_size[0])].get((int) (position % parts_size[0]));
-            if (p % 2 == 0) {
-                return sym[complement[(b >> 4) & 0x0f]];
-            } else {
-                return sym[complement[(b & 0x0f)]];
-            }
-        } else {
-            return 0;
-        }
-    }
-
-    /**
-     * Returns the binary code of anucleotide at a specified genomic position.
-     * @param g Genome number 
-     * @param s Sequence number
-     * @param p Base position
-     * @return The base 
-     */
-    public int get_code(int g, int s, int p) {
-        if (p < sequence_length[g][s] && p > -1) {
-            byte b;
-            long position = sequence_start[g][s] + p / 2;
-            b = genomes_buff[(int) (position / parts_size[0])].get((int) (position % parts_size[0]));
-            if (p % 2 == 0) {
-                return (b >> 4) & 0x0f;
-            } else {
-                return (b & 0x0f);
-            }
-        } else {
-            System.out.println("Wrong genomic position: " + p);
-            return -1;
-        }
-    }
-
-    /**
-     * Returns the binary code of complement of a nucleotide at a specified genomic position.
-     * @param g Genome number 
-     * @param s Sequence number
-     * @param p Base position
-     * @return The base 
-     */    
-    public int get_complement_code(int g, int s, int p) {
-        if (p < sequence_length[g][s]) {
-            byte b;
-            long position = sequence_start[g][s] + p / 2;
-            b = genomes_buff[(int) (position / parts_size[0])].get((int) (position % parts_size[0]));
-            if (p % 2 == 0) {
-                return complement[(b >> 4) & 0x0f];
-            } else {
-                return complement[(b & 0x0f)];
-            }
-        } else {
-            return -1;
-        }
-    }
-
-    /**
-     * Retrieves a genomic region from the genome database.
-     * 
-     * @param g Genome number
-     * @param s Sequence number
-     * @param p Start Position of the region
-     * @param l Length of the region
-     * @param direction specifies the direction, True for forward and False for reverse
-     * @return The genomic region
-     */
-    public String get_sequence(int g, int s, int p, int l, boolean direction) {
-        int i;
-        StringBuilder seq = new StringBuilder();
-        if (p < 0) // take the part is available at the start of the sequence
-        {
-            l += p;
-            p = 0;
-        }
-        if (p + l > sequence_length[g][s]) // take the part is available at the end of the sequence
-        {
-            l = (int) sequence_length[g][s] - p;
-        }
-        if (direction) {
-            for (i = 0; i < l; ++i) {
-                seq.append(get_symbol(g, s, p + i));
-            }
-        } else {
-            for (i = l - 1; i >= 0 && p + i < sequence_length[g][s]; --i) {
-                seq.append(get_complement_symbol(g, s, p + i));
-            }
-        }
-        return seq.toString();
-    }
-
-    public void get_sequence(StringBuilder seq, int[] address, boolean direction) {
-        int i, g, s, p, l;
-        g = address[0];
-        s = address[1];
-        p = address[2];
-        l = address[3] - address[2] + 1;
-        seq.setLength(0);
-        if (p < 0) // take the part is available at the start of the sequence
-        {
-            l += p;
-            p = 0;
-        }
-        if (p + l > sequence_length[g][s]) // take the part is available at the end of the sequence
-        {
-            l = (int) sequence_length[g][s] - p;
-        }
-        if (direction) {
-            for (i = 0; i < l; ++i) {
-                seq.append(get_symbol(g, s, p + i));
-            }
-        } else {
-            for (i = l - 1; i >= 0 && p + i < sequence_length[g][s]; --i) {
-                seq.append(get_complement_symbol(g, s, p + i));
-            }
-        }
-    }
-
-    /**
-     * Determines the identity of two genomic regions.
-     * 
-     * @param database The second database we are making a comparison with. 
-     * @param a1 Genomic address in the first database
-     * @param a2 Genomic address in the second database
-     * @param offset1 Distance to the start position of the first sequence
-     * @param offset2 Distance to the start position of the second sequence
-     * @param len The length of sequences
-     * @param direction Direction of the second sequence True for forward and False for reverse
-     * @return The result of the comparison
-     */
-    public boolean compare(SequenceDatabase database, int[] a1, int[] a2, int offset1, int offset2, int len, boolean direction) {
-        if (a1[2] + offset1 + len - 1 >= sequence_length[a1[0]][a1[1]] || a2[2] + offset2 + len - 1 >= database.sequence_length[a2[0]][a2[1]]) {
-            return false;
-        }
-        int i;
-        boolean equal;
-        if (direction) {
-            for (equal = true, i = 0; i < len && equal; ++i) {
-                if (get_code(a1[0], a1[1], a1[2] + offset1 + i) != database.get_code(a2[0], a2[1], a2[2] + offset2 + i)) {
-                    equal = false;
-                }
-            }
-        } else {
-            for (equal = true, i = 0; i < len && equal; ++i) {
-                if (get_code(a1[0], a1[1], a1[2] + offset1 + i) != database.get_complement_code(a2[0], a2[1], a2[2] + offset2 + len - i - 1)) {
-                    equal = false;
-                }
-            }
-        }
-        return equal;
     }
 }
