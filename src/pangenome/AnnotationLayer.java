@@ -46,8 +46,11 @@ import static pantools.Pantools.startTime;
 import static pangenome.GenomeLayer.locate;
 import static pantools.Pantools.CDS_label;
 import static pantools.Pantools.GRAPH_DATABASE_PATH;
-import static pantools.Pantools.K;
+import static pantools.Pantools.K_SIZE;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
+import static pantools.Pantools.PATH_TO_THE_ANNOTATIONS_FILE;
+import static pantools.Pantools.PATH_TO_THE_GENE_RECORDS;
+import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
 import static pantools.Pantools.annotation_label;
 import static pantools.Pantools.broken_protein_label;
 import static pantools.Pantools.coding_gene_label;
@@ -141,18 +144,18 @@ public class AnnotationLayer {
      * @param gff_paths_file A text file listing the paths to the annotation files
      * @param pangenome_path Path to the database folder
      */
-    public void add_annotaions(String gff_paths_file, String pangenome_path) {
-        if (! new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
-            System.out.println("No database found in " + pangenome_path);
+    public void add_annotaions() {
+        if (! new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH).exists()) {
+            System.out.println("No database found in " + PATH_TO_THE_PANGENOME_DATABASE);
             System.exit(1);
         }
         Node annotation_node, genome_node;
         String[] fields;
         String gff_path, line;
         int[] address = new int[4];
-        int k, degree;
+        int degree;
         BufferedWriter log_file;
-        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
+        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
         try (Transaction tx1 = graphDb.beginTx()) {
@@ -162,18 +165,18 @@ public class AnnotationLayer {
                 System.exit(1);
             }
             // Read the pangenome information    
-            k = (int) db_node.getProperty("k_mer_size");
+            K_SIZE = (int) db_node.getProperty("k_mer_size");
             num_nodes = (long) db_node.getProperty("num_nodes");
             num_edges = (long) db_node.getProperty("num_edges");
             tx1.success();
         }
         startTime = System.currentTimeMillis();
-        genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
+        genomeDb = new SequenceDatabase(PATH_TO_THE_PANGENOME_DATABASE + GENOME_DATABASE_PATH);
         num_proteins = 0;
-        try (BufferedReader gff_paths = new BufferedReader(new FileReader(gff_paths_file))) {
-            log_file = new BufferedWriter(new FileWriter(pangenome_path + "/annotation.log"));
-            if (! new File(pangenome_path + "/proteins").exists())
-                Files.createDirectory(Paths.get(pangenome_path + "/proteins"));
+        try (BufferedReader gff_paths = new BufferedReader(new FileReader(PATH_TO_THE_ANNOTATIONS_FILE))) {
+            log_file = new BufferedWriter(new FileWriter(PATH_TO_THE_PANGENOME_DATABASE + "/annotation.log"));
+            if (! new File(PATH_TO_THE_PANGENOME_DATABASE + "/proteins").exists())
+                Files.createDirectory(Paths.get(PATH_TO_THE_PANGENOME_DATABASE + "/proteins"));
             System.out.println("genome\tgenes\tmRNAs\ttRNAs\trRNAs");
             while (gff_paths.ready()) // for each gff file
             {
@@ -200,13 +203,13 @@ public class AnnotationLayer {
                     annotation_node.setProperty("identifier", address[0] + "_" + degree);
                     tx.success();
                 }
-                parse_gff(address, address[0] + "_" + degree, log_file, gff_path, pangenome_path, k);
+                parse_gff(address, address[0] + "_" + degree, log_file, gff_path, K_SIZE);
             } // for genomes
             gff_paths.close();
             log_file.close();
         } catch (IOException ioe) {
             System.out.println(ioe.getMessage());
-            System.out.println("Could not open " + gff_paths_file);
+            System.out.println("Could not open " + PATH_TO_THE_ANNOTATIONS_FILE);
         }
         try (Transaction tx = graphDb.beginTx()) {
             db_node.setProperty("num_proteins", num_proteins);
@@ -215,7 +218,7 @@ public class AnnotationLayer {
         graphDb.shutdown();
         genomeDb.close();
         // delete the database transaction files
-        File directory = new File(pangenome_path + GRAPH_DATABASE_PATH);
+        File directory = new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH);
         for (File f : directory.listFiles())
             if (f.getName().startsWith("neostore.transaction.db."))
                 f.delete();
@@ -223,7 +226,7 @@ public class AnnotationLayer {
         System.out.println("Annotated proteins available in directory proteins.");
     }
 
-    private void parse_gff(int[] address, String annotation_id, BufferedWriter log_file, String gff_path, String pangenome_path, int k){
+    private void parse_gff(int[] address, String annotation_id, BufferedWriter log_file, String gff_path, int k){
         int i, trsc, num_genes, num_mRNAs, num_tRNAs, num_rRNAs, feature_len, offset;
         long seq_len;
         String sequence_id, current_sequence_id=null, attribute;
@@ -367,15 +370,15 @@ public class AnnotationLayer {
                                         feature_node.addLabel(intron_label);
                                         break;
                         }
-                        if (trsc % 500 == 1)
-                            System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
+                        //if (trsc % 500 == 1)
+                        //    System.out.print("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
                     }// for trsc
                     tx2.success();
                 } // tx2
             } // while lines
             in.close();
-            System.out.println("\r" + address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
-            set_protein_sequences(gene_nodes, address[0], log_file, pangenome_path, k);
+            System.out.println(address[0] + "\t" + num_genes + "\t" + num_mRNAs + "\t" + num_tRNAs + "\t" + num_rRNAs + "\t");
+            set_protein_sequences(gene_nodes, address[0], log_file, PATH_TO_THE_PANGENOME_DATABASE, k);
             log_file.write("Genome "+address[0] + " : " + num_genes + " genes\t" + num_mRNAs + " mRNAs\t" + num_tRNAs + " tRNAs\t" + num_rRNAs + " rRNAs\n");
             log_file.write("----------------------------------------------------\n");
         }catch (IOException ioe) {
@@ -464,8 +467,8 @@ public class AnnotationLayer {
                                 protein = translate(rna_builder);
                                 if (protein.length() > 0){
                                     ++num_proteins;
-                                    if (num_proteins % 11 == 1)
-                                        System.out.print("\rAdding protein sequences... " + num_proteins);
+                                    //if (num_proteins % 11 == 1)
+                                    //    System.out.print("\rAdding protein sequences... " + num_proteins);
                                     annotaion_id = (String)mrna_node.getProperty("annotation_id");
                                     out.write(">G" + annotaion_id.replace('_', 'A') + "P" + num_proteins + "\n");
                                     write_fasta(out, protein, 70);
@@ -484,7 +487,7 @@ public class AnnotationLayer {
                     tx.success();
                 }
             }
-            System.out.print("\r                                                        \r"); //clear the line
+            //System.out.print("\r                                                        \r"); //clear the line
         }catch (IOException ioe) {
             System.out.println(ioe.getMessage());
         }        
@@ -533,8 +536,8 @@ public class AnnotationLayer {
      * @param annotation_records_file a text file containing annotation records of the genes to be retrieved.
      * @param pangenome_path Path to the database folder
      */
-    public void retrieve_genes(String annotation_records_file, String pangenome_path) {
-        if (new File(pangenome_path + GRAPH_DATABASE_PATH).exists()) {
+    public void retrieve_genes() {
+        if (new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH).exists()) {
             BufferedReader in;
             ResourceIterator<Node> gene_nodes;
             Relationship rstart;
@@ -548,19 +551,19 @@ public class AnnotationLayer {
             StringBuilder gene_seq;
             StringBuilder attr = new StringBuilder();
 
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
+            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
                     .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
             registerShutdownHook(graphDb);
             startTime = System.currentTimeMillis();
-            genomeDb = new SequenceDatabase(pangenome_path + GENOME_DATABASE_PATH);
+            genomeDb = new SequenceDatabase(PATH_TO_THE_PANGENOME_DATABASE + GENOME_DATABASE_PATH);
             try (Transaction tx = graphDb.beginTx()) {
-                K = (int) graphDb.findNodes(pangenome_label).next().getProperty("k_mer_size");
+                K_SIZE = (int) graphDb.findNodes(pangenome_label).next().getProperty("k_mer_size");
                 tx.success();
             }
             num_genes = 0;
             gene_seq = new StringBuilder();
             try {
-                in = new BufferedReader(new FileReader(annotation_records_file));
+                in = new BufferedReader(new FileReader(PATH_TO_THE_GENE_RECORDS));
                 while (in.ready()) {
                     line = in.readLine().trim();
                     if (line.equals("")) {
@@ -576,7 +579,7 @@ public class AnnotationLayer {
             String[] records = new String[num_genes];
             try (Transaction tx = graphDb.beginTx()) {
                 try {
-                    in = new BufferedReader(new FileReader(annotation_records_file));
+                    in = new BufferedReader(new FileReader(PATH_TO_THE_GENE_RECORDS));
                     // fill all the records in an array to be sorted    
                     for (i = 0; in.ready();) {
                         line = in.readLine().trim();
@@ -602,8 +605,8 @@ public class AnnotationLayer {
                     System.exit(1);
                 }
                 try {
-                    fields = annotation_records_file.split("\\/");
-                    out_file_name = pangenome_path + "/" + fields[fields.length - 1] + ".fasta";
+                    fields = PATH_TO_THE_GENE_RECORDS.split("\\/");
+                    out_file_name = PATH_TO_THE_PANGENOME_DATABASE + "/" + fields[fields.length - 1] + ".fasta";
                     BufferedWriter out = new BufferedWriter(new FileWriter(out_file_name));
                     // for all the genes in the database    
                     for (i = j = 0, gene_nodes = graphDb.findNodes(gene_label); gene_nodes.hasNext();) {
@@ -639,9 +642,9 @@ public class AnnotationLayer {
                             }
                             gene_seq.setLength(0);
                         }
-                        if (i % (num_genes / 100 + 1) == 0) {
-                            System.out.print((long) i * 100 / num_genes + 1 + "%\r");
-                        }
+                        //if (i % (num_genes / 100 + 1) == 0) {
+                        //    System.out.print((long) i * 100 / num_genes + 1 + "%\r");
+                        //}
                     }//for i
                     System.out.println(j + " out of " + i + " genes found and retrieved successfully (See " + out_file_name + ").");
                     out.close();
@@ -654,7 +657,7 @@ public class AnnotationLayer {
             graphDb.shutdown();
             genomeDb.close();
         } else {
-            System.out.println("No database found in " + pangenome_path);
+            System.out.println("No database found in " + PATH_TO_THE_PANGENOME_DATABASE);
             System.exit(1);
         }
     }
@@ -673,7 +676,7 @@ public class AnnotationLayer {
         return protein_builder.toString();
     }    
 
-    public void remove_annotaions(String gff_paths_file, String pangenome_path) {
+    public void remove_annotaions() {
     }
     
     /**

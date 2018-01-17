@@ -13,9 +13,11 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import static org.junit.Assert.*;
 import static pantools.Pantools.print_peak_memory;
 import static pantools.Pantools.startTime;
+import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
+import static pantools.Pantools.PATH_TO_THE_ANNOTATIONS_FILE;
+import static pantools.Pantools.PATH_TO_THE_GENE_RECORDS;
 
 /**
  *
@@ -23,17 +25,9 @@ import static pantools.Pantools.startTime;
  */
 public class AnnotationLayerTest {
     private static String test_directory;
-    private static String database_path;
-    private static String gff_paths_file;
-    private static String gene_records_file;
-    private static String genes_file;
     
     public AnnotationLayerTest() {
         test_directory = System.getProperty("user.home") + "/pantools/example/";
-        database_path = System.getProperty("user.home") + "/test/";
-        gff_paths_file = "sample_annotations_path.txt";
-        gene_records_file = "sample_annotation_records.txt";
-        genes_file = "sample_annotation_records.fasta";
     }
     
     @BeforeClass
@@ -59,10 +53,13 @@ public class AnnotationLayerTest {
     public void testRetrieve_genes() {
         System.out.println("retrieve_genes");
         AnnotationLayer instance = new AnnotationLayer();
-        instance.add_annotaions(test_directory + gff_paths_file, database_path);
-        instance.retrieve_genes(test_directory + gene_records_file, database_path);
-        String [] fields = gene_records_file.split("\\/");
-        if( are_the_same(database_path + "/" + fields[fields.length - 1] + ".fasta", test_directory + genes_file) )
+        PATH_TO_THE_ANNOTATIONS_FILE = test_directory + "sample_annotations_path.txt";
+        PATH_TO_THE_GENE_RECORDS = test_directory + "sample_annotation_records.txt";
+        PATH_TO_THE_PANGENOME_DATABASE = System.getProperty("user.home") + "/test/";
+        instance.add_annotaions();
+        instance.retrieve_genes();
+        //String [] fields = gene_records_file.split("\\/");//sample_annotation_records.txt
+        if( are_the_same(PATH_TO_THE_PANGENOME_DATABASE + "/sample_annotation_records.txt.fasta", test_directory + "sample_annotation_records.fasta") )
             System.out.println("Genes extracted properly.");
         else
             System.out.println("Test failed.");

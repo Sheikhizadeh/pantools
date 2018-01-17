@@ -12,16 +12,15 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import static pantools.Pantools.print_peak_memory;
 import static pantools.Pantools.startTime;
+import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
 
 /**
  *
  * @author sheik005
  */
 public class ProteomeLayerTest {
-    private static String database_path;
     
     public ProteomeLayerTest() {
-        database_path = System.getProperty("user.home") + "/test";
     }
     
     @BeforeClass
@@ -46,7 +45,8 @@ public class ProteomeLayerTest {
     @Test
     public void testGroup() {
         System.out.println("group");
-        String[] args = new String[]{"", database_path, "-d", "8"};
+        PATH_TO_THE_PANGENOME_DATABASE = System.getProperty("user.home") + "/test";
+        String[] args = new String[]{"", PATH_TO_THE_PANGENOME_DATABASE, "-d", "8"};
         ProteomeLayer instance = new ProteomeLayer();
         instance.group(args);
         System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
