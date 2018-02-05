@@ -5,6 +5,7 @@
  */
 package pangenome;
 
+import alignment.CompleteLocalSequenceAlignment;
 import alignment.ProteinAlignment;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -50,6 +51,8 @@ import static pantools.Pantools.THRESHOLD;
 import static pantools.Pantools.INTERSECTION;
 import static pantools.Pantools.CONTRAST;
 import static pantools.Pantools.INFLATION;
+import static pantools.Pantools.MAX_ALIGNMENT_LENGTH;
+import static pantools.Pantools.PATH_TO_THE_PROTEOMES_FILE;
 import static pantools.Pantools.THREADS;
 import static pantools.Pantools.executeCommand_for;
 import static pantools.Pantools.heapSize;
@@ -64,7 +67,6 @@ import static pantools.Pantools.mRNA_label;
  */
 public class ProteomeLayer {
     private int PEPTIDE_SIZE = 6;
-    private int MAX_ALIGNMENT_LENGTH;
     private int MAX_INTERSECTIONS;
     private int MAX_KMER_FREQ;
     private int MAX_KMERS_NUM;
@@ -85,7 +87,6 @@ public class ProteomeLayer {
     private Node pangenome_node;
     
     public ProteomeLayer(){
-        MAX_ALIGNMENT_LENGTH  = 1000;
         MAX_INTERSECTIONS  = 10000000;
         MAX_KMERS_NUM = (int)Math.round(Math.pow(20, PEPTIDE_SIZE));
     }
@@ -216,7 +217,9 @@ public class ProteomeLayer {
                                     kmer_index = kmer_index * 20 + code[protein.charAt(i)];
                                 for (; i < protein_length; ++i){// for each kmer of the protein
                                 // ignore extremely rare and abundant k-mers    
-                                    if (kmer_frequencies[kmer_index] > 1 + num_genomes / 2 && kmer_frequencies[kmer_index] < MAX_KMER_FREQ){
+                                    if (kmer_frequencies[kmer_index] > 1)// + num_genomes / 2)
+                                    if (kmer_frequencies[kmer_index] < MAX_KMER_FREQ)
+                                    {
                                         if (kmers_proteins_list[kmer_index] == null)
                                             kmers_proteins_list[kmer_index] = new LinkedList();
                                         kmers_proteins_list[kmer_index].add(protein_id);
@@ -347,10 +350,15 @@ public class ProteomeLayer {
      */
     public class Find_similarities implements Runnable {
         int threshold = THRESHOLD;
-        int max_alg_len = MAX_ALIGNMENT_LENGTH;
-        ProteinAlignment aligner;
+        StringBuilder query;
+        StringBuilder subject;
+        //ProteinAlignment aligner;
+        CompleteLocalSequenceAlignment aligner;
         public Find_similarities() {
-            aligner = new ProteinAlignment(-10,-1,max_alg_len);
+            //aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
+            aligner = new CompleteLocalSequenceAlignment(-10,-1,MAX_ALIGNMENT_LENGTH, 'P');
+            query = new StringBuilder();
+            subject = new StringBuilder();
         }
 
         @Override
@@ -366,7 +374,10 @@ public class ProteomeLayer {
                         protein_node2 = ints.protein2;
                         protein1 = (String)protein_node1.getProperty("protein");
                         protein2 = (String)protein_node2.getProperty("protein");
-                        ints.similarity = ((double)protein_similarity(aligner, protein1, protein2))/perfect_score(aligner, protein1, protein2)*100;
+                        if (protein1.length() < protein2.length())
+                            ints.similarity = protein_similarity(protein1, protein2);
+                        else
+                            ints.similarity = protein_similarity(protein2, protein1);
                         if (ints.similarity > threshold){
                             similarities.offer(ints);
                             num_similarities.getAndIncrement();
@@ -380,6 +391,54 @@ public class ProteomeLayer {
             }catch(InterruptedException e){
                 System.err.println(e.getMessage());
             }
+        }
+        /**
+         * Given two proteins calculates the normalized similarity score between them which is less or equal to 1.
+         * Proteins longer than MAX_LENGTH will be broken in smaller parts to be compared correspondingly.  
+         * @param p1 The first protein
+         * @param p2 The second protein
+         * @return The normalized similarity score which is less or equal to 1
+         */
+        double protein_similarity(String p1, String p2){
+            int m, n,i, parts_num = 1, part_len1, part_len2;
+            long score = 0, p_score = 0, s, p;
+            double max_score = 0;
+            m = p1.length();
+            n = p2.length();
+            if (n > MAX_ALIGNMENT_LENGTH){
+                if (n / m < MAX_ALIGNMENT_LENGTH - 1){
+                    parts_num = (n / MAX_ALIGNMENT_LENGTH) + (n % MAX_ALIGNMENT_LENGTH == 0 ? 0 : 1);
+                    part_len1 = m / parts_num;
+                    part_len2 = n / parts_num;
+                    for (i = 0; i < parts_num; ++i){
+                        query.setLength(0);
+                        subject.setLength(0);
+                        query.append(p1.substring(i * part_len1, min(m, (i + 1) * part_len1)));
+                        subject.append(p2.substring(i * part_len2, min(n, (i + 1) * part_len2)));
+                        aligner.align(query, subject );
+                        //score += aligner.get_score();
+                        //p_score += aligner.perfect_score(query);
+                        s = aligner.get_matches();
+                        p = query.length();
+                        if ((double)s / p > max_score){
+                            score = s;
+                            p_score = p;
+                            max_score = (double)s / p;
+                        }
+                    }
+                }
+            } else {
+                query.setLength(0);
+                subject.setLength(0);
+                query.append(p1);
+                subject.append(p2);
+                aligner.align(query, subject );
+                //score = aligner.get_score();
+                //p_score = aligner.perfect_score(query);
+                score = aligner.get_matches();
+                p_score = query.length();
+            }
+            return score * 100.0 / p_score;
         }
     }    
 
@@ -728,33 +787,33 @@ public class ProteomeLayer {
      * @param protein_paths_file A test file containing paths to the proteome FASTA files
      * @param pangenome_path Path to the pan-genome graph database
      */
-    public void initialize_panproteome(String protein_paths_file, String pangenome_path){
+    public void initialize_panproteome(){
         String file_path, line, protein_ID;
         StringBuilder protein = new StringBuilder();
         Node protein_node = null, panproteome;
         int trsc, num_proteins = 0, genome;
     // If a database folder is already exist in the specified path, removes all the content of it.    
-        File theDir = new File(pangenome_path);
+        File theDir = new File(PATH_TO_THE_PANGENOME_DATABASE);
         if (theDir.exists()) {
             try {
-                FileUtils.deleteRecursively(new File(pangenome_path));
+                FileUtils.deleteRecursively(new File(PATH_TO_THE_PANGENOME_DATABASE));
             } catch (IOException ioe) {
-                System.out.println("Failed to delete the database " + pangenome_path);
+                System.out.println("Failed to delete the database " + PATH_TO_THE_PANGENOME_DATABASE);
                 System.exit(1);  
             }
         } else {
             try {
                 theDir.mkdir();
             } catch (SecurityException se) {
-                System.out.println("Failed to create " + pangenome_path);
+                System.out.println("Failed to create " + PATH_TO_THE_PANGENOME_DATABASE);
                 System.exit(1);
             }
         }
-        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(pangenome_path + GRAPH_DATABASE_PATH))
+        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
         startTime = System.currentTimeMillis();
-        try(BufferedReader protein_paths = new BufferedReader(new FileReader(protein_paths_file))) {
+        try(BufferedReader protein_paths = new BufferedReader(new FileReader(PATH_TO_THE_PROTEOMES_FILE))) {
             for (genome = 1; protein_paths.ready(); ++genome){
                 file_path = protein_paths.readLine().trim();
                 if (file_path.equals("")) // if line is empty
@@ -826,6 +885,8 @@ public class ProteomeLayer {
         System.out.println("Threshold = " + THRESHOLD);
         System.out.println("MCL inflation = " + INFLATION);
         System.out.println("Contrast = " + CONTRAST);
+        System.out.println("MAX_ALIGNMENT_LENGTH = " + MAX_ALIGNMENT_LENGTH);
+
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
@@ -841,6 +902,8 @@ public class ProteomeLayer {
             num_proteins = (int)pangenome_node.getProperty("num_proteins");
             tx.success();
         }
+        if (THREADS < 3)
+            THREADS = 3;
         System.out.println("Grouping " + num_proteins + " proteins using " + THREADS + " threads:");
 
         MAX_KMER_FREQ = num_proteins / 1000 + 50 * num_genomes; //  because of probability p and copy number of 50
@@ -955,29 +1018,6 @@ public class ProteomeLayer {
         return score;
     }
    
-    /**
-     * Given two proteins calculates the normalized similarity score between them which is less or equal to 1.
-     * Proteins longer than MAX_LENGTH will be broken in smaller parts to be compared correspondingly.  
-     * @param p1 The first protein
-     * @param p2 The second protein
-     * @return The normalized similarity score which is less or equal to 1
-     */
-    long protein_similarity(ProteinAlignment aligner, String p1, String p2){
-        int m = p1.length(), n = p2.length(), max_len = max(m,n);
-        int i, parts_num = 1, part_len1, part_len2;
-        long score;
-        if (max_len > MAX_ALIGNMENT_LENGTH){
-            parts_num = (max_len / MAX_ALIGNMENT_LENGTH) + (max_len % MAX_ALIGNMENT_LENGTH == 0 ? 0 : 1);
-            part_len1 = m / parts_num;
-            part_len2 = n / parts_num;
-            for (score =0, i = 0; i < parts_num; ++i)
-                score += aligner.get_similarity(p1.substring(i * part_len1, min(m, (i + 1) * part_len1)),
-                                                    p2.substring(i * part_len2, min(n, (i + 1) * part_len2)) );
-            return score;
-        } else
-            return aligner.get_similarity(p1, p2);
-    }
-
     /**
      * Shuts down the graph database if the program halts unexpectedly.
      * 

@@ -38,6 +38,7 @@ Running the program
 java <JVM options> -jar pantools.jar <command> <arguments>
 
 pantools.jar is available in folder pantools/dist/ 
+arguments is a list of key value pairs separated by whitespace.
 
 JVM options
 -----------
@@ -48,100 +49,111 @@ JVM options
 PanTools commands
 -----------------
 
-<build pangenome>
+<build_pangenome>
    To build a pan-genome out of a set of genomes.
-   <arguments>
-   -d PATH_TO_THE_PANGENOME_DATABASE : 
-      path to the pangenome database. 
-   -g PATH_TO_THE_GENOMES_FILE : 
-      a text file containing paths to FASTA files of genomes;
-      each in a seperated line.
-   -k K_SIZE : 
-      If it is not given or is out of range ( 6 <= K_SIZE <= 255 ), 
-      an optimal value would be calculated automatically.    
 
-<build panproteome>
+   <argument keys>
+   --database_path or -dp
+      gives path to the pangenome database. 
+   --genomes-file or -gf 
+      gives a text file containing paths to FASTA files of genomes;
+      each in a seperated line.
+   --kmer-size or ks
+      gives the size of k-mers, if not given or is out of range 
+      (6 <= K_SIZE <= 255),an optimal value would be calculated automatically.    
+
+<build_panproteome>
    To build a pan-proteome out of a set of proteins.
-   <arguments>
-   -d PATH_TO_THE_PANGENOME_DATABASE : 
-      path to the pangenome database. 
-   -p PATH_TO_THE_PROTEOMES_FILE : 
-      a text file containing paths to FASTA files of proteomes; 
+
+   <argument keys>
+   --database_path or -dp
+      gives path to the pangenome database. 
+   --proteomes_file or -pf
+      gives a text file containing paths to FASTA files of proteomes; 
       each in a seperated line.
              
-<add genomes>
-   To add new genomes to an available pan-genome.    
-   <arguments>
-   -d PATH_TO_THE_PANGENOME_DATABASE : 
-      path to the pangenome database. 
-   -g PATH_TO_THE_GENOMES_FILE : 
-      a text file containing paths to FASTA files of the new 
+<add_genomes>
+   To add new genomes to an available pan-genome.  
+  
+   <argument keys>
+   --database_path or -dp
+      gives path to the pangenome database. 
+   --genomes-file or -gf
+      gives a text file containing paths to FASTA files of the new 
       genomes to be added to the pangeome; 
       each in a seperated line.
 
-<add annotations>
+<add_annotations>
    To add new annotations to an available pan-genome. 
-   <arguments>
-   -d PATH_TO_THE_PANGENOME_DATABASE : 
-      path to the pangenome database. 
-   -a PATH_TO_THE_ANNOTATIONS_FILE : 
-      a text file each line of which contains genome number and 
+
+   <argument keys>
+   --database_path or -dp 
+      gives path to the pangenome database. 
+   --annotations-file or -af
+      gives a text file each line of which contains genome number and 
       path to the corresponding GFF file seperated by one space.
       Genomes are numbered in the same order they have been added
       to the pangenome. The protein sequence of the annotated genes 
       will be also stored in the folder "proteins" in the same path 
       as the pangenome. 
 
-<retrieve genes>
+<retrieve_genes>
    To retrieve the sequence of annotated genes from the pangenome. 
    The results will be stored in the same folder as the pangenome.
-   <arguments>
-   -d PATH_TO_THE_PANGENOME_DATABASE : 
-      path to the pangenome database. 
-   -e PATH_TO_THE_GENE_RECORDS : 
-      a text file containing records of annotated genes, 
+
+   <argument keys>
+   --database_path or -dp
+      gives path to the pangenome database. 
+   --gene-records or -gr
+      gives a text file containing records of annotated genes, 
       as they appear in GFF file, to be retrieved. The resulting 
       FASTA file would have the same name with an additional 
       .fasta extention.
 
-<retrieve regions> 
+<retrieve_regions> 
    To retrieve the sequence of some genomic regios from the pangenome. 
    The results will be stored in the same folder as the pangenome.
-   <arguments>
-   -d PATH_TO_THE_PANGENOME_DATABASE : 
-      path to the pangenome database. 
-   -r PATH_TO_THE_REGIONS_FILE : 
-      a text file containing records with genome_number, 
+
+   <argument keys>
+   --database_path or -dp 
+      gives path to the pangenome database. 
+   --regions-file or -rf
+      gives a text file containing records with genome_number, 
       sequence_number, begin and end positions seperated by one 
       space for each region. The resulting FASTA file would have 
       the same name with an additional .fasta extention.
-<retrieve genomes>
+
+<retrieve_genomes>
    To retrieve the full sequence of some genomes. The results will be 
    stored in the same folder as the pangenome itself.
-   <arguments>
-   -d PATH_TO_THE_PANGENOME_DATABASE : 
-      path to the pangenome database. 
-   -n PATH_TO_THE_GENOME_NUMBERS_FILE : 
-      a text file containing genome_numbers to be retrieved in each line. 
+
+   <argument keys>
+   --database_path or -dp
+      gives path to the pangenome database. 
+   --genome-numbers or -gn
+      gives a text file containing genome_numbers to be retrieved in each line. 
       The resulting FASTA files are named like Genome_x.fasta.
 
 <group>
    To add homology nodes which point to a groups of homologous proteins.
-   <arguments>
-   -d PATH_TO_THE_PANGENOME_DATABASE : 
-      path to the pangenome database. 
-   -i INTERSECTION_RATE (default = 0.09): 
-      determines the fraction of kmers needs to be shared by two 
+
+   <argument keys>
+   --database_path or -dp
+      gives path to the pangenome database. 
+   --intersection-rate or -ir (default = 0.09)
+      gives the fraction of kmers needs to be shared by two 
       intersecting proteins. Should be in range [0.001, 0.1].
-   -t THRESHOLD (default = 95): 
-      the minimum similarity score. Should be in range [1-99]. 
-   -m MCL_INFLATION (default = 9.6): 
-      the MCL inflation. Should be in range ]1-19[.
-   -c CONTRAST (default = 8): 
-      the contrast factor. Should be in range ]0-10[.
-   -r RELAXATION (default 1): 
-      the relaxation about homology. Sould be in range [1, 8], 
+   --similarity-threshold or -st (default = 95) 
+      gives the minimum similarity score. Should be in range [1-99]. 
+   --mcl-inflation or -mi (default = 9.6) 
+      gives the MCL inflation. Should be in range ]1-19[.
+   --contrast or -ct (default = 8)
+      gives the contrast factor. Should be in range ]0-10[.
+   --relaxation or rn (default 1)
+      gives the relaxation in homology calls. Should be in range [1, 8], 
       from strict to relaxed.
+   --threads-number or -tn (default = 1) 
+      gives the number of parallel working threads
 
 <version>
    To show the versions of PanTools and Neo4j.
