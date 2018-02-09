@@ -50,16 +50,12 @@ public class Pantools {
     public static String MAPPING_NAME = "mapped";
     public static double INTERSECTION = 0.09;
     public static double CONTRAST = 8;
-    public static double INFLATION = 10.8;
+    public static double INFLATION = 9.6;
     public static int K_SIZE = -1;
     public static int THRESHOLD = 95;
-    public static int GAP_OPEN = -20;
+    public static int GAP_OPEN = -10;
     public static int GAP_EXT = -1;
-    public static int MAX_BOUND = 50;
-    public static int MAX_ALIGNMENT_LENGTH = 500;
-    public static int MIN_QUALITY = 0;
-    public static int MIN_SCORE = 50;
-    public static int MAX_TRIALS = 3; // the minimum number of coordinates to be checked in one sequence
+    public static int MAX_ALIGNMENT_LENGTH = 1000;
     
     public static GraphDatabaseService graphDb;
     public static IndexDatabase indexDb;
@@ -144,97 +140,98 @@ public class Pantools {
                     break;
                 case "--db-path": case "-dp":
                     PATH_TO_THE_PANGENOME_DATABASE = args[i + 1];
+                    System.out.println("PATH_TO_THE_PANGENOME_DATABASE = " + PATH_TO_THE_PANGENOME_DATABASE);
                     break;
                 case "--genomes-file": case "-gf":
                     PATH_TO_THE_GENOMES_FILE = args[i + 1];
+                    System.out.println("PATH_TO_THE_GENOMES_FILE = " + PATH_TO_THE_GENOMES_FILE);
                     break;
                 case "--proteomes-file": case "-pf":
                     PATH_TO_THE_PROTEOMES_FILE = args[i + 1];
+                    System.out.println("PATH_TO_THE_PROTEOMES_FILE = " + PATH_TO_THE_PROTEOMES_FILE);
                     break;
                 case "--annotations-file": case "-af":
                     PATH_TO_THE_ANNOTATIONS_FILE = args[i + 1];
+                    System.out.println("PATH_TO_THE_ANNOTATIONS_FILE = " + PATH_TO_THE_ANNOTATIONS_FILE);
                     break;
                 case "--gene-records": case "-gr":
                     PATH_TO_THE_GENE_RECORDS = args[i + 1];
+                    System.out.println("PATH_TO_THE_GENE_RECORDS = " + PATH_TO_THE_GENE_RECORDS);
                     break;
                 case "--regions-file": case "-rf":
                     PATH_TO_THE_REGIONS_FILE = args[i + 1];
+                    System.out.println("PATH_TO_THE_REGIONS_FILE = " + PATH_TO_THE_REGIONS_FILE);
                     break;
                 case "--genome-numbers": case "-gn":
                     PATH_TO_THE_GENOME_NUMBERS_FILE = args[i + 1];
+                    System.out.println("PATH_TO_THE_GENOME_NUMBERS_FILE = " + PATH_TO_THE_GENOME_NUMBERS_FILE);
                     break;
                 case "--sras-file": case "-sf":
                     PATH_TO_THE_SRAS_FILE = args[i + 1];
+                    System.out.println("PATH_TO_THE_SRAS_FILE = " + PATH_TO_THE_SRAS_FILE);
                     break;
                 case "--intersection-rate": case "-ir": 
                     y = Double.parseDouble(args[i + 1]);
                     if (y >= 0.001 && y <= 0.1)
                         INTERSECTION = y;
+                    System.out.println("INTERSECTION = " + INTERSECTION);
                     break;
                 case "--similarity-threshold": case "-st": 
                     x = Integer.parseInt(args[i + 1]);
                     if (x > 0 && x < 100)
                         THRESHOLD = x;
+                    System.out.println("THRESHOLD = " + THRESHOLD);
                     break;
                 case "--mcl-inflation": case "-mi": 
                     y = Double.parseDouble(args[i + 1]);
                     if (y > 1 && y < 19)
                         INFLATION = y;
+                    System.out.println("INFLATION = " + INFLATION);
                     break;
                 case "--contrast": case "-ct": 
                     y = Double.parseDouble(args[i + 1]);
                     if (y > 0 && y < 10)
                         CONTRAST = y;
+                    System.out.println("CONTRAST = " + CONTRAST);
                     break;
                 case "--relaxation": case "-rn": 
                     x = Integer.parseInt(args[i + 1]);
                     if (x >= 1 && x <= 8){
                         INTERSECTION = new double[] {0, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02}[x];
-                        THRESHOLD = new int[]   {0,95, 85, 75, 65, 55, 45, 35, 25}[x];
-                        INFLATION = new double[]{0, 10.8, 9.6, 8.4, 7.2, 6.0, 4.8, 3.6, 2.4}[x];
-                        CONTRAST = new double[] {0,8, 7, 6, 5, 4, 3, 2, 1 }[x];
+                        THRESHOLD = new int[]   {0, 95, 85, 75, 65, 55, 45, 35, 25}[x];
+                        INFLATION = new double[]{0, 9.6, 8.4, 7.2, 6.0, 4.8, 3.6, 2.4, 1.2}[x];
+                        CONTRAST = new double[] {0, 8, 7, 6, 5, 4, 3, 2, 1 }[x];
                     }
-                    break;
-                case "--base-quality": case "-bq":
-                    x = Integer.parseInt(args[i + 1]);
-                    if (x >= 0)
-                        MIN_QUALITY = x;
+                    System.out.println("INTERSECTION = " + INTERSECTION);
+                    System.out.println("THRESHOLD = " + THRESHOLD);
+                    System.out.println("INFLATION = " + INFLATION);
+                    System.out.println("CONTRAST = " + CONTRAST);
                     break;
                 case "--threads-number": case "-tn":
                     THREADS = Integer.parseInt(args[i + 1]);
+                    System.out.println("THREADS = " + THREADS);
                     break;
                 case "--gap-open": case "-go":
                     x = Integer.parseInt(args[i + 1]);
                     if (x >= -50 && x <= -1)
                         GAP_OPEN = x;
+                    System.out.println("GAP_OPEN = " + GAP_OPEN);
                     break;
                 case "--gap-extention": case "-ge":
                     x = Integer.parseInt(args[i + 1]);
                     if (x >= -50 && x <= -1)
                         GAP_EXT = x;
-                    break;
-                case "--max-bound": case "-mb":
-                    x = Integer.parseInt(args[i + 1]);
-                    if (x >= 1 && x <= 100)
-                        MAX_BOUND = x;
+                    System.out.println("GAP_EXT = " + GAP_EXT);
                     break;
                 case "--max-length": case "-ml":
                     x = Integer.parseInt(args[i + 1]);
                     if (x >= 100 && x <= 5000)
                         MAX_ALIGNMENT_LENGTH = x;
-                    break;
-                case "--minimum-score": case "-ms":
-                    x = Integer.parseInt(args[i + 1]);
-                    if (x >= 1 && x <= 99)
-                        MIN_SCORE = x;
-                    break;
-                case "--maximum-trial": case "-mt":
-                    x = Integer.parseInt(args[i + 1]);
-                    if (x >= 1 && x <= 1000)
-                        MAX_TRIALS = x;
+                    System.out.println("MAX_ALIGNMENT_LENGTH = " + MAX_ALIGNMENT_LENGTH);
                     break;
                 case "--mapping-name": case "-mn":
                     MAPPING_NAME = args[i + 1];
+                    System.out.println("MAPPING_NAME = " + MAPPING_NAME);
                     break;
             }  
         }

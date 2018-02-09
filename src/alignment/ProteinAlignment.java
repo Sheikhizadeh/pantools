@@ -671,11 +671,11 @@ public class ProteinAlignment {
         int m = s1.length(), n = s2.length();
         for (i = 1; i <= m; i++) {
             left[i][0] = NEGATIVE_INFINITY;
-            matrix[i][0] = 0;//GAP_OPEN + i*GAP_EXT;
+            matrix[i][0] = 0;
         }        
         for (j = 1; j <= n; j++) {
             up[0][j] = NEGATIVE_INFINITY;
-            matrix[0][j] = 0;//GAP_OPEN + j*GAP_EXT;
+            matrix[0][j] = 0;
         }   
         score = 0;
         for (i = 1; i <= m; i++) {
@@ -687,22 +687,6 @@ public class ProteinAlignment {
                     score = matrix[i][j];
             }
         }
-        /*i = m;
-        j = n;
-        while (i > 0 && j > 0) {
-            if (matrix[i][j] == up[i][j]) {
-                i = i - 1;
-            } else if (matrix[i][j] == left[i][j]) {
-                j = j - 1;
-            } else {
-                match_score += match[s1.charAt(i-1)][s2.charAt(j-1)];
-                max_score += (match[s1.charAt(i-1)][s1.charAt(i-1)] + match[s2.charAt(j-1)][s2.charAt(j-1)])/2;
-                ++match_length;
-                i = i - 1;
-                j = j - 1;
-            }
-        }      
-        return 100 * (match_score / max_score) * Math.sqrt(match_length / Math.max(m, n));*/
         return score;
     }
     /**

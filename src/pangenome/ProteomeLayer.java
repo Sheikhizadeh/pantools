@@ -5,7 +5,6 @@
  */
 package pangenome;
 
-import alignment.CompleteLocalSequenceAlignment;
 import alignment.ProteinAlignment;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -14,8 +13,6 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import static java.lang.Integer.max;
-import static java.lang.Integer.min;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
@@ -217,8 +214,7 @@ public class ProteomeLayer {
                                     kmer_index = kmer_index * 20 + code[protein.charAt(i)];
                                 for (; i < protein_length; ++i){// for each kmer of the protein
                                 // ignore extremely rare and abundant k-mers    
-                                    if (kmer_frequencies[kmer_index] > 1)// + num_genomes / 2)
-                                    if (kmer_frequencies[kmer_index] < MAX_KMER_FREQ)
+                                    if (kmer_frequencies[kmer_index] > 1 + num_genomes / 2 && kmer_frequencies[kmer_index] < MAX_KMER_FREQ)
                                     {
                                         if (kmers_proteins_list[kmer_index] == null)
                                             kmers_proteins_list[kmer_index] = new LinkedList();
@@ -352,11 +348,9 @@ public class ProteomeLayer {
         int threshold = THRESHOLD;
         StringBuilder query;
         StringBuilder subject;
-        //ProteinAlignment aligner;
-        CompleteLocalSequenceAlignment aligner;
+        ProteinAlignment aligner;
         public Find_similarities() {
-            //aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
-            aligner = new CompleteLocalSequenceAlignment(-10,-1,MAX_ALIGNMENT_LENGTH, 'P');
+            aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
             query = new StringBuilder();
             subject = new StringBuilder();
         }
@@ -401,31 +395,21 @@ public class ProteomeLayer {
          */
         double protein_similarity(String p1, String p2){
             int m, n,i, parts_num = 1, part_len1, part_len2;
-            long score = 0, p_score = 0, s, p;
-            double max_score = 0;
+            long score = 0, p_score = 0;
             m = p1.length();
             n = p2.length();
             if (n > MAX_ALIGNMENT_LENGTH){
-                if (n / m < MAX_ALIGNMENT_LENGTH - 1){
-                    parts_num = (n / MAX_ALIGNMENT_LENGTH) + (n % MAX_ALIGNMENT_LENGTH == 0 ? 0 : 1);
-                    part_len1 = m / parts_num;
-                    part_len2 = n / parts_num;
-                    for (i = 0; i < parts_num; ++i){
-                        query.setLength(0);
-                        subject.setLength(0);
-                        query.append(p1.substring(i * part_len1, min(m, (i + 1) * part_len1)));
-                        subject.append(p2.substring(i * part_len2, min(n, (i + 1) * part_len2)));
-                        aligner.align(query, subject );
-                        //score += aligner.get_score();
-                        //p_score += aligner.perfect_score(query);
-                        s = aligner.get_matches();
-                        p = query.length();
-                        if ((double)s / p > max_score){
-                            score = s;
-                            p_score = p;
-                            max_score = (double)s / p;
-                        }
-                    }
+                parts_num = (n / MAX_ALIGNMENT_LENGTH) + (n % MAX_ALIGNMENT_LENGTH == 0 ? 0 : 1);
+                part_len1 = m / parts_num;
+                part_len2 = n / parts_num;
+                for (i = 0; i < parts_num; ++i){
+                    query.setLength(0);
+                    subject.setLength(0);
+                    query.append(p1.substring(i * part_len1, Math.min(m, (i + 1) * part_len1)));
+                    subject.append(p2.substring(i * part_len2, Math.min(n, (i + 1) * part_len2)));
+                    aligner.align(query, subject );
+                    score += aligner.get_score();
+                    p_score += aligner.perfect_score(query);
                 }
             } else {
                 query.setLength(0);
@@ -433,10 +417,8 @@ public class ProteomeLayer {
                 query.append(p1);
                 subject.append(p2);
                 aligner.align(query, subject );
-                //score = aligner.get_score();
-                //p_score = aligner.perfect_score(query);
-                score = aligner.get_matches();
-                p_score = query.length();
+                score = aligner.get_score();
+                p_score = aligner.perfect_score(query);
             }
             return score * 100.0 / p_score;
         }
@@ -881,12 +863,6 @@ public class ProteomeLayer {
      */
     public void group() {
         startTime = System.currentTimeMillis();
-        System.out.println("Intersection rate = " + INTERSECTION);
-        System.out.println("Threshold = " + THRESHOLD);
-        System.out.println("MCL inflation = " + INFLATION);
-        System.out.println("Contrast = " + CONTRAST);
-        System.out.println("MAX_ALIGNMENT_LENGTH = " + MAX_ALIGNMENT_LENGTH);
-
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
@@ -904,7 +880,7 @@ public class ProteomeLayer {
         }
         if (THREADS < 3)
             THREADS = 3;
-        System.out.println("Grouping " + num_proteins + " proteins using " + THREADS + " threads:");
+        System.out.println("Number of proteins = " + num_proteins);
 
         MAX_KMER_FREQ = num_proteins / 1000 + 50 * num_genomes; //  because of probability p and copy number of 50
         num_hexamers = 0;
