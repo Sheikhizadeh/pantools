@@ -71,10 +71,9 @@ public class GenomeLayerTest {
         System.out.println("Testing add:");
         GenomeLayer instance = new GenomeLayer();
         PATH_TO_THE_GENOMES_FILE = test_directory + "sample_genomes_path_1.txt";
-        PATH_TO_THE_PANGENOME_DATABASE = System.getProperty("user.home") + "/cumulatve_test/";
+        PATH_TO_THE_PANGENOME_DATABASE = System.getProperty("user.home") + "/cumulative_test/";
         instance.initialize_pangenome();
         PATH_TO_THE_GENOMES_FILE = test_directory + "sample_genomes_path_2.txt";
-        PATH_TO_THE_PANGENOME_DATABASE = System.getProperty("user.home") + "/test/";
         instance.add_genomes();
         System.out.println("Total time : " + (System.currentTimeMillis() - startTime) / 1000 + "." + (System.currentTimeMillis() - startTime) % 1000 + " seconds");
         print_peak_memory();

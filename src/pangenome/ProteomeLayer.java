@@ -770,13 +770,21 @@ public class ProteomeLayer {
      * @param pangenome_path Path to the pan-genome graph database
      */
     public void initialize_panproteome(){
-        String file_path, line, protein_ID;
+        String file_path, file_type, line, protein_ID;
         StringBuilder protein = new StringBuilder();
         Node protein_node = null, panproteome;
         int trsc, num_proteins = 0, genome;
+        String[] fields;
     // If a database folder is already exist in the specified path, removes all the content of it.    
         File theDir = new File(PATH_TO_THE_PANGENOME_DATABASE);
         if (theDir.exists()) {
+            System.out.println("Directory " + PATH_TO_THE_PANGENOME_DATABASE + " already exist. Enter 'r' to remove its content or another key to quit.");
+            try{
+               if (System.in.read() != (int)'r')
+                   System.exit(1);
+            } catch (IOException ex){
+                System.exit(1);
+            }
             try {
                 FileUtils.deleteRecursively(new File(PATH_TO_THE_PANGENOME_DATABASE));
             } catch (IOException ioe) {
@@ -787,10 +795,14 @@ public class ProteomeLayer {
             try {
                 theDir.mkdir();
             } catch (SecurityException se) {
-                System.out.println("Failed to create " + PATH_TO_THE_PANGENOME_DATABASE);
+                System.out.println("Failed to create directory " + PATH_TO_THE_PANGENOME_DATABASE);
                 System.exit(1);
             }
         }
+        if (PATH_TO_THE_PROTEOMES_FILE == null){
+            System.out.println("PATH_TO_THE_PROTEOMES_FILE is empty.");
+            System.exit(1);
+        }  
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);
@@ -800,47 +812,54 @@ public class ProteomeLayer {
                 file_path = protein_paths.readLine().trim();
                 if (file_path.equals("")) // if line is empty
                     continue;
-                BufferedReader in = new BufferedReader(new FileReader(file_path));
-            // skip lines till get to the first id line   
-                do{
-                    line = in.readLine().trim();
-                } while(line.equals(""));
-                protein_ID = line.substring(1);
-                ++num_proteins;
-                while (in.ready()) {
-                    try (Transaction tx = graphDb.beginTx()) {
-                        for (trsc = 0; in.ready() && trsc < MAX_TRANSACTION_SIZE; ++trsc){
-                            line = in.readLine().trim();
-                            if (line.equals("")) // if line is empty
-                                continue;
-                            else if (line.charAt(0) == '>'){
-                                ++num_proteins;
-                                protein_node = graphDb.createNode(mRNA_label);
-                                protein_node.setProperty("protein_ID", protein_ID);
-                                protein_node.setProperty("protein", protein.toString());
-                                protein_node.setProperty("protein_length", protein.length());
-                                protein_node.setProperty("genome",genome);
-                                protein.setLength(0);
-                                protein_ID = line.substring(1);
+                fields = file_path.split("\\.");
+                file_type = fields[fields.length - 1].toLowerCase();
+                if (file_type.equals("fasta") || file_type.equals("faa")){
+                    BufferedReader in = new BufferedReader(new FileReader(file_path));
+                // skip lines till get to the first id line   
+                    do{
+                        line = in.readLine().trim();
+                    } while(line.equals(""));
+                    protein_ID = line.substring(1);
+                    ++num_proteins;
+                    while (in.ready()) {
+                        try (Transaction tx = graphDb.beginTx()) {
+                            for (trsc = 0; in.ready() && trsc < MAX_TRANSACTION_SIZE; ++trsc){
+                                line = in.readLine().trim();
+                                if (line.equals("")) // if line is empty
+                                    continue;
+                                else if (line.charAt(0) == '>'){
+                                    ++num_proteins;
+                                    protein_node = graphDb.createNode(mRNA_label);
+                                    protein_node.setProperty("protein_ID", protein_ID);
+                                    protein_node.setProperty("protein", protein.toString());
+                                    protein_node.setProperty("protein_length", protein.length());
+                                    protein_node.setProperty("genome",genome);
+                                    protein.setLength(0);
+                                    protein_ID = line.substring(1);
+                                }
+                                else
+                                    protein.append(line);
+                                if (num_proteins % 11 == 1)
+                                    System.out.print("\r" + num_proteins + " proteins ");
                             }
-                            else
-                                protein.append(line);
-                            if (num_proteins % 11 == 1)
-                                System.out.print("\r" + num_proteins + " proteins ");
+                            tx.success();
                         }
+                    }
+                    in.close();
+                // For the last protein    
+                    try (Transaction tx = graphDb.beginTx()) {
+                        protein_node = graphDb.createNode(mRNA_label);
+                        protein_node.setProperty("protein_ID", protein_ID);
+                        protein_node.setProperty("protein", protein.toString());
+                        protein_node.setProperty("protein_length", protein.length());
+                        protein_node.setProperty("genome",genome);
+                        protein.setLength(0);
                         tx.success();
                     }
-                }
-                in.close();
-            // For the last protein    
-                try (Transaction tx = graphDb.beginTx()) {
-                    protein_node = graphDb.createNode(mRNA_label);
-                    protein_node.setProperty("protein_ID", protein_ID);
-                    protein_node.setProperty("protein", protein.toString());
-                    protein_node.setProperty("protein_length", protein.length());
-                    protein_node.setProperty("genome",genome);
-                    protein.setLength(0);
-                    tx.success();
+                } else {
+                    System.out.println(file_path + " does not have a valid extention (fasta, faa)");
+                    System.exit(1);
                 }
             }
             System.out.println("\r" + num_proteins + " proteins ");
@@ -863,6 +882,10 @@ public class ProteomeLayer {
      */
     public void group() {
         startTime = System.currentTimeMillis();
+        if (! new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH).exists()) {
+            System.out.println("No database found in " + PATH_TO_THE_PANGENOME_DATABASE);
+            System.exit(1);
+        }
         graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
                 .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
         registerShutdownHook(graphDb);

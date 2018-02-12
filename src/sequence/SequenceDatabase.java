@@ -205,6 +205,9 @@ public class SequenceDatabase {
                         num_sequences[g]++;
                     }
                     num_sequences[g] /= 4;
+                } else {
+                    System.out.println(genome_names[g] + " does not have a valid extention (fasta, fa, fna, fn, fastq, fq, fnq, q)");
+                    System.exit(1);
                 }
                 in.close();
             } catch (IOException e) {
@@ -362,10 +365,9 @@ public class SequenceDatabase {
                     }
                     if (size % 2 == 1)
                         ++size;
-                }else{
-                    System.err.println(genome_names[g] + " should have one of these extensions: fasta, fa, fna, fn for FATSA or"
-                            + "fastq, fq, fnq, q for FASTQ.");
-                    continue;
+                } else {
+                    System.out.println(genome_names[g] + " does not have a valid extention (fasta, fa, fna, fn, fastq, fq, fnq, q)");
+                    System.exit(1);
                 }
                 in.close();
             }

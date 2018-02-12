@@ -138,26 +138,30 @@ public class kmer {
      * @param s_len The new suffix length for the k-mer  
      */
     public static void adjust_fwd_kmer(kmer kmer2, kmer kmer1){
-        int i, j, suffix_length1, suffix_length2;
+        int i, j, k, suffix_length1, suffix_length2;
         suffix_length1 = kmer1.suffix_length;
         suffix_length2 = kmer2.suffix_length;
         if (suffix_length1 != suffix_length2){
             for(i = suffix_length1/4 - 1, j = suffix_length2/4 - 1; i >= 0 && j >= 0; --i, --j)
-                kmer2.fwd_suffix[j] = kmer1.fwd_suffix[i];        
-            for (;i >= 0; --i){
-                kmer2.fwd_prefix = (kmer2.fwd_prefix << 8) | (kmer1.fwd_suffix[i] & 0x00FF);
+                kmer2.fwd_suffix[j] = kmer1.fwd_suffix[i];  
+            if (i >= 0){
+                for (kmer2.fwd_prefix = kmer1.fwd_prefix, k = 0; k <= i; ++k)
+                    kmer2.fwd_prefix = (kmer2.fwd_prefix << 8) | (kmer1.fwd_suffix[k] & 0x00FF);
             }
-            for (;j >= 0; --j){
-                kmer2.fwd_suffix[j] = (byte)(kmer1.fwd_prefix & 0x0FF);
-                kmer1.fwd_prefix = kmer1.fwd_prefix >> 8;
+            if (j >= 0){
+                kmer2.fwd_prefix = kmer1.fwd_prefix;
+                for (;j >= 0; --j){
+                    kmer2.fwd_suffix[j] = (byte)(kmer2.fwd_prefix & 0x0FF);
+                    kmer2.fwd_prefix = kmer2.fwd_prefix >> 8;
+                }
             }
         } else{
-            kmer2.set_fwd_suffix(kmer1.get_fwd_suffix());
-            kmer2.set_fwd_prefix(kmer1.get_fwd_prefix());
+            //kmer2.set_fwd_suffix(Arrays.clone(kmer1.get_fwd_suffix()));
+            //kmer2.set_fwd_prefix(kmer1.get_fwd_prefix());
+            kmer2 = kmer1;
         }
         kmer2.canonical = true; // to be found by find()
     }
-    
     
     /**
      * Clears the content of the kmer

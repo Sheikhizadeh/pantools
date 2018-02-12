@@ -150,6 +150,10 @@ public class AnnotationLayer {
      * @param pangenome_path Path to the database folder
      */
     public void add_annotaions() {
+        if (PATH_TO_THE_ANNOTATIONS_FILE == null){
+            System.out.println("PATH_TO_THE_ANNOTATIONS_FILE is empty.");
+            System.exit(1);
+        }        
         if (! new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH).exists()) {
             System.out.println("No database found in " + PATH_TO_THE_PANGENOME_DATABASE);
             System.exit(1);
@@ -180,7 +184,8 @@ public class AnnotationLayer {
         indexDb = new IndexDatabase(PATH_TO_THE_PANGENOME_DATABASE + INDEX_DATABASE_PATH);
         scanner = new SequenceScanner(genomeDb, 1, genomeDb.num_genomes, 1, genomeDb.num_sequences[1], K_SIZE, indexDb.get_pre_len());
         num_proteins = 0;
-        try (BufferedReader gff_paths = new BufferedReader(new FileReader(PATH_TO_THE_ANNOTATIONS_FILE))) {
+        try{
+            BufferedReader gff_paths = new BufferedReader(new FileReader(PATH_TO_THE_ANNOTATIONS_FILE));
             log_file = new BufferedWriter(new FileWriter(PATH_TO_THE_PANGENOME_DATABASE + "/annotation.log"));
             if (! new File(PATH_TO_THE_PANGENOME_DATABASE + "/proteins").exists())
                 Files.createDirectory(Paths.get(PATH_TO_THE_PANGENOME_DATABASE + "/proteins"));
@@ -215,8 +220,9 @@ public class AnnotationLayer {
             gff_paths.close();
             log_file.close();
         } catch (IOException ioe) {
-            System.out.println(ioe.getMessage());
-            System.out.println("Could not open " + PATH_TO_THE_ANNOTATIONS_FILE);
+            System.out.println("Failed to open " + PATH_TO_THE_ANNOTATIONS_FILE);
+        } catch (NumberFormatException ioe) {
+            System.out.println("Wrong number format in " + PATH_TO_THE_ANNOTATIONS_FILE);
         }
         try (Transaction tx = graphDb.beginTx()) {
             db_node.setProperty("num_proteins", num_proteins);
@@ -544,128 +550,131 @@ public class AnnotationLayer {
      * @param pangenome_path Path to the database folder
      */
     public void retrieve_genes() {
-        if (new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH).exists()) {
-            BufferedReader in;
-            ResourceIterator<Node> gene_nodes;
-            Relationship rstart;
-            Node start, gene;
-            String record;
-            String line, out_file_name;
-            boolean strand;
-            int i, j, num_genes, begin,end;
-            int[] address;
-            String[] fields;
-            StringBuilder gene_seq;
-            StringBuilder attr = new StringBuilder();
+        if (PATH_TO_THE_GENE_RECORDS == null){
+            System.out.println("PATH_TO_THE_GENE_RECORDS is empty.");
+            System.exit(1);
+        } 
+        if (! new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH).exists()) {
+            System.out.println("No database found in " + PATH_TO_THE_PANGENOME_DATABASE);
+            System.exit(1);
+        }
+        BufferedReader in;
+        ResourceIterator<Node> gene_nodes;
+        Relationship rstart;
+        Node start, gene;
+        String record;
+        String line, out_file_name;
+        boolean strand;
+        int i, j, num_genes, begin,end;
+        int[] address;
+        String[] fields;
+        StringBuilder gene_seq;
+        StringBuilder attr = new StringBuilder();
 
-            graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
-                    .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
-            registerShutdownHook(graphDb);
-            startTime = System.currentTimeMillis();
-            genomeDb = new SequenceDatabase(PATH_TO_THE_PANGENOME_DATABASE + GENOME_DATABASE_PATH);
-            indexDb = new IndexDatabase(PATH_TO_THE_PANGENOME_DATABASE + INDEX_DATABASE_PATH);
-            K_SIZE = indexDb.get_K();
-            scanner = new SequenceScanner(genomeDb, 1, genomeDb.num_genomes, 1, genomeDb.num_sequences[1], K_SIZE, indexDb.get_pre_len());
-            num_genes = 0;
-            gene_seq = new StringBuilder();
+        graphDb = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(new File(PATH_TO_THE_PANGENOME_DATABASE + GRAPH_DATABASE_PATH))
+                .setConfig(keep_logical_logs, "4 files").newGraphDatabase();
+        registerShutdownHook(graphDb);
+        startTime = System.currentTimeMillis();
+        genomeDb = new SequenceDatabase(PATH_TO_THE_PANGENOME_DATABASE + GENOME_DATABASE_PATH);
+        indexDb = new IndexDatabase(PATH_TO_THE_PANGENOME_DATABASE + INDEX_DATABASE_PATH);
+        K_SIZE = indexDb.get_K();
+        scanner = new SequenceScanner(genomeDb, 1, genomeDb.num_genomes, 1, genomeDb.num_sequences[1], K_SIZE, indexDb.get_pre_len());
+        num_genes = 0;
+        gene_seq = new StringBuilder();
+        try {
+            in = new BufferedReader(new FileReader(PATH_TO_THE_GENE_RECORDS));
+            while (in.ready()) {
+                line = in.readLine().trim();
+                if (line.equals("")) {
+                    continue;
+                }
+                num_genes++;
+            }
+            in.close();
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+            System.exit(1);
+        }
+        String[] records = new String[num_genes];
+        try (Transaction tx = graphDb.beginTx()) {
             try {
                 in = new BufferedReader(new FileReader(PATH_TO_THE_GENE_RECORDS));
-                while (in.ready()) {
+                // fill all the records in an array to be sorted    
+                for (i = 0; in.ready();) {
                     line = in.readLine().trim();
                     if (line.equals("")) {
                         continue;
                     }
-                    num_genes++;
+                    if (line.contains("\t")){
+                        fields = line.split("\\t");
+                        records[i] = fields[fields.length - 1];
+                    } else {
+                        fields = line.split("\\s");
+                        attr.setLength(0);
+                        for (int x = 7; x < fields.length; ++x)
+                            attr.append(fields[x]).append(" ");
+                        records[i] = attr.toString().trim();
+                    }
+                    ++i;
                 }
                 in.close();
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
+                Arrays.sort(records);
+            } catch (IOException ioe) {
+                System.out.println("Failed to read file names!");
                 System.exit(1);
             }
-            String[] records = new String[num_genes];
-            try (Transaction tx = graphDb.beginTx()) {
-                try {
-                    in = new BufferedReader(new FileReader(PATH_TO_THE_GENE_RECORDS));
-                    // fill all the records in an array to be sorted    
-                    for (i = 0; in.ready();) {
-                        line = in.readLine().trim();
-                        if (line.equals("")) {
-                            continue;
-                        }
-                        if (line.contains("\t")){
-                            fields = line.split("\\t");
-                            records[i] = fields[fields.length - 1];
-                        } else {
-                            fields = line.split("\\s");
-                            attr.setLength(0);
-                            for (int x = 7; x < fields.length; ++x)
-                                attr.append(fields[x]).append(" ");
-                            records[i] = attr.toString().trim();
-                        }
+            try {
+                fields = PATH_TO_THE_GENE_RECORDS.split("\\/");
+                out_file_name = PATH_TO_THE_PANGENOME_DATABASE + "/" + fields[fields.length - 1] + ".fasta";
+                BufferedWriter out = new BufferedWriter(new FileWriter(out_file_name));
+                // for all the genes in the database    
+                for (i = j = 0, gene_nodes = graphDb.findNodes(gene_label); gene_nodes.hasNext();) {
+                    gene = gene_nodes.next();
+                    record = (String) gene.getProperty("attribute");
+                    if (record != null && Arrays.binarySearch(records, record) >= 0) // gene is in the records
+                    {
                         ++i;
-                    }
-                    in.close();
-                    Arrays.sort(records);
-                } catch (IOException ioe) {
-                    System.out.println("Failed to read file names!");
-                    System.exit(1);
-                }
-                try {
-                    fields = PATH_TO_THE_GENE_RECORDS.split("\\/");
-                    out_file_name = PATH_TO_THE_PANGENOME_DATABASE + "/" + fields[fields.length - 1] + ".fasta";
-                    BufferedWriter out = new BufferedWriter(new FileWriter(out_file_name));
-                    // for all the genes in the database    
-                    for (i = j = 0, gene_nodes = graphDb.findNodes(gene_label); gene_nodes.hasNext();) {
-                        gene = gene_nodes.next();
-                        record = (String) gene.getProperty("attribute");
-                        if (record != null && Arrays.binarySearch(records, record) >= 0) // gene is in the records
-                        {
-                            ++i;
-                            rstart = gene.getSingleRelationship(RelTypes.starts, Direction.OUTGOING);
-                            start = rstart.getEndNode();
-                            address = (int[]) gene.getProperty("address");
-                            begin = address[2];
-                            end = address[3];
-                            strand = ((String)gene.getProperty("strand")).equals("+");
-                            //extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
-                            address[2] -= 1;
-                            address[3] -= 1;
-                            scanner.get_sequence_string(gene_seq, address, strand);
-                            //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
-                            //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
-                            //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
-                            if (gene_seq.length() == end - begin + 1) {
-                                ++j;
-                                out.write(">" + record + "\n");
-                                //if (strand) {
-                                    write_fasta(out, gene_seq.toString(), 70);
-                                //} else {
-                                //    reverse_complement(gene_seq);
-                                //    write_fasta(out, gene_seq.toString(), 70);
-                                //}
-                            } else {
-                                System.out.println("Failed to assemble:\n" + record);
-                            }
-                            gene_seq.setLength(0);
+                        rstart = gene.getSingleRelationship(RelTypes.starts, Direction.OUTGOING);
+                        start = rstart.getEndNode();
+                        address = (int[]) gene.getProperty("address");
+                        begin = address[2];
+                        end = address[3];
+                        strand = ((String)gene.getProperty("strand")).equals("+");
+                        //extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
+                        address[2] -= 1;
+                        address[3] -= 1;
+                        scanner.get_sequence_string(gene_seq, address, strand);
+                        //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
+                        //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
+                        //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//
+                        if (gene_seq.length() == end - begin + 1) {
+                            ++j;
+                            out.write(">" + record + "\n");
+                            //if (strand) {
+                                write_fasta(out, gene_seq.toString(), 70);
+                            //} else {
+                            //    reverse_complement(gene_seq);
+                            //    write_fasta(out, gene_seq.toString(), 70);
+                            //}
+                        } else {
+                            System.out.println("Failed to assemble:\n" + record);
                         }
-                        //if (i % (num_genes / 100 + 1) == 0) {
-                        //    System.out.print((long) i * 100 / num_genes + 1 + "%\r");
-                        //}
-                    }//for i
-                    System.out.println(j + " out of " + i + " genes found and retrieved successfully (See " + out_file_name + ").");
-                    out.close();
-                } catch (IOException ioe) {
-                    System.out.println("Failed to read file names!");
-                    System.exit(1);
-                }
-                tx.success();
+                        gene_seq.setLength(0);
+                    }
+                    //if (i % (num_genes / 100 + 1) == 0) {
+                    //    System.out.print((long) i * 100 / num_genes + 1 + "%\r");
+                    //}
+                }//for i
+                System.out.println(j + " out of " + i + " genes found and retrieved successfully (See " + out_file_name + ").");
+                out.close();
+            } catch (IOException ioe) {
+                System.out.println("Failed to read file names!");
+                System.exit(1);
             }
-            graphDb.shutdown();
-            genomeDb.close();
-        } else {
-            System.out.println("No database found in " + PATH_TO_THE_PANGENOME_DATABASE);
-            System.exit(1);
+            tx.success();
         }
+        graphDb.shutdown();
+        genomeDb.close();
     }
 
     /**
