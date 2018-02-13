@@ -22,9 +22,9 @@ import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Transaction;
 import static pantools.Pantools.genome_label;
+import static pantools.Pantools.labels;
 import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.sequence_label;
-import static pantools.Pantools.write_fasta;
 
 /**
  * Implements all the functionality to work with a 4-bit compressed sequence database. 

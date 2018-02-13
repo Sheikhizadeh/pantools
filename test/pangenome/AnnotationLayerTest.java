@@ -8,16 +8,20 @@ package pangenome;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.HashMap;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.neo4j.graphdb.Label;
+import static org.neo4j.graphdb.Label.label;
 import static pantools.Pantools.print_peak_memory;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
 import static pantools.Pantools.PATH_TO_THE_ANNOTATIONS_FILE;
-import static pantools.Pantools.PATH_TO_THE_GENE_RECORDS;
+import static pantools.Pantools.PATH_TO_THE_GENOME_NUMBERS_FILE;
+import static pantools.Pantools.labels;
 
 /**
  *
@@ -51,15 +55,23 @@ public class AnnotationLayerTest {
      */
     @Test
     public void testRetrieve_genes() {
-        System.out.println("retrieve_genes");
+        System.out.println("retrieve_features");
+        labels = new HashMap<String,Label>();
+        String[] label_strings = new String[]{
+        "pangenome", "genome","sequence","nucleotide","degenerate",
+        "annotation","variation","gene","coding_gene", "mRNA", 
+        "tRNA", "rRNA", "CDS", "exon", "intron", "feature", 
+        "broken_protein", "homology_group", "low_complexity"};        
+        for (int i = 0; i < label_strings.length; ++i)
+            labels.put(label_strings[i], label(label_strings[i]));
         AnnotationLayer instance = new AnnotationLayer();
         PATH_TO_THE_ANNOTATIONS_FILE = test_directory + "sample_annotations_path.txt";
-        PATH_TO_THE_GENE_RECORDS = test_directory + "sample_annotation_records.txt";
+        PATH_TO_THE_GENOME_NUMBERS_FILE = test_directory + "sample_genome_numbers.txt";
         PATH_TO_THE_PANGENOME_DATABASE = System.getProperty("user.home") + "/test/";
         instance.add_annotaions();
-        instance.retrieve_genes();
-        //String [] fields = gene_records_file.split("\\/");//sample_annotation_records.txt
-        if( are_the_same(PATH_TO_THE_PANGENOME_DATABASE + "/sample_annotation_records.txt.fasta", test_directory + "sample_annotation_records.fasta") )
+        instance.retrieve_feature();
+        if( are_the_same("genes.1.fasta", test_directory + "sample_genes.1.fasta") &&
+            are_the_same("genes.2.fasta", test_directory + "sample_genes.2.fasta"))
             System.out.println("Genes extracted properly.");
         else
             System.out.println("Test failed.");
@@ -71,9 +83,9 @@ public class AnnotationLayerTest {
     public boolean are_the_same(String file_name1, String file_name2) {
         BufferedReader in1, in2;
         try {
+            System.out.println("Comparing " + file_name1 + " and " + file_name2 + "...");
             in1 = new BufferedReader(new FileReader(file_name1));
             in2 = new BufferedReader(new FileReader(file_name2));
-            System.out.println("Comparing " + file_name1 + " and " + file_name2 + "...");
             do
                 if( !in1.readLine().toUpperCase().trim().equals(in2.readLine().toUpperCase().trim()) )
                         return false;

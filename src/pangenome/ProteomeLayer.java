@@ -40,7 +40,7 @@ import static pangenome.GenomeLayer.getFolderSize;
 import static pantools.Pantools.GRAPH_DATABASE_PATH;
 import static pantools.Pantools.RelTypes;
 import static pantools.Pantools.graphDb;
-import static pantools.Pantools.pangenome_label;
+import static pantools.Pantools.labels;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
@@ -55,6 +55,7 @@ import static pantools.Pantools.executeCommand_for;
 import static pantools.Pantools.heapSize;
 import static pantools.Pantools.homology_group_label;
 import static pantools.Pantools.mRNA_label;
+import static pantools.Pantools.pangenome_label;
 
 /**
  * Implements all the functionalities related to the annotation layer of the pangenome
@@ -214,7 +215,8 @@ public class ProteomeLayer {
                                     kmer_index = kmer_index * 20 + code[protein.charAt(i)];
                                 for (; i < protein_length; ++i){// for each kmer of the protein
                                 // ignore extremely rare and abundant k-mers    
-                                    if (kmer_frequencies[kmer_index] > 1 + num_genomes / 2 && kmer_frequencies[kmer_index] < MAX_KMER_FREQ)
+                                    if (kmer_frequencies[kmer_index] > 1 + num_genomes / 2)
+                                    if (kmer_frequencies[kmer_index] < MAX_KMER_FREQ)
                                     {
                                         if (kmers_proteins_list[kmer_index] == null)
                                             kmers_proteins_list[kmer_index] = new LinkedList();
@@ -399,17 +401,19 @@ public class ProteomeLayer {
             m = p1.length();
             n = p2.length();
             if (n > MAX_ALIGNMENT_LENGTH){
-                parts_num = (n / MAX_ALIGNMENT_LENGTH) + (n % MAX_ALIGNMENT_LENGTH == 0 ? 0 : 1);
-                part_len1 = m / parts_num;
-                part_len2 = n / parts_num;
-                for (i = 0; i < parts_num; ++i){
-                    query.setLength(0);
-                    subject.setLength(0);
-                    query.append(p1.substring(i * part_len1, Math.min(m, (i + 1) * part_len1)));
-                    subject.append(p2.substring(i * part_len2, Math.min(n, (i + 1) * part_len2)));
-                    aligner.align(query, subject );
-                    score += aligner.get_score();
-                    p_score += aligner.perfect_score(query);
+                if (n / m < MAX_ALIGNMENT_LENGTH - 1){
+                    parts_num = (n / MAX_ALIGNMENT_LENGTH) + (n % MAX_ALIGNMENT_LENGTH == 0 ? 0 : 1);
+                    part_len1 = m / parts_num;
+                    part_len2 = n / parts_num;
+                    for (i = 0; i < parts_num; ++i){
+                        query.setLength(0);
+                        subject.setLength(0);
+                        query.append(p1.substring(i * part_len1, Math.min(m, (i + 1) * part_len1)));
+                        subject.append(p2.substring(i * part_len2, Math.min(n, (i + 1) * part_len2)));
+                        aligner.align(query, subject );
+                        score += aligner.get_score();
+                        p_score += aligner.perfect_score(query);
+                    }
                 }
             } else {
                 query.setLength(0);
@@ -422,6 +426,7 @@ public class ProteomeLayer {
             }
             return score * 100.0 / p_score;
         }
+
     }    
 
     /**
@@ -778,13 +783,6 @@ public class ProteomeLayer {
     // If a database folder is already exist in the specified path, removes all the content of it.    
         File theDir = new File(PATH_TO_THE_PANGENOME_DATABASE);
         if (theDir.exists()) {
-            System.out.println("Directory " + PATH_TO_THE_PANGENOME_DATABASE + " already exist. Enter 'r' to remove its content or another key to quit.");
-            try{
-               if (System.in.read() != (int)'r')
-                   System.exit(1);
-            } catch (IOException ex){
-                System.exit(1);
-            }
             try {
                 FileUtils.deleteRecursively(new File(PATH_TO_THE_PANGENOME_DATABASE));
             } catch (IOException ioe) {

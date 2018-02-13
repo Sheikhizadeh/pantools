@@ -49,7 +49,7 @@ JVM options
 PanTools commands
 -----------------
 
-<build_pangenome>
+<build_pangenome or bg> 
    To build a pan-genome out of a set of genomes.
 
    <argument keys>
@@ -62,7 +62,7 @@ PanTools commands
       gives the size of k-mers, if not given or is out of range 
       (6 <= K_SIZE <= 255),an optimal value would be calculated automatically.    
 
-<build_panproteome>
+<build_panproteome or bp>
    To build a pan-proteome out of a set of proteins.
 
    <argument keys>
@@ -72,7 +72,7 @@ PanTools commands
       gives a text file containing paths to FASTA files of proteomes; 
       each in a seperated line.
              
-<add_genomes>
+<add_genomes or ag>
    To add new genomes to an available pan-genome.  
   
    <argument keys>
@@ -83,7 +83,7 @@ PanTools commands
       genomes to be added to the pangeome; 
       each in a seperated line.
 
-<add_annotations>
+<add_annotations or aa>
    To add new annotations to an available pan-genome. 
 
    <argument keys>
@@ -97,20 +97,23 @@ PanTools commands
       will be also stored in the folder "proteins" in the same path 
       as the pangenome. 
 
-<retrieve_genes>
-   To retrieve the sequence of annotated genes from the pangenome. 
-   The results will be stored in the same folder as the pangenome.
+<retrieve_features of rf>
+   To retrieve the sequence of annotated features from the pangenome. 
+   For each genome the resulting FASTA file will be stored in the current 
+   directory.
 
    <argument keys>
    --database_path or -dp
       gives path to the pangenome database. 
-   --gene-records or -gr
-      gives a text file containing records of annotated genes, 
-      as they appear in GFF file, to be retrieved. The resulting 
-      FASTA file would have the same name with an additional 
-      .fasta extention.
+   --genome-numbers or -gn
+      gives a text file containing genome_numbers for which the features will 
+      be retrieved. The resulting FASTA files have two parts separated by a dot. 
+      The first part determines the feature and the second determines the 
+      genome number; for example, genes.1.fasta.
+   --feature-type or -ft (default = gene)
+      gives the feature name; for example gene, mRNA, exon, tRNA, ... 
 
-<retrieve_regions> 
+<retrieve_regions or rr> 
    To retrieve the sequence of some genomic regios from the pangenome. 
    The results will be stored in the same folder as the pangenome.
 
@@ -123,7 +126,7 @@ PanTools commands
       space for each region. The resulting FASTA file would have 
       the same name with an additional .fasta extention.
 
-<retrieve_genomes>
+<retrieve_genomes or rg>
    To retrieve the full sequence of some genomes. The results will be 
    stored in the same folder as the pangenome itself.
 
@@ -134,7 +137,7 @@ PanTools commands
       gives a text file containing genome_numbers to be retrieved in each line. 
       The resulting FASTA files are named like Genome_x.fasta.
 
-<group>
+<group or g>
    To add homology nodes which point to a groups of homologous proteins.
 
    <argument keys>
@@ -155,9 +158,12 @@ PanTools commands
    --threads-number or -tn (default = 1) 
       gives the number of parallel working threads
 
-<version>
+<version or v>
    To show the versions of PanTools and Neo4j.
    
+<help or h>
+   To see this document.
+
 Visualization in the Neo4j browser
 ----------------------------------
    Neo4j browser allows you to run Cypher queries and receive 

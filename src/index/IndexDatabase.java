@@ -26,6 +26,7 @@ import java.nio.file.Paths;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.cores;
 import static pantools.Pantools.degenerate_label;
+import static pantools.Pantools.labels;
 import static pantools.Pantools.executeCommand;
 import static pantools.Pantools.nucleotide_label;
 

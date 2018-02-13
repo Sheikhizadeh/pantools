@@ -32,23 +32,20 @@ import static pantools.Pantools.GENOME_DATABASE_PATH;
 import static pantools.Pantools.GRAPH_DATABASE_PATH;
 import static pantools.Pantools.INDEX_DATABASE_PATH;
 import pantools.Pantools.RelTypes;
-import static pantools.Pantools.degenerate_label;
+import static pantools.Pantools.labels;
 import static pantools.Pantools.genomeDb;
+import static pantools.Pantools.sequencingDb;
 import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
 import static pantools.Pantools.PATH_TO_THE_GENOMES_FILE;
 import static pantools.Pantools.PATH_TO_THE_REGIONS_FILE;
 import static pantools.Pantools.PATH_TO_THE_GENOME_NUMBERS_FILE;
-import static pantools.Pantools.genome_label;
 import static pantools.Pantools.graphDb;
 import static pantools.Pantools.indexDb;
-import static pantools.Pantools.nucleotide_label;
 import static pantools.Pantools.num_bases;
 import static pantools.Pantools.num_degenerates;
 import static pantools.Pantools.num_edges;
 import static pantools.Pantools.num_nodes;
-import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.phaseTime;
-import static pantools.Pantools.sequence_label;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
 import static pantools.Pantools.ANCHORS;
@@ -65,14 +62,22 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.neo4j.graphdb.NotFoundException;
 import static pantools.Pantools.DEBUG;
+import static pantools.Pantools.GAP_EXT;
+import static pantools.Pantools.GAP_OPEN;
 import static pantools.Pantools.K_SIZE;
+import static pantools.Pantools.MAX_ALIGNMENT_LENGTH;
 import static pantools.Pantools.PATH_TO_THE_SRAS_FILE;
-import static pantools.Pantools.THRESHOLD;
 import static pantools.Pantools.READS_DATABASE_PATH;
 import static pantools.Pantools.SHOW_KMERS;
+//import static pantools.Pantools.MAX_TRIALS;
 import static pantools.Pantools.THREADS;
+import static pantools.Pantools.degenerate_label;
+import static pantools.Pantools.genome_label;
 import static pantools.Pantools.low_complexity_label;
+import static pantools.Pantools.nucleotide_label;
+import static pantools.Pantools.pangenome_label;
 import static pantools.Pantools.scanner;
+import static pantools.Pantools.sequence_label;
 
 /**
  * Implements all the functionalities related to the sequence layer of the pangenome
@@ -85,8 +90,7 @@ public class GenomeLayer {
     private Node curr_node;
     private byte curr_side;        
     private boolean finish;
-    private AtomicInteger[] num_genomic_mapping;
-    
+   
     /**
      * Constructs a pangenome database from given genomes.
      * 
@@ -95,16 +99,9 @@ public class GenomeLayer {
      */  
     public void initialize_pangenome() {
     // If a database folder is already exist in the specified path, removes all the content of it.
-    Node pangenome_node;
+        Node pangenome_node;
         File theDir = new File(PATH_TO_THE_PANGENOME_DATABASE);
         if (theDir.exists()) {
-            System.out.println("Directory " + PATH_TO_THE_PANGENOME_DATABASE + " already exist. Enter 'r' to remove its content or another key to quit.");
-            try{
-               if (System.in.read() != (int)'r')
-                   System.exit(1);
-            } catch (IOException ex){
-                System.exit(1);
-            }
             try {
                 FileUtils.deleteRecursively(new File(PATH_TO_THE_PANGENOME_DATABASE));
             } catch (IOException ioe) {
@@ -277,7 +274,7 @@ public class GenomeLayer {
     public void remove_genomes() {
         
     }
-        
+    
     /**
      * Retrieves the sequence of a number of genomic regions from the pangenome and stores them in a FASTA file.
      * 
@@ -348,7 +345,8 @@ public class GenomeLayer {
                         out.write(">genome:" + address[0] + " sequence:" + address[1] + " from:" + address[2] + " to:" + address[3] + " length:" + (address[3] - address[2] + 1) + "\n");
                         address[2] -= 1;
                         address[3] -= 1;
-                        scanner.get_sequence_string(seq, address, true);
+                        seq.setLength(0);
+                        scanner.get_sub_sequence(seq, address, true);
                         write_fasta(out, seq.toString(), 70);
                         ++c;
                         //if (c % (num_regions / 100 + 1) == 0) 
@@ -435,7 +433,8 @@ public class GenomeLayer {
                             out.write(">" + genomeDb.sequence_titles[address[0]][address[1]] + "\n");
                             address[2] = 0;
                             address[3] = (int)genomeDb.sequence_length[address[0]][address[1]] - 1;
-                            scanner.get_sequence_string(seq, address, true);
+                            seq.setLength(0);
+                            scanner.get_sub_sequence(seq, address, true);
                             write_fasta(out, seq.toString(), 80);
                             seq.setLength(0);
                         }
@@ -1331,7 +1330,7 @@ public class GenomeLayer {
                 sequence.setLength(0);
                 //num_bases += node_length - K + 1;
                 //node.setProperty("sequence", genomeDb.get_sequence(addr[0], addr[1], addr[2], node_length - K + 1, true).toString());
-                scanner.get_sequence_string(sequence, addr[0], addr[1], addr[2], node_length, true);
+                scanner.get_sub_sequence(sequence, addr[0], addr[1], addr[2], node_length, true);
                 node.setProperty("sequence", sequence.toString());
                 ++trsc;
                 if (trsc >= MAX_TRANSACTION_SIZE){

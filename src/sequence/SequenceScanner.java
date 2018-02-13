@@ -324,9 +324,8 @@ public class SequenceScanner {
      * @param direction specifies the direction, True for forward and False for reverse
      * @return The genomic region
      */
-    public void get_sequence_string(StringBuilder seq, int g, int s, int p, int l, boolean direction) {
+    public void get_sub_sequence(StringBuilder seq, int g, int s, int p, int l, boolean direction) {
         int i;
-        seq.setLength(0);
         if (p >= 0 && p + l <= database.sequence_length[g][s]){
             if (direction) {
                 for (i = 0; i < l; ++i) {
@@ -337,15 +336,16 @@ public class SequenceScanner {
                     seq.append(get_complement_symbol(g, s, p + i));
                 }
             }
-        }
+        } else
+            System.err.println("Reading out of range!");
     } 
-    public void get_sequence_string(StringBuilder seq, int[] adderess, boolean direction) {
+
+    public void get_sub_sequence(StringBuilder seq, int[] adderess, boolean direction) {
         int i, g, s, p, l;
         g = adderess[0];
         s = adderess[1];
         p =adderess[2];
         l = adderess[3] - adderess[2] + 1;
-        seq.setLength(0);
         if (p >= 0 && p + l <= database.sequence_length[g][s]){
             if (direction) {
                 for (i = 0; i < l; ++i) {
@@ -356,16 +356,45 @@ public class SequenceScanner {
                     seq.append(get_complement_symbol(g, s, p + i));
                 }
             }
-        }
+        } else
+            System.err.println("Reading out of range!");
     } 
 
+    public void get_complete_sequence(StringBuilder seq, int g, int s, boolean direction) {
+        int i, l;
+        l = (int)database.sequence_length[g][s];
+        if (direction) {
+            for (i = 0; i < l; ++i) {
+                seq.append(get_symbol(g, s, i));
+            }
+        } else {
+            for (i = l - 1; i >= 0; --i) {
+                seq.append(get_complement_symbol(g, s, i));
+            }
+        }
+    } 
+    
+    public void get_complete_sequence(StringBuilder seq, int[] adderess, boolean direction) {
+        int i, g, s, p, l;
+        g = adderess[0];
+        s = adderess[1];
+        l = (int)database.sequence_length[g][s];
+        if (direction) {
+            for (i = 0; i < l; ++i) {
+                seq.append(get_symbol(g, s, i));
+            }
+        } else {
+            for (i = l - 1; i >= 0; --i) {
+                seq.append(get_complement_symbol(g, s, i));
+            }
+        }
+    } 
+    
     public void get_sequence_quality(StringBuilder quality, int g, int s) {
-        quality.setLength(0);
         quality.append(database.sequence_qualities[g][s]);
     } 
 
     public void get_sequence_title(StringBuilder title, int g, int s) {
-        title.setLength(0);
         title.append(database.sequence_titles[g][s]);
     } 
     
