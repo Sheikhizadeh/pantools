@@ -16,7 +16,6 @@ public class ProteinAlignment {
     public int MAX_LENGTH;
     public int GAP_OPEN;
     public int GAP_EXT;
-    public int NEGATIVE_INFINITY = Integer.MIN_VALUE;
     public long score;
     
     /**
@@ -26,6 +25,7 @@ public class ProteinAlignment {
      * @param max_length
      */
     public ProteinAlignment(int gap_open, int gap_ext, int max_length) {
+        int i, j;
         MAX_LENGTH = max_length;
         GAP_OPEN = gap_open;
         GAP_EXT = gap_ext;
@@ -33,7 +33,16 @@ public class ProteinAlignment {
         matrix = new long[MAX_LENGTH+1][MAX_LENGTH+1];
         up = new long[MAX_LENGTH+1][MAX_LENGTH+1];
         left = new long[MAX_LENGTH+1][MAX_LENGTH+1];
-    // initialize similarity matrix BLOSUM62
+        for (i = 1; i <= MAX_LENGTH; i++) {
+                up[i][0] = 0;
+                left[i][0] = Integer.MIN_VALUE;
+                matrix[i][0] = 0;
+            }
+        for (j = 1; j <= MAX_LENGTH; j++) {
+                up[0][j] = Integer.MIN_VALUE;
+                left[0][j] = 0;
+                matrix[0][j] = 0;
+            }    // initialize similarity matrix BLOSUM62
         match = new int[256][256];
         match['A']['A'] = 4;
         match['A']['R'] = -1;
@@ -669,26 +678,20 @@ public class ProteinAlignment {
     public long align(StringBuilder s1, StringBuilder s2) {
         int i, j;
         int m = s1.length(), n = s2.length();
-        for (i = 1; i <= m; i++) {
-            left[i][0] = NEGATIVE_INFINITY;
-            matrix[i][0] = 0;
-        }        
-        for (j = 1; j <= n; j++) {
-            up[0][j] = NEGATIVE_INFINITY;
-            matrix[0][j] = 0;
-        }   
         score = 0;
         for (i = 1; i <= m; i++) {
             for (j = 1; j <= n; j++) {
-                up[i][j] = Math.max( up[i-1][j] + GAP_EXT , matrix[i-1][j]+GAP_OPEN + GAP_EXT);
-                left[i][j] = Math.max( left[i][j-1] + GAP_EXT , matrix[i][j-1]+GAP_OPEN + GAP_EXT);
-                matrix[i][j] = Math.max( match[s1.charAt(i-1)][s2.charAt(j-1)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
+                up[i][j] = Math.max( up[i-1][j] + GAP_EXT , Math.max(matrix[i-1][j], left[i-1][j]) + GAP_OPEN + GAP_EXT);
+                left[i][j] = Math.max( left[i][j-1] + GAP_EXT , Math.max(matrix[i][j-1], up[i][j-1]) + GAP_OPEN + GAP_EXT);
+                //matrix[i][j] = Math.max( match[s1.charAt(i-1)][s2.charAt(j-1)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) ); // It is wrong formula
+                matrix[i][j] = match[s1.charAt(i-1)][s2.charAt(j-1)] + Math.max( matrix[i-1][j-1] , Math.max( up[i-1][j-1] , left[i-1][j-1]) );
                 if (matrix[i][j] > score)
                     score = matrix[i][j];
             }
         }
         return score;
-    }
+    }    
+
     /**
      * The similarity score of the shorter protein with itself  
      * @param aligner The protein aligner object
@@ -710,5 +713,14 @@ public class ProteinAlignment {
     public long get_score(){
         return score;
     }
+
+    public double score(String s1, String s2) {
+        int i, num = 0;
+        for (i = 0; i < s1.length(); ++i)
+            if (s1.charAt(i) == s2.charAt(i))
+                ++num;
+        return num * 100.0 / s1.length();
+    }    
+
 
 }

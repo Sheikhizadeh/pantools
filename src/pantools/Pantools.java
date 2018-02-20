@@ -66,7 +66,7 @@ public class Pantools {
     public static SequenceScanner scanner;
     public static int ANCHORS = 10000; // The number of anchor nodes
     public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
-    public static int cores = Math.max(Runtime.getRuntime().availableProcessors() / 2, 2);
+    public static int cores = Runtime.getRuntime().availableProcessors();
     public static long heapSize = Runtime.getRuntime().maxMemory();
     public static boolean DEBUG;
     public static boolean SHOW_KMERS;
@@ -273,10 +273,10 @@ public class Pantools {
                         break;
                     case "--threads-number": case "-tn":
                         x = Integer.parseInt(args[i + 1]);
-                        if (x <= cores)
+                        if (x < cores)
                             THREADS = x;
                         else {
-                            System.out.println("The maximum number of threads you can use on this machine is " + cores + ".");
+                            System.out.println("The maximum number of threads on this machine = " + cores + ".");
                             THREADS = cores;
                         }
                         System.out.println("THREADS = " + THREADS);
