@@ -47,6 +47,8 @@ import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
 import static pantools.Pantools.THRESHOLD;
 import static pantools.Pantools.INTERSECTION;
 import static pantools.Pantools.CONTRAST;
+import static pantools.Pantools.GAP_EXT;
+import static pantools.Pantools.GAP_OPEN;
 import static pantools.Pantools.INFLATION;
 import static pantools.Pantools.MAX_ALIGNMENT_LENGTH;
 import static pantools.Pantools.PATH_TO_THE_PROTEOMES_FILE;
@@ -178,7 +180,7 @@ public class ProteomeLayer {
                 }
                 kmers_proteins_list = new long[MAX_KMERS_NUM][];
                 for (i = 0; i < MAX_KMERS_NUM; ++i){
-                    if (kmer_frequencies[i] > 1 && kmer_frequencies[i] < MAX_KMER_FREQ)//+ num_genomes / 2
+                    if (kmer_frequencies[i] > 1 && kmer_frequencies[i] < MAX_KMER_FREQ)// + num_genomes / 2
                         kmers_proteins_list[i] = new long[kmer_frequencies[i]];
                     kmer_frequencies[i] = 0;
                 }
@@ -342,7 +344,7 @@ public class ProteomeLayer {
                     System.out.print("0 ......................................... 100\n  "); 
                 // Signify the end of intersections queue.    
                     for (i = 0; i < THREADS; ++i)
-                        intersections.offer(new intersection(null, null,0));// end of queue
+                        intersections.offer(new intersection(null, null,-1));// end of queue
                 } catch(InterruptedException e){
                     System.err.println(e.getMessage());
                 }
@@ -365,7 +367,7 @@ public class ProteomeLayer {
         StringBuilder subject;
         ProteinAlignment aligner;
         public Find_similarities() {
-            aligner = new ProteinAlignment(-10,-1,MAX_ALIGNMENT_LENGTH);
+            aligner = new ProteinAlignment(GAP_OPEN, GAP_EXT,MAX_ALIGNMENT_LENGTH);
             query = new StringBuilder();
             subject = new StringBuilder();
         }
@@ -390,7 +392,8 @@ public class ProteomeLayer {
                         n = protein2.length();
                         if (m == n)
                             ints.similarity = aligner.score(protein1, protein2);
-                        else if (m < n)
+                        else 
+                            if (m < n)
                             ints.similarity = protein_similarity(protein1, protein2);
                         else
                             ints.similarity = protein_similarity(protein2, protein1);

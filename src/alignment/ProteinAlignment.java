@@ -42,7 +42,11 @@ public class ProteinAlignment {
                 up[0][j] = Integer.MIN_VALUE;
                 left[0][j] = 0;
                 matrix[0][j] = 0;
-            }    // initialize similarity matrix BLOSUM62
+            } 
+        iniialize_BLOSUM62();
+    }
+    
+    private void iniialize_BLOSUM62(){
         match = new int[256][256];
         match['A']['A'] = 4;
         match['A']['R'] = -1;
@@ -668,7 +672,6 @@ public class ProteinAlignment {
         match['*']['*'] = 1;
     }
 
-
     /**
      * Calculates the similarity score of two nucleotide sequences (score is not greater than 1).
      * @param s1 First sequence
@@ -683,7 +686,7 @@ public class ProteinAlignment {
             for (j = 1; j <= n; j++) {
                 up[i][j] = Math.max( up[i-1][j] + GAP_EXT , Math.max(matrix[i-1][j], left[i-1][j]) + GAP_OPEN + GAP_EXT);
                 left[i][j] = Math.max( left[i][j-1] + GAP_EXT , Math.max(matrix[i][j-1], up[i][j-1]) + GAP_OPEN + GAP_EXT);
-                //matrix[i][j] = Math.max( match[s1.charAt(i-1)][s2.charAt(j-1)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) ); // It is wrong formula
+                //matrix[i][j] = Math.max( match[s1.charAt(i-1)][s2.charAt(j-1)] + matrix[i - 1][j - 1] , Math.max( up[i][j] , left[i][j]) );
                 matrix[i][j] = match[s1.charAt(i-1)][s2.charAt(j-1)] + Math.max( matrix[i-1][j-1] , Math.max( up[i-1][j-1] , left[i-1][j-1]) );
                 if (matrix[i][j] > score)
                     score = matrix[i][j];
