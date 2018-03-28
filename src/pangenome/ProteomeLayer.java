@@ -118,6 +118,7 @@ public class ProteomeLayer {
             try(Transaction tx = graphDb.beginTx()){
                 pangenome_node = graphDb.findNodes(pangenome_label).next();
                 proteins_iterator = graphDb.findNodes(mRNA_label);
+                proteins.clear();
                 while (proteins_iterator.hasNext())
                     proteins.offer(proteins_iterator.next());
                 proteins_iterator.close();
