@@ -129,7 +129,7 @@ public class Pantools {
         double y;
         File theDir;
         if (args.length < 1) {
-            print_help_comment();
+            print_help_message();
             System.exit(1);
         }
         seqLayer = new GenomeLayer();
@@ -321,7 +321,7 @@ public class Pantools {
                         System.out.println("FEATURE = " + FEATURE);
                         break;
                     case "--help": case "-h":
-                        print_help_comment();
+                        print_help_message();
                         System.exit(1);
                         break;
                 }  
@@ -362,7 +362,7 @@ public class Pantools {
                 seqLayer.retrieve_synteny(args[2]);
                 break;
             case "h": case "help":
-                print_help_comment();
+                print_help_message();
                 System.exit(1);
                 break;
             case "v": case "version":
@@ -380,7 +380,7 @@ public class Pantools {
     /**
      * Print the manual of the software.
      */
-    private static void print_help_comment() {
+    private static void print_help_message() {
         System.out.println("****************************************************************\n" +
 "PanTools version 1.1,\n" +
 "\n" +
@@ -432,7 +432,7 @@ public class Pantools {
 "PanTools commands\n" +
 "-----------------\n" +
 "\n" +
-"<build_pangenome>\n" +
+"<build_pangenome or bg> \n" +
 "   To build a pan-genome out of a set of genomes.\n" +
 "\n" +
 "   <argument keys>\n" +
@@ -445,7 +445,7 @@ public class Pantools {
 "      gives the size of k-mers, if not given or is out of range \n" +
 "      (6 <= K_SIZE <= 255),an optimal value would be calculated automatically.    \n" +
 "\n" +
-"<build_panproteome>\n" +
+"<build_panproteome or bp>\n" +
 "   To build a pan-proteome out of a set of proteins.\n" +
 "\n" +
 "   <argument keys>\n" +
@@ -455,7 +455,7 @@ public class Pantools {
 "      gives a text file containing paths to FASTA files of proteomes; \n" +
 "      each in a seperated line.\n" +
 "             \n" +
-"<add_genomes>\n" +
+"<add_genomes or ag>\n" +
 "   To add new genomes to an available pan-genome.  \n" +
 "  \n" +
 "   <argument keys>\n" +
@@ -466,7 +466,7 @@ public class Pantools {
 "      genomes to be added to the pangeome; \n" +
 "      each in a seperated line.\n" +
 "\n" +
-"<add_annotations>\n" +
+"<add_annotations or aa>\n" +
 "   To add new annotations to an available pan-genome. \n" +
 "\n" +
 "   <argument keys>\n" +
@@ -480,20 +480,23 @@ public class Pantools {
 "      will be also stored in the folder \"proteins\" in the same path \n" +
 "      as the pangenome. \n" +
 "\n" +
-"<retrieve_genes>\n" +
-"   To retrieve the sequence of annotated genes from the pangenome. \n" +
-"   The results will be stored in the same folder as the pangenome.\n" +
+"<retrieve_features of rf>\n" +
+"   To retrieve the sequence of annotated features from the pangenome. \n" +
+"   For each genome the resulting FASTA file will be stored in the current \n" +
+"   directory.\n" +
 "\n" +
 "   <argument keys>\n" +
 "   --database_path or -dp\n" +
 "      gives path to the pangenome database. \n" +
-"   --gene-records or -gr\n" +
-"      gives a text file containing records of annotated genes, \n" +
-"      as they appear in GFF file, to be retrieved. The resulting \n" +
-"      FASTA file would have the same name with an additional \n" +
-"      .fasta extention.\n" +
+"   --genome-numbers or -gn\n" +
+"      gives a text file containing genome_numbers for which the features will \n" +
+"      be retrieved. The resulting FASTA files have two parts separated by a dot. \n" +
+"      The first part determines the feature and the second determines the \n" +
+"      genome number; for example, genes.1.fasta.\n" +
+"   --feature-type or -ft (default = gene)\n" +
+"      gives the feature name; for example gene, mRNA, exon, tRNA, ... \n" +
 "\n" +
-"<retrieve_regions> \n" +
+"<retrieve_regions or rr> \n" +
 "   To retrieve the sequence of some genomic regios from the pangenome. \n" +
 "   The results will be stored in the same folder as the pangenome.\n" +
 "\n" +
@@ -506,7 +509,7 @@ public class Pantools {
 "      space for each region. The resulting FASTA file would have \n" +
 "      the same name with an additional .fasta extention.\n" +
 "\n" +
-"<retrieve_genomes>\n" +
+"<retrieve_genomes or rg>\n" +
 "   To retrieve the full sequence of some genomes. The results will be \n" +
 "   stored in the same folder as the pangenome itself.\n" +
 "\n" +
@@ -517,7 +520,7 @@ public class Pantools {
 "      gives a text file containing genome_numbers to be retrieved in each line. \n" +
 "      The resulting FASTA files are named like Genome_x.fasta.\n" +
 "\n" +
-"<group>\n" +
+"<group or g>\n" +
 "   To add homology nodes which point to a groups of homologous proteins.\n" +
 "\n" +
 "   <argument keys>\n" +
@@ -538,9 +541,12 @@ public class Pantools {
 "   --threads-number or -tn (default = 1) \n" +
 "      gives the number of parallel working threads\n" +
 "\n" +
-"<version>\n" +
+"<version or v>\n" +
 "   To show the versions of PanTools and Neo4j.\n" +
 "   \n" +
+"<help or h>\n" +
+"   To see this document.\n" +
+"\n" +
 "Visualization in the Neo4j browser\n" +
 "----------------------------------\n" +
 "   Neo4j browser allows you to run Cypher queries and receive \n" +

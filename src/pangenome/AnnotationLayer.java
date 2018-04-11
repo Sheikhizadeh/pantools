@@ -245,7 +245,7 @@ public class AnnotationLayer {
         int i, trsc, num_genes, num_mRNAs, num_tRNAs, num_rRNAs, feature_len, offset;
         long seq_len;
         String sequence_id, current_sequence_id=null, attribute;
-        Node gene_node, rna_node, feature_node, parent_node = null;
+        Node gene_node, rna_node, feature_node, parent_node = null, node;
         Relationship rel;
         String[] fields,parent_ids;
         String strand, line, ID;
@@ -486,8 +486,8 @@ public class AnnotationLayer {
                                 if (!forward)
                                     reverse_complement(rna_builder);
                                 protein = translate(rna_builder);
+                                ++num_proteins;
                                 if (protein.length() > 0){
-                                    ++num_proteins;
                                     //if (num_proteins % 11 == 1)
                                     //    System.out.print("\rAdding protein sequences... " + num_proteins);
                                     mRNA_id = (String)mrna_node.getProperty("id");
