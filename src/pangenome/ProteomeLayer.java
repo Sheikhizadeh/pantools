@@ -378,7 +378,7 @@ public class ProteomeLayer {
             Node protein_node1, protein_node2;
             String protein1, protein2;
             intersection ints;
-            int num_ints = 0;
+            int num_ints = 0, chunk = num_proteins > 40 ? num_proteins / 40 : 1;
             boolean all_intersections_found = false;
             try{
                 try(Transaction tx = graphDb.beginTx()){
@@ -410,7 +410,7 @@ public class ProteomeLayer {
                                 num_ints -= THREADS * processed;
                             }
                         }
-                        if (all_intersections_found && processed % (num_ints / 40) == 0){
+                        if (all_intersections_found && processed % chunk == 0){
                             System.out.print("|");
                             similarity_bars.getAndIncrement();
                         }
