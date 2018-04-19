@@ -207,7 +207,7 @@ public class AnnotationLayer {
                 }
                 try (Transaction tx = graphDb.beginTx()) {
                     annotation_node = graphDb.createNode(annotation_label);
-                    genome_node = graphDb.findNodes(genome_label,"number",address[0]).next();
+                    genome_node = graphDb.findNode(genome_label,"number",address[0]);
                     annotation_node.createRelationshipTo(genome_node, RelTypes.annotates);
                     degree = genome_node.getDegree(RelTypes.annotates, Direction.INCOMING);
                     annotation_node.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
