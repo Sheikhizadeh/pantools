@@ -64,7 +64,7 @@ public class Pantools {
     public static SequenceDatabase genomeDb;
     public static SequenceDatabase sequencingDb;
     public static SequenceScanner scanner;
-    public static int ANCHORS = 10000; // The number of anchor nodes
+    public static int ANCHORS_DISTANCE = 10000; // The distance between two anchor nodes
     public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
     public static int cores = Runtime.getRuntime().availableProcessors();
     public static long heapSize = Runtime.getRuntime().maxMemory();

@@ -48,7 +48,7 @@ import static pantools.Pantools.num_nodes;
 import static pantools.Pantools.phaseTime;
 import static pantools.Pantools.startTime;
 import static pantools.Pantools.MAX_TRANSACTION_SIZE;
-import static pantools.Pantools.ANCHORS;
+import static pantools.Pantools.ANCHORS_DISTANCE;
 import static pantools.Pantools.complement;
 import static pantools.Pantools.write_fasta;
 import java.text.SimpleDateFormat;
@@ -1176,9 +1176,9 @@ public class GenomeLayer {
     void localize_nodes() {
         ResourceIterator<Node> sequence_iterator;
         LinkedList<Node> sequence_nodes;
-        int anchors_distance, trsc = 0, i, len, m, neighbor_length = 0, count;
+        int anchors_distance, trsc = 0, i, len, m, neighbor_length = 0;
         char node_side, neighbor_side;
-        long length;
+        long length, distance;
         long[] anchor_nodes;
         int[] anchor_positions;
         int[] initial_coordinate = new int[1];
@@ -1210,10 +1210,9 @@ public class GenomeLayer {
                 address[1] = (int)sequence_node.getProperty("number");
                 System.out.println("\rLocalizing sequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
                 length = genomeDb.sequence_length[address[0]][address[1]] - 1;
-                anchors_distance = (int)num_nodes / ANCHORS + 1;
                 node = sequence_node;
                 node_side = 'F';
-                count = 0;
+                distance = 0;
                 for (address[2] = 0; address[2] + K_SIZE - 1 <= length && found;){ // K-1 bases of the last node not added
                     //System.out.println((address[2] + K - 1)+" ? " + length);
                     found = false;
@@ -1251,12 +1250,12 @@ public class GenomeLayer {
                                 initial_coordinate[0] = address[2];
                                 r.setProperty(origin, initial_coordinate);
                             }
-                            if (count % anchors_distance == 0) {
+                            if (address[2] >= distance) {
                                 nds.append(neighbor.getId()).append(" ");
                                 sds.append(neighbor_side);
                                 pos.append(address[2]).append(" ");
+                                distance += ANCHORS_DISTANCE;
                             }
-                            count++;
                             address[2] = address[2] + neighbor_length - K_SIZE + 1;
                             node = neighbor;
                             node_side = neighbor_side;
