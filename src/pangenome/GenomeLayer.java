@@ -1132,30 +1132,32 @@ public class GenomeLayer {
                     sequence_node.setProperty("offset", genomeDb.sequence_offset[scanner.get_genome()][scanner.get_sequence()]);
                     genome_node.createRelationshipTo(sequence_node, RelTypes.has);
                     finish = false;
-                    System.out.println("sequence " + scanner.get_sequence() + "/" + genomeDb.num_sequences[scanner.get_genome()] + 
-                    " of genome " + scanner.get_genome() + "\tlength=" + genomeDb.sequence_length[scanner.get_genome()][scanner.get_sequence()]);
-                    curr_node = sequence_node;
-                    curr_side = 0;
-                    initialize(0);
-                    while (!finish) {
-                        scanner.set_curr_index(indexDb.find(scanner.get_curr_kmer()));
-                        indexDb.get_pointer(pointer, scanner.get_curr_index());
-                        if (pointer.node_id == -1L) // kmer is new
-                            create_extend();
-                        else if (scanner.get_curr_kmer().get_canonical() ^ pointer.canonical)// if sides don't agree
-                            follow_reverse(pointer);
-                        else 
-                            follow_forward(pointer);
-                        ++trsc;
-                        if (trsc >= MAX_TRANSACTION_SIZE){    
-                            tx.success();
-                            tx.close();
-                            tx = graphDb.beginTx();
-                            trsc = 0;
+                    if (genomeDb.sequence_length[scanner.get_genome()][scanner.get_sequence()] >= K_SIZE){
+                        System.out.println("sequence " + scanner.get_sequence() + "/" + genomeDb.num_sequences[scanner.get_genome()] + 
+                        " of genome " + scanner.get_genome() + "\tlength=" + genomeDb.sequence_length[scanner.get_genome()][scanner.get_sequence()]);
+                        curr_node = sequence_node;
+                        curr_side = 0;
+                        initialize(0);
+                        while (!finish) {
+                            scanner.set_curr_index(indexDb.find(scanner.get_curr_kmer()));
+                            indexDb.get_pointer(pointer, scanner.get_curr_index());
+                            if (pointer.node_id == -1L) // kmer is new
+                                create_extend();
+                            else if (scanner.get_curr_kmer().get_canonical() ^ pointer.canonical)// if sides don't agree
+                                follow_reverse(pointer);
+                            else 
+                                follow_forward(pointer);
+                            ++trsc;
+                            if (trsc >= MAX_TRANSACTION_SIZE){    
+                                tx.success();
+                                tx.close();
+                                tx = graphDb.beginTx();
+                                trsc = 0;
+                            }
                         }
+                        connect(curr_node, sequence_node, RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
+                        ++num_edges;
                     }
-                    connect(curr_node, sequence_node, RelTypes.values()[curr_side*2]);// to point to the last k-mer of the sequence located in the other strand
-                    ++num_edges;
                     scanner.next_sequence();
                 }//sequences
                 System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");
@@ -1210,86 +1212,88 @@ public class GenomeLayer {
                 address[1] = (int)sequence_node.getProperty("number");
                 System.out.println("\rLocalizing sequence "+address[1] + "/" + genomeDb.num_sequences[address[0]] + " of genome " + address[0] + "                        ");
                 length = genomeDb.sequence_length[address[0]][address[1]] - 1;
-                node = sequence_node;
-                node_side = 'F';
-                distance = 0;
-                for (address[2] = 0; address[2] + K_SIZE - 1 <= length && found;){ // K-1 bases of the last node not added
-                    //System.out.println((address[2] + K - 1)+" ? " + length);
-                    found = false;
-                    for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
-                        rel_name = r.getType().name();
-                        if (rel_name.charAt(0) != node_side)
-                            continue;
-                        neighbor = r.getEndNode();
-                        neighbor_side = rel_name.charAt(1);
-                        is_node = neighbor.hasLabel(nucleotide_label) && !neighbor.hasLabel(degenerate_label);
-                        is_degenerate = neighbor.hasLabel(degenerate_label);
-                        if (is_node || is_degenerate){
-                            addr = (int[]) neighbor.getProperty("address");
-                            neighbor_length = (int) neighbor.getProperty("length");
-                        }
-                        //System.out.println(node.getId()+" "+address[2]+" "+node_side);
-                        //System.out.println(neighbor.getId()+" "+addr[2]+" "+neighbor_side);
-                        if ((is_node && scanner.compare(address, addr, K_SIZE - 1,
-                                neighbor_side == 'F' ? K_SIZE - 1 : neighbor_length - K_SIZE, 1, neighbor_side == 'F'))
-                                || (is_degenerate && Arrays.equals(addr, address))) {
-                            //System.out.println("found "+address[2]+" "+neighbor.getId());
-                            found = true;
-                            positions = (int[]) r.getProperty(origin, null);
-                            if (positions != null) {
-                                len = positions.length;
-                                new_positions = new int[len + 1];
-                                for (i = 0; i < len; ++i) {
-                                    new_positions[i] = positions[i];
+                if (length >= K_SIZE){
+                    node = sequence_node;
+                    node_side = 'F';
+                    distance = 0;
+                    for (address[2] = 0; address[2] + K_SIZE - 1 <= length && found;){ // K-1 bases of the last node not added
+                        //System.out.println((address[2] + K - 1)+" ? " + length);
+                        found = false;
+                        for (Relationship r : node.getRelationships(Direction.OUTGOING)) {
+                            rel_name = r.getType().name();
+                            if (rel_name.charAt(0) != node_side)
+                                continue;
+                            neighbor = r.getEndNode();
+                            neighbor_side = rel_name.charAt(1);
+                            is_node = neighbor.hasLabel(nucleotide_label) && !neighbor.hasLabel(degenerate_label);
+                            is_degenerate = neighbor.hasLabel(degenerate_label);
+                            if (is_node || is_degenerate){
+                                addr = (int[]) neighbor.getProperty("address");
+                                neighbor_length = (int) neighbor.getProperty("length");
+                            }
+                            //System.out.println(node.getId()+" "+address[2]+" "+node_side);
+                            //System.out.println(neighbor.getId()+" "+addr[2]+" "+neighbor_side);
+                            if ((is_node && scanner.compare(address, addr, K_SIZE - 1,
+                                    neighbor_side == 'F' ? K_SIZE - 1 : neighbor_length - K_SIZE, 1, neighbor_side == 'F'))
+                                    || (is_degenerate && Arrays.equals(addr, address))) {
+                                //System.out.println("found "+address[2]+" "+neighbor.getId());
+                                found = true;
+                                positions = (int[]) r.getProperty(origin, null);
+                                if (positions != null) {
+                                    len = positions.length;
+                                    new_positions = new int[len + 1];
+                                    for (i = 0; i < len; ++i) {
+                                        new_positions[i] = positions[i];
+                                    }
+                                    new_positions[i] = address[2];
+                                    r.setProperty(origin, new_positions);
+                                    if (len > 1000)
+                                        neighbor.addLabel(low_complexity_label);
+                                } else {
+                                    initial_coordinate[0] = address[2];
+                                    r.setProperty(origin, initial_coordinate);
                                 }
-                                new_positions[i] = address[2];
-                                r.setProperty(origin, new_positions);
-                                if (len > 1000)
-                                    neighbor.addLabel(low_complexity_label);
-                            } else {
-                                initial_coordinate[0] = address[2];
-                                r.setProperty(origin, initial_coordinate);
+                                if (address[2] >= distance) {
+                                    nds.append(neighbor.getId()).append(" ");
+                                    sds.append(neighbor_side);
+                                    pos.append(address[2]).append(" ");
+                                    distance += ANCHORS_DISTANCE;
+                                }
+                                address[2] = address[2] + neighbor_length - K_SIZE + 1;
+                                node = neighbor;
+                                node_side = neighbor_side;
+                                break;
                             }
-                            if (address[2] >= distance) {
-                                nds.append(neighbor.getId()).append(" ");
-                                sds.append(neighbor_side);
-                                pos.append(address[2]).append(" ");
-                                distance += ANCHORS_DISTANCE;
-                            }
-                            address[2] = address[2] + neighbor_length - K_SIZE + 1;
-                            node = neighbor;
-                            node_side = neighbor_side;
-                            break;
                         }
+                        ++trsc;
+                        if (trsc >= 1000 * MAX_TRANSACTION_SIZE){
+                            tx.success();
+                            tx.close();
+                            tx = graphDb.beginTx();
+                            trsc = 0;
+                        }
+                        //System.out.print("%" + address[2] * 100 / length + "\t\r");
                     }
-                    ++trsc;
-                    if (trsc >= 1000 * MAX_TRANSACTION_SIZE){
-                        tx.success();
-                        tx.close();
-                        tx = graphDb.beginTx();
-                        trsc = 0;
+                    if (!found) {
+                        System.out.println("Could not locate position " + address[2] + " from node ID=" + node.getId());
+                        System.exit(1);
                     }
-                    //System.out.print("%" + address[2] * 100 / length + "\t\r");
+                    m = sds.length();
+                    ids_list = nds.toString().split("\\s");
+                    posis_list = pos.toString().split("\\s");
+                    anchor_nodes = new long[m];
+                    anchor_positions = new int[m];
+                    for (i = 0; i < m; ++i) {
+                        anchor_nodes[i] = Long.valueOf(ids_list[i]);
+                        anchor_positions[i] = Integer.valueOf(posis_list[i]);
+                    }
+                    sequence_node.setProperty("anchor_nodes", anchor_nodes);
+                    sequence_node.setProperty("anchor_positions", anchor_positions);
+                    sequence_node.setProperty("anchor_sides", sds.toString());
+                    nds.setLength(0);
+                    pos.setLength(0);
+                    sds.setLength(0);
                 }
-                if (!found) {
-                    System.out.println("Could not locate position " + address[2] + " from node ID=" + node.getId());
-                    System.exit(1);
-                }
-                m = sds.length();
-                ids_list = nds.toString().split("\\s");
-                posis_list = pos.toString().split("\\s");
-                anchor_nodes = new long[m];
-                anchor_positions = new int[m];
-                for (i = 0; i < m; ++i) {
-                    anchor_nodes[i] = Long.valueOf(ids_list[i]);
-                    anchor_positions[i] = Integer.valueOf(posis_list[i]);
-                }
-                sequence_node.setProperty("anchor_nodes", anchor_nodes);
-                sequence_node.setProperty("anchor_positions", anchor_positions);
-                sequence_node.setProperty("anchor_sides", sds.toString());
-                nds.setLength(0);
-                pos.setLength(0);
-                sds.setLength(0);
             }//while
             System.out.println((System.currentTimeMillis() - phaseTime) / 1000 + " seconds elapsed.");
             tx.success();
