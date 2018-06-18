@@ -157,6 +157,8 @@ public class ProteomeLayer {
             for (i = 0; i < 21; ++i)
                 code[aminoacids[i]] = i;
             kmer_frequencies = new int[MAX_KMERS_NUM];
+            for (i = 0; i < MAX_KMERS_NUM; ++i)
+                kmer_frequencies[i] = 0;
             try{
                 try (Transaction tx = graphDb.beginTx()) {
                     for (c = 0; c < num_proteins; ++c){
