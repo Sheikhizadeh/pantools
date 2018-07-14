@@ -86,6 +86,7 @@ public class ProteomeLayer {
     private BlockingQueue<LinkedList> components; 
     private BlockingQueue<LinkedList> homology_groups_list; 
     private Node pangenome_node;
+    private boolean all_intersections_found;
     
     public ProteomeLayer(){
         MAX_INTERSECTIONS  = 10000000;
@@ -282,7 +283,6 @@ public class ProteomeLayer {
             int protein_length, shorter_len;
             String protein, crossing_protein;
             long crossing_protein_id, p_id;
-            
             try (Transaction tx = graphDb.beginTx()) {
                 try{
                     for (p = 0; p < num_proteins; ++p) {
@@ -350,6 +350,7 @@ public class ProteomeLayer {
                 // Signify the end of intersections queue.    
                     for (i = 0; i < THREADS; ++i)
                         intersections.offer(new intersection(null, null,-1));// end of queue
+                    all_intersections_found = true;
                 } catch(InterruptedException e){
                     System.err.println(e.getMessage());
                 }
@@ -367,7 +368,6 @@ public class ProteomeLayer {
      */
     public class Find_similarities implements Runnable {
         int m, n, threshold = THRESHOLD;
-        int processed = 0;
         StringBuilder query;
         StringBuilder subject;
         ProteinAlignment aligner;
@@ -382,8 +382,7 @@ public class ProteomeLayer {
             Node protein_node1, protein_node2;
             String protein1, protein2;
             intersection ints;
-            int num_ints = 0, chunk = num_proteins > 40 ? num_proteins / 40 : 1;
-            boolean all_intersections_found = false;
+            int chunk = 0, processed = 0;
             try{
                 try(Transaction tx = graphDb.beginTx()){
                     ints = intersections.take();
@@ -407,16 +406,13 @@ public class ProteomeLayer {
                             num_similarities.getAndIncrement();
                         }
                         ints = intersections.take();
-                        if (!all_intersections_found){
-                            num_ints = num_intersections.intValue();
-                            if (num_ints > 0){
-                                all_intersections_found = true;
-                                num_ints -= THREADS * processed;
+                        if (all_intersections_found){ 
+                            if (chunk == 0)
+                                chunk = num_intersections.get() / 40 + 1;
+                            if(processed % chunk == 0){
+                                System.out.print("|");
+                                similarity_bars.getAndIncrement();
                             }
-                        }
-                        if (all_intersections_found && processed % chunk == 0){
-                            System.out.print("|");
-                            similarity_bars.getAndIncrement();
                         }
                     }
                 // Signify the end of the similarities queue.   
@@ -848,7 +844,7 @@ public class ProteomeLayer {
                     continue;
                 fields = file_path.split("\\.");
                 file_type = fields[fields.length - 1].toLowerCase();
-                if (file_type.equals("fasta") || file_type.equals("faa")){
+                if (file_type.equals("fasta") || file_type.equals("faa") || file_type.equals("fa")){
                     BufferedReader in = new BufferedReader(new FileReader(file_path));
                 // skip lines till get to the first id line   
                     do{
@@ -874,13 +870,12 @@ public class ProteomeLayer {
                                 }
                                 else
                                     protein.append(line);
-                                if (num_proteins % 11 == 1)
-                                    System.out.print("\r" + num_proteins + " proteins ");
                             }
                             tx.success();
                         }
                     }
                     in.close();
+                    System.out.println(num_proteins + " proteins ");
                 // For the last protein    
                     try (Transaction tx = graphDb.beginTx()) {
                         protein_node = graphDb.createNode(mRNA_label);
@@ -892,11 +887,10 @@ public class ProteomeLayer {
                         tx.success();
                     }
                 } else {
-                    System.out.println(file_path + " does not have a valid extention (fasta, faa)");
+                    System.out.println(file_path + " does not have a valid extention (fasta, faa, fa)");
                     System.exit(1);
                 }
             }
-            System.out.println("\r" + num_proteins + " proteins ");
             try (Transaction tx1 = graphDb.beginTx()) {
                 panproteome = graphDb.createNode(pangenome_label);
                 panproteome.setProperty("date", new SimpleDateFormat("yyyy/MM/dd HH:mm:ss").format(new Date()));
@@ -930,6 +924,7 @@ public class ProteomeLayer {
         num_similarities = new AtomicInteger(0);
         num_components = new AtomicInteger(0);
         similarity_bars = new AtomicInteger(0);
+        all_intersections_found = false;
         try(Transaction tx = graphDb.beginTx()){
             pangenome_node = graphDb.findNodes(pangenome_label).next();
             num_genomes = (int)pangenome_node.getProperty("num_genomes");
