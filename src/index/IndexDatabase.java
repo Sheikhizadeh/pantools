@@ -154,9 +154,9 @@ public final class IndexDatabase {
                 K += 1;
             Runtime.getRuntime().exec("kmc"); // to check if kmc is reachable
             System.out.println("Running KMC with K = " + K + " ...                      ");
-            //executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
-              //      (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
-                //    (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);            
+            executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
+                    (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
+                    (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);            
             if (new File(index_path + "/kmers.kmc_pre").exists() && new File(index_path + "/kmers.kmc_suf").exists()) {
                 System.out.println("Sorting Kmers...                      ");
                 output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
