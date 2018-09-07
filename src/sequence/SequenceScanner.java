@@ -134,7 +134,8 @@ public class SequenceScanner {
             next_position();
             curr_kmer.next_kmer(get_code(0));
         }
-        if (DEBUG) System.out.println(curr_kmer.toString());
+        if (DEBUG) 
+            System.out.println(curr_kmer.toString());
         return true;
     }
 

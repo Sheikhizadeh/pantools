@@ -152,19 +152,25 @@ public final class IndexDatabase {
                 K = k;
             if (K % 2 == 0) // Even values make localization process problamatic
                 K += 1;
+            Runtime.getRuntime().exec("kmc"); // to check if kmc is reachable
             System.out.println("Running KMC with K = " + K + " ...                      ");
-            executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
-                    (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
-                    (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);            
-            System.out.println("Sorting Kmers...                      ");
-            output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
-        // Small databases are usually sorted already    
-            if (output.startsWith("This database contains sorted k-mers already!")) {
-                new File(index_path + "/kmers.kmc_pre").renameTo(new File(index_path + "/sorted.kmc_pre"));
-                new File(index_path + "/kmers.kmc_suf").renameTo(new File(index_path + "/sorted.kmc_suf"));
+            //executeCommand("kmc -r -k" + K + " -t" + cores + " -m" + 
+              //      (Runtime.getRuntime().maxMemory() / 1073741824L) + " -ci1 -fm " + 
+                //    (genomeDb.num_genomes > 1 ? "@" + genomes_path_file.trim() : genomeDb.genome_names[1]) + " " + index_path + "/kmers " + index_path);            
+            if (new File(index_path + "/kmers.kmc_pre").exists() && new File(index_path + "/kmers.kmc_suf").exists()) {
+                System.out.println("Sorting Kmers...                      ");
+                output = executeCommand("kmc_tools sort " + index_path + "/kmers " + index_path + "/sorted");
+            // Small databases are usually sorted already    
+                if (output.startsWith("This database contains sorted k-mers already!")) {
+                    new File(index_path + "/kmers.kmc_pre").renameTo(new File(index_path + "/sorted.kmc_pre"));
+                    new File(index_path + "/kmers.kmc_suf").renameTo(new File(index_path + "/sorted.kmc_suf"));
+                } else {
+                    new File(index_path + "/kmers.kmc_pre").delete();
+                    new File(index_path + "/kmers.kmc_suf").delete();
+                }            
             } else {
-                new File(index_path + "/kmers.kmc_pre").delete();
-                new File(index_path + "/kmers.kmc_suf").delete();
+                System.out.println("No kmc index found in " + index_path);
+                System.exit(1);
             }
         /*
         All integers in the KMC output files are stored in LSB (least significant byte first) format.
@@ -322,8 +328,9 @@ public final class IndexDatabase {
             min_count = read_int(pre_file);
             max_count = read_int(pre_file);
             kmers_num = read_long(pre_file);
-            System.out.println((kmers_num - old_index.kmers_num) + " new kmers generated.                    ");
-        // load the prefix file into the memory    
+            System.out.println("number of available kmers:\t" + old_index.kmers_num);
+            System.out.println("number of new kmers:\t" + (kmers_num - old_index.kmers_num));
+            System.out.println("Total number of kmers:\t" + kmers_num);        // load the prefix file into the memory    
             pre_file.seek(4);
             int q, len = 1 << (2 * pre_len);
             prefix_ptr = new long[len];

@@ -86,6 +86,14 @@ public class kmer {
     public boolean get_canonical(){
         return canonical;
     }
+    
+    public int get_suffix_len(){
+        return suffix_length;
+    }
+
+    public int get_prefix_len(){
+        return prefix_length;
+    }
 
     /**
      * Sets the prefix to a new value
@@ -155,10 +163,10 @@ public class kmer {
                     kmer2.fwd_prefix = kmer2.fwd_prefix >> 8;
                 }
             }
-        } else{
-            //kmer2.set_fwd_suffix(Arrays.clone(kmer1.get_fwd_suffix()));
-            //kmer2.set_fwd_prefix(kmer1.get_fwd_prefix());
-            kmer2 = kmer1;
+        } else {
+            kmer2.set_fwd_suffix(Arrays.clone(kmer1.get_fwd_suffix()));
+            kmer2.set_fwd_prefix(kmer1.get_fwd_prefix());
+            //kmer2 = kmer1;
         }
         kmer2.canonical = true; // to be found by find()
     }

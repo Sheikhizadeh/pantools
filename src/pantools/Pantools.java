@@ -320,6 +320,9 @@ public class Pantools {
                         }
                         System.out.println("FEATURE = " + FEATURE);
                         break;
+                    case "--debug": case "-dbg":
+                        DEBUG = true;
+                        break;
                     case "--help": case "-h":
                         print_help_message();
                         System.exit(1);
