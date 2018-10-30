@@ -1,141 +1,238 @@
-************************************************************************
-PanTools is a disk-based java application for computational pan-genomics
-developed by Siavash Sheikhizadeh et. al in Bioinformatics group of 
-Wageningen university and research center, the Netherlands.  
-************************************************************************
+****************************************************************
+PanTools version 1.1,
+
+is a java application based on Neo4j graph database community 
+edition 3.3.1 for computational pan-genomics, developed by 
+Siavash Sheikhizadeh in Wageningen university, the Netherlands.
+If you use PanTools please do not forget to cite it :
+
+doi: 10.1093/bioinformatics/btw455
+
+https://github.com/Sheikhizadeh/pantools  
+
+****************************************************************
 
 Requirements
 ------------
-- KMC2: is a disk-based programm for counting k-mers from (possibly gzipped) FASTQ/FASTA files( http://sun.aei.polsl.pl/kmc ).
-        You need to unzipd kmc.zip file provided in this release of PanTools and add the path of the corresponding version (linux, macos or windows) of kmc and kmc_tools executables to your OS path environment variable.
+- KMC: is a disk-based programm for counting k-mers from 
+       (possibly gzipped) FASTQ/FASTA files
+       (http://sun.aei.polsl.pl/kmc).
+        You need to download it and add the path to the 
+        appropriate version (linux, macos or windows) of kmc 
+        and kmc_tools executables to your OS path environment 
+        variable.
 
-- Java Virtual Machine version 1.7 or higher: Add the path to the java executable to your OS path environment variable.
+- Java Virtual Machine version 1.8 or higher: Add the path to 
+       the java executable to your OS path environment variable.
 
+- MCL: The Markov Cluster Algorithm, is a fast and scalable 
+       unsupervised cluster algorithm for graphs 
+       (http://micans.org/mcl ) which is needed for group 
+       functionality of PanTools.
+       You need to download, unzip and compile it (see README), 
+       and add the path to the mcl executable to your path
+       environment variable.
 
-How to run the program 
-----------------------
-java  [-server] [-XX:+UseConcMarkSweepGC]  [-Xmx(a number followed by g or m)] -jar ./pantools/dist/pantools.jar command arguments
+Running the program 
+-------------------
+java <JVM options> -jar pantools.jar <command> <arguments>
 
+pantools.jar is available in folder pantools/dist/ 
+arguments is a list of key value pairs separated by whitespace.
 
-List of commands and examples for the provided sample data :
+JVM options
+-----------
+[-server] 
+[-XX:+UseConcMarkSweepGC]  
+[-Xmx(a number followed by g or m)]
 
-1. build:
+PanTools commands
+-----------------
+
+<build_pangenome or bg> 
    To build a pan-genome out of a set of genomes.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  build  K_VALUE  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMES_PATH_FILE
+   <argument keys>
+   --database_path or -dp
+      path to the pangenome database. 
+   --genomes-file or -gf 
+      a text file containing paths to FASTA files of genomes;
+      each in a seperated line.
+   --kmer-size or -ks
+      the size of k-mers, if not given or is out of range 
+      (6 <= K_SIZE <= 255),an optimal value would be calculated automatically.    
 
-   K_VALUE :   size of K for construction of the de Bruijn graph.
-   PATH_TO_THE_GENOMES_PATH_FILE : a text file containing paths to FASTA files (genomes); each in a seperated line.
-   PATH_TO_THE_PANGENOME_DATABASE : path where the resulting pangenome is stored.  
+<build_panproteome or bp>
+   To build a pan-proteome out of a set of proteins.
 
-   Example: 
-   
-   java  -Xmx4g  -jar  /home/sheik005/pantools/dist/pantools.jar build  31  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomes_path.txt
+   <argument keys>
+   --database_path or -dp
+      path to the pangenome database. 
+   --proteomes_file or -pf
+      a text file containing paths to FASTA files of proteomes; 
+      each in a seperated line.
              
-2. annotate:
-   To add annotations to a pan-genome. This function also produce a FASTA file containing all the protein sequences in the same order as they have been annotated in the GFF file.
+<add_genomes or ag>
+   To add new genomes to an available pan-genome.  
+  
+   <argument keys>
+   --database_path or -dp
+      path to the pangenome database. 
+   --genomes-file or -gf
+      a text file containing paths to FASTA files of the new 
+      genomes to be added to the pangeome; 
+      each in a seperated line.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  annotate  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_PATH_FILE
+<add_annotations or aa>
+   To add new annotations to an available pan-genome. 
 
-   PATH_TO_THE_ANNOTATION_PATH_FILE : a text file containing paths to the GFF files corresponding to the genomes in the same order as they apear in PATH_TO_THE_GENOMES_PATH_FILE.
-                                      Missing annotations are indicated by an empty line.
+   <argument keys>
+   --database_path or -dp 
+      path to the pangenome database. 
+   --annotations-file or -af
+      a text file each line of which contains genome number and 
+      path to the corresponding GFF file seperated by one space.
+      Genomes are numbered in the same order they have been added
+      to the pangenome. The protein sequence of the annotated genes 
+      will be also stored in the folder "proteins" in the same path 
+      as the pangenome. 
+   --connect_annotations or -ca
+      connect the annotated genomic features to the nodes of gDBG.
 
-   Example: 
+<retrieve_features of rf>
+   To retrieve the sequence of annotated features from the pangenome. 
+   For each genome the resulting FASTA file will be stored in the current 
+   directory.
 
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  annotate  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotations_path.txt
+   <argument keys>
+   --database_path or -dp
+      path to the pangenome database. 
+   --genome-numbers or -gn
+      a text file containing genome_numbers for which the features will 
+      be retrieved. The resulting FASTA files have two parts separated by a dot. 
+      The first part determines the feature and the second determines the 
+      genome number; for example, genes.1.fasta.
+   --feature-type or -ft (default = gene)
+      the feature name; for example gene, mRNA, exon, tRNA, ... 
 
-3. add:
-   To add new genomes to an available pan-genome.
+<retrieve_regions or rr> 
+   To retrieve the sequence of some genomic regios from the pangenome. 
+   The results will be stored in the same folder as the pangenome.
 
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  add  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_NEW_GENOMES_PATH_FILE
+   <argument keys>
+   --database_path or -dp 
+      path to the pangenome database. 
+   --regions-file or -rf
+      a text file containing records with genome_number, 
+      sequence_number, begin and end positions seperated by one 
+      space for each region. The resulting FASTA file would have 
+      the same name with an additional .fasta extention.
+
+<retrieve_genomes or rg>
+   To retrieve the full sequence of some genomes. The results will be 
+   stored in the same folder as the pangenome itself.
+
+   <argument keys>
+   --database_path or -dp
+      path to the pangenome database. 
+   --genome-numbers or -gn
+      a text file containing genome_numbers to be retrieved in each line. 
+      The resulting FASTA files are named like Genome_x.fasta.
+
+<group or g>
+   To add homology nodes which point to a groups of homologous proteins.
+
+   <argument keys>
+   --database_path or -dp
+      path to the pangenome database. 
+   --intersection-rate or -ir (default = 0.09)
+      the fraction of kmers needs to be shared by two 
+      intersecting proteins. Should be in range [0.001, 0.1].
+   --min-protein-identity or -mpi (default = 95) 
+      the minimum similarity score. Should be in range [1-99]. 
+   --mcl-inflation or -mi (default = 9.6) 
+      the MCL inflation. Should be in range ]1-19[.
+   --contrast or -ct (default = 8)
+      the contrast factor. Should be in range ]0-10[.
+   --relaxation or rn (default 1)
+      the relaxation in homology calls. Should be in range [1, 8], 
+      from strict to relaxed.
+   --threads-number or -tn (default = 1) 
+      the number of parallel working threads
+
+<map or m>
+   To map single or paired-end reads to all or a sebset of constituent genomes.
+
+   <argument keys>
+   --database_path or -dp
+      path to the pangenome database. 
+   -1 
+      a text file containing path to the first short-read archive in FASTQ
+      or FASTA format. 
+   -2 
+      optionally, a text file containing path to the second short-read 
+      archive in FASTQ or FASTA format. 
+   --genome-numbers or -gn
+      a text file containing genome_numbers to map reads against in 
+      each line. 
+   --output-path or -op (default: database path determined by -dp)
+      path to the output files.
+   --threads-number or -tn (default = 1) 
+      the number of parallel working threads
+   --min-mapping-score or -mms (default = 20)
+      the minimum of read mapping score
+   --num-kmer-samples or -nks (default = 20)
+      the number of kmers sampled from read
+   --min-hit-length or -mhl (default = 17)
+      the minimum acceptable length of alignment after soft-clipping
+   --max-alignment-length or -mal (default = 1000)
+      the maximum acceptable length of alignment
+   --max-fragment-length or -mfl (default = 2000)
+      the maximum acceptable length of fragment
+   --max-num-locations or -mnl (default = 20)
+      the maximum number of location of candidate hits to examine
+   --alignment-bound or -ab (default = 7)
+      the length of bound of banded alignment
+   --clipping-stringency or -ci (default = 2)
+      the stringency of soft-clipping  
+      0 : no soft clipping
+      1 : low
+      2 : medium
+      3 : high
+   --bam-format or -bf (default = FALSE)
+      the alignment format (.sam or .bam)
+   --alignment-mode or -am (default = 0)
+      the alignment mode
+      0 : Competitive, only-best
+      1 : Competitive, all-bests
+      2 : Normal, only-best
+      3 : Normal, all-bests
+<version or v>
+   To show the versions of PanTools and Neo4j.
    
-   PATH_TO_THE_NEW_GENOMES_PATH_FILE : a text file containing paths to FASTA files of the new genomes to be added to the pangeome; each in a seperated line.
-                                       New genomes could also be annotated later in the same way; however, there should be an empty lines in the annotations path file for existing genomes.
-
-4. retrieve genes:
-   To extract sequence of some annotated genes. 
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  genes  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_ANNOTATION_RECORDS_FILE
-
-   PATH_TO_THE_ANNOTATION_RECORDS_FILE : a text file containing records of annotated genes, as they appear in GFF file, to be retrieved.
-                                         The resulting FASTA file would have the same name as the PATH_TO_THE_ANNOTATION_RECORDS_FILE with an additional .fasta extention.
-
-   Example: 
-
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  genes  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_annotaion_records.txt
-
-5. retrieve regions:
-   To extract sequence of some genomic regios.
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  retrieve  regions  PATH_TO_THE_PANGENOME_DATABASE  PATH_TO_THE_GENOMIC_REGIONS_FILE
-
-   PATH_TO_THE_GENOMIC_REGIONS_FILE : a text file containing records with genome_number, sequence_number, begin and end positions seperated by one space for each region.
-                                      The resulting FASTA file would have the same name as the PATH_TO_THE_GENOMIC_REGIONS_FILE with an additional .fasta extention.
-
-   Example: 
-
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  retrieve  regions  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_genomic_regions.txt
-
-6. reconstruct:
-   To reconstruct all or a set of genomes out of the pan-genome.
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  reconstruct all [or PATH_TO_THE_GENOME_NAMES_FILE]  PATH_TO_THE_PANGENOME_DATABASE
-
-   PATH_TO_THE_GENOME_NAMES_FILE : a text file containing genome_number and a given name for that genome seperated by a single space in each line. 
-                                   The resulting FASTA files are named as genome_X.fasta where X determines the number of the genome in the pangenome.
-
-   Example: 
-
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  reconstruct  all  /home/sheik005/two_hiv_pangenome_database
-
-7. group:
-   To group genes by adding group nodes pointing to them, either de novo (based on thier similarity) or using a group file.
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  group  denovo [or PATH_TO_THE_GROUP_FILE] PATH_TO_THE_PANGENOME_DATABASE 
-
-   PATH_TO_THE_GROUP_FILE : a text file each line stars with name of the group follewed by space-seperated name of the group members (proteins) in each line.
-
-   Example: 
-
-   java  -jar  /home/sheik005/pantools/dist/pantools.jar  group  /home/sheik005/two_hiv_pangenome_database  /home/sheik005/pantools/example/sample_orthologous_groups.txt
-
-
-8. compare:
-   To compare topology of two pan-genomes.
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  compare  PATH_TO_THE_PANGENOME_DATABASE_1  PATH_TO_THE_PANGENOME_DATABASE_2
-
-9. query
-   To run Cypher queries.
-
-   java  -jar  PATH_TO_THE_JAR_FILE/pantools.jar  query  PATH_TO_THE_PANGENOME_DATABASE
-   
+<help or h>
+   To see this document.
 
 Visualization in the Neo4j browser
 ----------------------------------
-Neo4j browser allows you to run Cypher queries and receive the results in a Tabular or a graph-representation mode. To do that, you need to download the appropriate version of Neo4j from their website. 
-There you will find an article demonstrating how to use the Neo4j browser for querying, visualization and data interaction. It is quite simple. 
-For example, to visualize the pangenome of two HIV strains provided as a sample data, after download I needed to take this actions, on my linux machine :
-
-1. Add the path to the Neo4j /bin directory to the path environment variable.
-
-2. Hard-code the path to your pangenome in the configuration file ( NEO4J-DIRECTORY/conf/neo4j.conf ) by : 
+   Neo4j browser allows you to run Cypher queries and receive 
+   the results in a tabular or a graph representation mode. 
+   You need to download the appropriate version of Neo4j. 
+   To visualize the pangenome of two HIV strains provided 
+   as a sample data in pantools repositiory, take these actions 
+   on a linux machine. Windows users could also download the
+   Neo4j desktop application for starting and stopping a server 
+   instead of usingn commandline.
+1. Add the path to the Neo4j /bin directory to the path 
+   environment variable.
+2. Hard-code the path to your pangenome in the configuration file 
+   ,NEO4J-DIRECTORY/conf/neo4j.conf, by: 
    dbms.directories.data = PATH_TO_THE_PANGENOME_DATABASE
-
-3. Start the Neo4j database server by : 
+3. Start the Neo4j database server by: 
    neo4j start
-
 4. open an internet browser and Open the URL http://localhost:7474
-
-5. To visualize the whole pangenome of two HIV strains type this simple Cypher command:
+5. To visualize the whole pangenome of two HIV strains, 
+   type this simple Cypher command:
    MATCH (n) RETURN n
-
-6. To stop the Neo4j server type :
+6. To stop the Neo4j server type:
    neo4j stop
-
-- Windows users could also download a Neo4j desktop application for starting and stopping a server instead of doing it on the commandline.
-   
-   
-
- 
-

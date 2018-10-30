@@ -1,0 +1,32 @@
+##sequence-region NC_001722.1 1 10359
+##species https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=11709
+NC_001722.1	RefSeq	region	1	10359	.	+	.	ID=id0;Dbxref=taxon:11709;clone=MK[2%2C6].;gb-acronym=HIV-2;gbkey=Src;genome=proviral;isolate=BEN;mol_type=genomic RNA
+NC_001722.1	RefSeq	long_terminal_repeat	1	855	.	+	.	ID=id1;Note=5' LTR;gbkey=LTR
+NC_001722.1	RefSeq	primer_binding_site	859	875	.	+	.	ID=id2;Note=primer (Lys-tRNA) binding site;gbkey=primer_bind
+NC_001722.1	RefSeq	gene	1103	5754	.	+	.	ID=gene0;Dbxref=GeneID:1490001;Name=gag-pol;gbkey=Gene;gene=gag-pol;gene_biotype=protein_coding;locus_tag=HIV2gp1
+NC_001722.1	RefSeq	CDS	1103	2398	.	+	0	ID=cds0;Parent=gene0;Dbxref=Genbank:NP_663784.1,GeneID:1490001;Name=NP_663784.1;Note=translated by ribosomal slip at 'TTTTTTA';exception=ribosomal slippage;gbkey=CDS;gene=gag-pol;product=gag-pol fusion polyprotein;protein_id=NP_663784.1
+NC_001722.1	RefSeq	CDS	2398	5754	.	+	0	ID=cds0;Parent=gene0;Dbxref=Genbank:NP_663784.1,GeneID:1490001;Name=NP_663784.1;Note=translated by ribosomal slip at 'TTTTTTA';exception=ribosomal slippage;gbkey=CDS;gene=gag-pol;product=gag-pol fusion polyprotein;protein_id=NP_663784.1
+NC_001722.1	RefSeq	CDS	1103	2668	.	+	0	ID=cds1;Parent=gene0;Dbxref=Genbank:NP_056837.1,GeneID:1490001;Name=NP_056837.1;gbkey=CDS;gene=gag-pol;product=gag polyprotein;protein_id=NP_056837.1
+NC_001722.1	RefSeq	gene	5423	6070	.	+	.	ID=gene1;Dbxref=GeneID:1724712;Name=HIV2gp2;gbkey=Gene;gene_biotype=protein_coding;locus_tag=HIV2gp2
+NC_001722.1	RefSeq	CDS	5423	6070	.	+	0	ID=cds2;Parent=gene1;Dbxref=Genbank:NP_056839.1,GeneID:1724712;Name=NP_056839.1;gbkey=CDS;product=vif protein;protein_id=NP_056839.1
+NC_001722.1	RefSeq	gene	5898	6239	.	+	.	ID=gene2;Dbxref=GeneID:1724714;Name=HIV2gp3;gbkey=Gene;gene_biotype=protein_coding;locus_tag=HIV2gp3
+NC_001722.1	RefSeq	CDS	5898	6239	.	+	0	ID=cds3;Parent=gene2;Dbxref=Genbank:NP_056840.1,GeneID:1724714;Name=NP_056840.1;gbkey=CDS;product=vpx protein;protein_id=NP_056840.1
+NC_001722.1	RefSeq	gene	6239	6502	.	+	.	ID=gene3;Dbxref=GeneID:1724718;Name=HIV2gp4;gbkey=Gene;gene_biotype=protein_coding;locus_tag=HIV2gp4
+NC_001722.1	RefSeq	CDS	6239	6502	.	+	0	ID=cds4;Parent=gene3;Dbxref=Genbank:NP_056841.1,GeneID:1724718;Name=NP_056841.1;gbkey=CDS;product=vpr protein;protein_id=NP_056841.1
+NC_001722.1	RefSeq	gene	6402	8957	.	+	.	ID=gene4;Dbxref=GeneID:1724713;Name=HIV2gp5;gbkey=Gene;gene_biotype=protein_coding;locus_tag=HIV2gp5
+NC_001722.1	RefSeq	CDS	6402	6697	.	+	0	ID=cds5;Parent=gene4;Dbxref=Genbank:NP_056842.1,GeneID:1724713;Name=NP_056842.1;gbkey=CDS;product=tat protein;protein_id=NP_056842.1
+NC_001722.1	RefSeq	CDS	8861	8957	.	+	1	ID=cds5;Parent=gene4;Dbxref=Genbank:NP_056842.1,GeneID:1724713;Name=NP_056842.1;gbkey=CDS;product=tat protein;protein_id=NP_056842.1
+NC_001722.1	RefSeq	exon	6402	6697	.	+	.	ID=id3;Parent=gene4;Dbxref=GeneID:1724713;Note=tat protein%2C  (first expressed exon);exon_number=2;gbkey=exon;partial=true;start_range=.,6402
+NC_001722.1	RefSeq	gene	6628	9102	.	+	.	ID=gene5;Dbxref=GeneID:1724716;Name=HIV2gp6;gbkey=Gene;gene_biotype=protein_coding;locus_tag=HIV2gp6
+NC_001722.1	RefSeq	CDS	6628	6697	.	+	0	ID=cds6;Parent=gene5;Dbxref=Genbank:NP_056843.1,GeneID:1724716;Name=NP_056843.1;gbkey=CDS;product=rev protein;protein_id=NP_056843.1
+NC_001722.1	RefSeq	CDS	8861	9102	.	+	2	ID=cds6;Parent=gene5;Dbxref=Genbank:NP_056843.1,GeneID:1724716;Name=NP_056843.1;gbkey=CDS;product=rev protein;protein_id=NP_056843.1
+NC_001722.1	RefSeq	exon	6628	6697	.	+	.	ID=id4;Parent=gene5;Dbxref=GeneID:1724716;Note=rev protein%2C  (first expressed exon);exon_number=2;gbkey=exon;partial=true;start_range=.,6628
+NC_001722.1	RefSeq	exon	8861	9102	.	+	.	ID=id5;Parent=gene5;Dbxref=GeneID:1724716;Note=rev protein;end_range=9102,.;exon_number=3;gbkey=exon;partial=true
+NC_001722.1	RefSeq	exon	8861	8957	.	+	.	ID=id6;Parent=gene5;Dbxref=GeneID:1724716;Note=tat protein%2C  (AA at 8862);end_range=8957,.;exon_number=3;gbkey=exon;partial=true
+NC_001722.1	RefSeq	gene	6704	9286	.	+	.	ID=gene6;Dbxref=GeneID:1724717;Name=HIV2gp7;gbkey=Gene;gene_biotype=protein_coding;locus_tag=HIV2gp7
+NC_001722.1	RefSeq	CDS	6704	9286	.	+	0	ID=cds7;Parent=gene6;Dbxref=Genbank:NP_056844.1,GeneID:1724717;Name=NP_056844.1;gbkey=CDS;product=env polyprotein;protein_id=NP_056844.1
+NC_001722.1	RefSeq	gene	9120	9893	.	+	.	ID=gene7;Dbxref=GeneID:1724715;Name=HIV2gp8;gbkey=Gene;gene_biotype=protein_coding;locus_tag=HIV2gp8
+NC_001722.1	RefSeq	CDS	9120	9893	.	+	0	ID=cds8;Parent=gene7;Dbxref=Genbank:NP_056845.1,GeneID:1724715;Name=NP_056845.1;gbkey=CDS;product=nef protein;protein_id=NP_056845.1
+NC_001722.1	RefSeq	long_terminal_repeat	9505	10359	.	+	.	ID=id7;Note=3' LTR;gbkey=LTR
+NC_001722.1	RefSeq	polyA_signal_sequence	10211	10216	.	+	.	ID=id8;gbkey=polyA_signal
+

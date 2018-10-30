@@ -1,3 +1,3 @@
-/Users/siavash/pantools/example/data/1/genome.fasta
-/Users/siavash/pantools/example/data/2/genome.fasta
+/home/sheik005/pantools/example/data/hiv1.fna
+/home/sheik005/pantools/example/data/hiv2.fna
 
