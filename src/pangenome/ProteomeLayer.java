@@ -416,7 +416,7 @@ public class ProteomeLayer {
                             num_ints = num_intersections.intValue();
                             if (num_ints > 0){
                                 all_intersections_found = true;
-                                num_ints -= THREADS * processed;
+                                num_ints -= processed;
                             }
                             if (num_ints < 40)
                                 num_ints = 40;
@@ -457,7 +457,7 @@ public class ProteomeLayer {
                     subject.append(p2.substring(i * part_len2, Math.min(n, (i + 1) * part_len2)));
                     aligner.align(query, subject);
                     score += aligner.get_similarity_score();
-                    p_score += 5 * query.length();//aligner.perfect_score();
+                    p_score += aligner.get_match_score(query, query);// 5 * query.length();
                 }
             } else {
                 query.setLength(0);
@@ -466,7 +466,7 @@ public class ProteomeLayer {
                 subject.append(p2);
                 aligner.align(query, subject);
                 score = aligner.get_similarity_score();
-                p_score = 5 * query.length();//aligner.perfect_score();
+                p_score = aligner.get_match_score(query, query);//5 * query.length();
             }
             return score * 100.0 / p_score;
         }
