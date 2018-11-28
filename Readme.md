@@ -1,12 +1,12 @@
 ****************************************************************
-PanTools version 1.1,
+PanTools version 1.3-alpha,
 
 is a java application based on Neo4j graph database community 
 edition 3.3.1 for computational pan-genomics, developed by 
 Siavash Sheikhizadeh in Wageningen university, the Netherlands.
 If you use PanTools please do not forget to cite it :
 
-doi: 10.1093/bioinformatics/btw455
+https://doi.org/10.1186/s12859-018-2362-4
 
 https://github.com/Sheikhizadeh/pantools  
 
