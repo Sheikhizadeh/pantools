@@ -1095,6 +1095,16 @@ public class LocalSequenceAlignment {
             return score;
         }   
 
+    public double get_match_percentage(String s1, String s2) {
+            int i;
+            long score = 0, p_score = 0;
+            for (i = 0; i < s1.length(); ++i) {
+                score += match[s1.charAt(i)][s2.charAt(i)];
+                p_score += match[s1.charAt(i)][s1.charAt(i)];
+            }
+            return score * 100.0 / p_score;
+        }   
+
     public long get_similarity_score(){
         return similarity_score;
     }

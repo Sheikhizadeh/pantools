@@ -3,11 +3,8 @@
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
-            <file>file:/home/sheik005/pantools/src/index/IndexPointer.java</file>
-            <file>file:/home/sheik005/pantools/src/index/IndexDatabase.java</file>
-            <file>file:/home/sheik005/pantools/src/index/kmer.java</file>
-            <file>file:/home/sheik005/pantools/src/pantools/Pantools.java</file>
-            <file>file:/home/sheik005/pantools/src/pangenome/GenomeLayer.java</file>
+            <file>file:/home/sheik005/pantools_v1.3-alpha/src/pangenome/ProteomeLayer.java</file>
+            <file>file:/home/sheik005/pantools_v1.3-alpha/src/alignment/LocalSequenceAlignment.java</file>
         </group>
     </open-files>
 </project-private>

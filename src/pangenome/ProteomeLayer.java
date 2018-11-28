@@ -401,12 +401,12 @@ public class ProteomeLayer {
                         m = protein1.length();
                         n = protein2.length();
                         if (m == n)
-                            ints.similarity = aligner.get_match_score(protein1, protein2);
+                            ints.similarity = aligner.get_match_percentage(protein1, protein2);
                         else 
                             if (m < n)
-                            ints.similarity = protein_similarity(protein1, protein2);
+                            ints.similarity = similarity_percantage(protein1, protein2);
                         else
-                            ints.similarity = protein_similarity(protein2, protein1);
+                            ints.similarity = similarity_percantage(protein2, protein1);
                         if (ints.similarity > threshold){
                             similarities.put(ints);
                             num_similarities.getAndIncrement();
@@ -441,7 +441,7 @@ public class ProteomeLayer {
          * @param p2 The second protein
          * @return The normalized similarity score which is less or equal to 1
          */
-        double protein_similarity(String p1, String p2){
+        double similarity_percantage(String p1, String p2){
             int m, n,i, parts_num = 1, part_len1, part_len2;
             long score = 0, p_score = 0;
             m = p1.length();
