@@ -5,6 +5,7 @@
         <group>
             <file>file:/home/sheik005/pantools_v1.3-alpha/src/pangenome/ProteomeLayer.java</file>
             <file>file:/home/sheik005/pantools_v1.3-alpha/src/alignment/LocalSequenceAlignment.java</file>
+            <file>file:/home/sheik005/pantools_v1.3-alpha/src/pangenome/AnnotationLayer.java</file>
         </group>
     </open-files>
 </project-private>
