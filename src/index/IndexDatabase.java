@@ -82,7 +82,7 @@ public final class IndexDatabase {
      * @param index_path Path to the index database 
      */
     public IndexDatabase(String index_path, String index_name) {
-        int i, j, k, number_of_pages, record_size, page_size, full_page_size;
+        int i, j, number_of_pages, record_size, page_size, full_page_size;
         long number_of_prefixes;
         try {
             //System.out.println("Mounting index " + index_path);

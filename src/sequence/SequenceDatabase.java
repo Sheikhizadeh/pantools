@@ -152,8 +152,7 @@ public class SequenceDatabase {
     public SequenceDatabase(String path, String genome_paths_file) {
         int g;
         BufferedReader in;
-        String line, file_type;
-        String[] fields;
+        String line;
         List<String> genome_list = new LinkedList();
         db_path = path;
         initalize();
@@ -162,7 +161,7 @@ public class SequenceDatabase {
         number_of_bytes = 0;
         // count number of genomes    
         try {
-            in = new BufferedReader(new FileReader(genome_paths_file));
+            in = open_file(genome_paths_file);
             while (in.ready()) {
                 line = in.readLine();
                 if (line.equals("")) {
@@ -190,32 +189,28 @@ public class SequenceDatabase {
             num_sequences[g] = 0;
             genome_names[g] = itr.next();
             try {
-                fields = genome_names[g].split("\\.");
-                file_type = fields[fields.length - 1].toLowerCase();
-                if (file_type.equals("gz") || file_type.equals("gzip")){
-                    in = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(genome_names[g])), "UTF-8"));                    
-                    file_type = fields[fields.length - 2].toLowerCase();
-                } else
-                    in = new BufferedReader(new FileReader(genome_names[g]));
-                if (file_type.equals("fasta") || file_type.equals("fa") || file_type.equals("fna") || file_type.equals("fn")){
+                if (is_fasta(genome_names[g])){
+                    in = open_file(genome_names[g]);
                     while ((line = in.readLine()) != null){
                         if (line.equals("")) 
                             continue;
-                        if (line.charAt(0) == '>') // || line.charAt(0) == '+'
+                        if (line.charAt(0) == '>')
                             num_sequences[g]++;
                     }
-                }else if (file_type.equals("fastq") || file_type.equals("fq") || file_type.equals("fnq") || file_type.equals("q")){
+                    in.close();
+                }else if (is_fastq(genome_names[g])){
+                    in = open_file(genome_names[g]);
                     while ((line = in.readLine()) != null){
                         if (line.equals(""))
                             continue;
                         num_sequences[g]++;
                     }
                     num_sequences[g] /= 4;
+                    in.close();
                 } else {
-                    System.out.println(genome_names[g] + " does not have a valid extention (fasta, fa, fna, fn, fastq, fq, fnq, q)");
+                    System.out.println(genome_names[g] + " is not a proper FASTA of FAASTQ file");
                     System.exit(1);
                 }
-                in.close();
             } catch (IOException e) {
                 System.out.println(e.getMessage());
                 System.exit(1);
@@ -229,6 +224,7 @@ public class SequenceDatabase {
         code_genomes(path, 0);
         write_info();
     }
+    
 
     /**
      * Reconstructs a genome database from the pangenome.
@@ -303,8 +299,7 @@ public class SequenceDatabase {
      * @param previous_num_genomes The number of the genomes were already in the genome database
      */
     public void code_genomes(String path, int previous_num_genomes) {
-        String line, file_type;
-        String[] fields;
+        String line;
         char carry;
         boolean havecarry;
         long size = 0, byte_number;
@@ -315,14 +310,8 @@ public class SequenceDatabase {
         try {
             for (g = previous_num_genomes + 1; g <= num_genomes; ++g) {
                 System.out.println("Reading " + genome_names[g] + " ...");
-                fields = genome_names[g].split("\\.");
-                file_type = fields[fields.length - 1].toLowerCase();
-                if (file_type.equals("gz") || file_type.equals("gzip")){
-                    in = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(genome_names[g])), "UTF-8"));                    
-                    file_type = fields[fields.length - 2].toLowerCase();
-                } else
-                    in = new BufferedReader(new FileReader(genome_names[g]));
-                if (file_type.equals("fasta") || file_type.equals("fa") || file_type.equals("fna") || file_type.equals("fn")){
+                if (is_fasta(genome_names[g])){
+                    in = open_file(genome_names[g]);
                     s = 0;
                     sequence_offset[g][0] = 0;
                     sequence_length[g][0] = 0;
@@ -348,7 +337,9 @@ public class SequenceDatabase {
                     if (size % 2 == 1) {
                         ++size;
                     }
-                } else if (file_type.equals("fastq") || file_type.equals("fq") || file_type.equals("fnq") || file_type.equals("q")){
+                    in.close();
+                }else if (is_fastq(genome_names[g])){
+                    in = open_file(genome_names[g]);
                     sequence_offset[g][0] = 0;
                     sequence_length[g][0] = 0;
                     for (s = 1;(line = in.readLine()) != null; ++s){
@@ -374,11 +365,11 @@ public class SequenceDatabase {
                     }
                     if (size % 2 == 1)
                         ++size;
+                    in.close();
                 } else {
-                    System.out.println(genome_names[g] + " does not have a valid extention (fasta, fa, fna, fn, fastq, fq, fnq, q)");
+                    System.out.println(genome_names[g] + " is not a proper FASTA of FAASTQ file");
                     System.exit(1);
                 }
-                in.close();
             }
             number_of_bytes += size / 2;
             try {
@@ -396,15 +387,8 @@ public class SequenceDatabase {
             }
             genomes_buff[(int) (byte_number / MAX_BYTE_COUNT)].position((int) (byte_number % MAX_BYTE_COUNT));
             for (g = previous_num_genomes + 1; g <= num_genomes; ++g) {
-                in = new BufferedReader(new FileReader(genome_names[g]));
-                fields = genome_names[g].split("\\.");
-                file_type = fields[fields.length - 1].toLowerCase();
-                if (file_type.equals("gz") || file_type.equals("gzip")){
-                    in = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(genome_names[g])), "UTF-8"));                    
-                    file_type = fields[fields.length - 2].toLowerCase();
-                } else
-                    in = new BufferedReader(new FileReader(genome_names[g]));
-                if (file_type.equals("fasta") || file_type.equals("fa") || file_type.equals("fna") || file_type.equals("fn")){
+                if (is_fasta(genome_names[g])){
+                    in = open_file(genome_names[g]);
                     carry = ' ';
                     havecarry = false;
                     s = 0;
@@ -441,7 +425,9 @@ public class SequenceDatabase {
                         ++byte_number;
                     }
                     havecarry = false;
-                }else if (file_type.equals("fastq") || file_type.equals("fq") || file_type.equals("fnq") || file_type.equals("q")){
+                    in.close();
+                }else if (is_fastq(genome_names[g])){
+                    in = open_file(genome_names[g]);
                     carry = ' ';
                     havecarry = false;
                     while ((line = in.readLine()) != null){
@@ -472,9 +458,9 @@ public class SequenceDatabase {
                         ++byte_number;
                     }
                     havecarry = false;
+                    in.close();
                 }else{
-                    System.err.println(genome_names[g] + " should have one of these extensions: fasta, fa, fna, fn for FATSA or"
-                            + "fastq, fq, fnq, q for FASTQ.");
+                    System.out.println(genome_names[g] + " is not a proper FASTA of FAASTQ file");
                     continue;
                 }
                 in.close();
@@ -482,6 +468,56 @@ public class SequenceDatabase {
         } catch (IOException e) {
             System.out.println(e.getMessage());
             System.exit(1);
+        }
+    }
+
+    public boolean is_fasta(String file_name){
+        try{
+            BufferedReader in = open_file(file_name);
+            String line;
+            while ((line = in.readLine()) != null){
+                if (line.equals("")) 
+                    continue;
+                else {
+                    in.close();
+                    return line.charAt(0) == '>';
+                }            
+            }
+        } catch (IOException ex){
+            System.err.println(ex.getMessage());
+        }
+        return false;
+    }
+
+    public boolean is_fastq(String file_name){
+        try{
+            BufferedReader in = open_file(file_name);
+            String line;
+            while ((line = in.readLine()) != null){
+                if (line.equals("")) 
+                    continue;
+                else {
+                    in.close();
+                    return line.charAt(0) == '@';
+                }
+            }
+        } catch (IOException ex){
+            System.err.println(ex.getMessage());
+        }
+        return false;
+    }
+    
+    private BufferedReader open_file(String filename){
+        try{        
+            String[] fields = filename.split("\\.");
+            String file_type = fields[fields.length - 1].toLowerCase();
+            if (file_type.equals("gz") || file_type.equals("gzip"))
+                return new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(filename)), "UTF-8"));                    
+            else 
+                return new BufferedReader(new BufferedReader(new FileReader(filename)));                    
+        } catch (IOException ex){
+            System.out.println(ex.getMessage());
+            return null;
         }
     }
 
