@@ -371,7 +371,7 @@ public class AnnotationLayer {
                                                     rna_node.setProperty("length", gene_node.getProperty("length"));
                                                     rna_node.setProperty("id", ((String)gene_node.getProperty("id")).replaceAll("gene", "mRNA"));
                                                     rna_node.setProperty("attribute", ((String)gene_node.getProperty("attribute")).replaceAll("gene", "mRNA"));
-                                                    rna_node.setProperty("type", gene_node.getProperty("mRNA"));
+                                                    rna_node.setProperty("type", "mRNA");
                                                     rna_node.setProperty("name", ((String)gene_node.getProperty("name")).replaceAll("gene", "mRNA"));
                                                     rna_node.setProperty("annotation_id", annotation_id);
                                                     rna_node.setProperty("genome",address[0]);
