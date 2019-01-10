@@ -316,6 +316,7 @@ public class AnnotationLayer {
                         feature_node.setProperty("sequence",address[1]);
                         feature_node.setProperty("begin",address[2]);
                         feature_node.setProperty("end",address[3]);
+                        feature_node.setProperty("phase",fields[6]);
                         parent_node = get_node_by_id(gene_nodes,get_property(attribute,"Parent"));
                         if (parent_node != null)
                             parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
