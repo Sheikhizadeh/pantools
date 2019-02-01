@@ -11,10 +11,10 @@ import java.util.Stack;
 public class LocalSequenceAlignment {
 
     private int match[][];
-    private long matrix[][];
+    private int matrix[][];
     private char direction[][];
-    private long up[][];
-    private long left[][];
+    private int up[][];
+    private int left[][];
     private StringBuilder seq1;
     private StringBuilder seq2;
     private StringBuilder cigar;
@@ -27,7 +27,8 @@ public class LocalSequenceAlignment {
     private int max_j;
     private int deletions;
     private int insertions;
-    private long similarity_score;
+    private int similarity;
+    private double identity;
     private char TYPE;
     private int offset;
     private int range_len;
@@ -50,10 +51,10 @@ public class LocalSequenceAlignment {
         TYPE = type;
         cigar = new StringBuilder();
     // initialize matrixes
-        matrix = new long[MAX_LENGTH+1][MAX_LENGTH+1];
+        matrix = new int[MAX_LENGTH+1][MAX_LENGTH+1];
         direction = new char[MAX_LENGTH + 1][MAX_LENGTH + 1];
-        up = new long[MAX_LENGTH+1][MAX_LENGTH+1];
-        left = new long[MAX_LENGTH+1][MAX_LENGTH+1];
+        up = new int[MAX_LENGTH+1][MAX_LENGTH+1];
+        left = new int[MAX_LENGTH+1][MAX_LENGTH+1];
         score_array = new int[MAX_LENGTH];
         operation_stack = new Stack();
         count_stack = new Stack();
@@ -958,13 +959,12 @@ public class LocalSequenceAlignment {
      * @return The similarity score
      */
     public void align(StringBuilder s1, StringBuilder s2) {
-        int i, j;
+        int i, j, d;
         int m = s1.length(), n = s2.length();
-        long d, u, l;
         seq1 = s1;
         seq2 = s2;
         if(m < MAX_LENGTH){
-            similarity_score = Integer.MIN_VALUE;
+            similarity = Integer.MIN_VALUE;
             /*for (j = 1; j <= n; j++) 
                 System.out.print(String.format("%4c", seq2.charAt(j-1) ));
             System.out.println();*/
@@ -984,8 +984,8 @@ public class LocalSequenceAlignment {
                         matrix[i][j] = up[i][j];
                         direction[i][j] = 'I';
                     }
-                    if (matrix[i][j] > similarity_score){
-                        similarity_score = matrix[i][j];
+                    if (matrix[i][j] > similarity){
+                        similarity = matrix[i][j];
                         max_i = i;
                         max_j = j;
                     }                
@@ -1048,14 +1048,14 @@ public class LocalSequenceAlignment {
                 subject.append( seq2.charAt(j-1) );
             }
         }
-        for (;i > 0; --i){
+        /*for (;i > 0; --i){
             query.append( seq1.charAt(i-1) );
             subject.append( '-' );
         }
         for (;j > 0; --j){
             query.append( '-' );
             subject.append( seq2.charAt(j-1) );
-        }            
+        }  */          
         return subject.reverse() + "\n" + query.reverse();
     }
 
@@ -1094,7 +1094,7 @@ public class LocalSequenceAlignment {
             }
             return score;
         }   
-
+    
     public double get_match_percentage(String s1, String s2) {
             int i;
             long score = 0, p_score = 0;
@@ -1105,14 +1105,14 @@ public class LocalSequenceAlignment {
             return score * 100.0 / p_score;
         }   
 
-    public long get_similarity_score(){
-        return similarity_score;
-    }
-
-    public double get_similarity_percentage(){
-        return (double)similarity_score * 20.0 / seq1.length();
+    public int get_similarity(){
+        return similarity;
     }
     
+    public double get_identity(){
+       return identity;
+    }
+
     public int[] calculate_clip_range() {
         int i, j, x, max_ending_here, max_so_far, tmp_start, tmp_stop;
         int[] range = new int[4];
@@ -1173,7 +1173,7 @@ public class LocalSequenceAlignment {
     }
     
     public String get_cigar() {
-        int i, j, move_counts, count;
+        int i, j, move_counts, count, identicals = 0;
         int range[];
         char curr_move, prev_move, operation;
         insertions = deletions = 0;
@@ -1194,9 +1194,17 @@ public class LocalSequenceAlignment {
             move_counts = range[1] < seq1.length() ? seq1.length() - range[1] + 1 : 1;
         }
         range_len = range[1] - range[0] + 1;
+        i = seq1.length();
+        j = range[3] + seq1.length() - range[1];
+        if (j > seq2.length()){
+            i -= j - seq2.length();
+            j -= j - seq2.length();
+        }
+        for (; i >= range[1]; --i, --j)
+             if (seq1.charAt(i-1) == seq2.charAt(j-1))
+                identicals++;
         i = range[1] - 1;
         j = range[3] - 1;
-        offset = 0;
         while (i >= range[0]){
             curr_move = direction[i][j];
             if (curr_move == 'I'){
@@ -1206,6 +1214,8 @@ public class LocalSequenceAlignment {
                 j = j - 1;
                 ++deletions;
             } else {
+                if (seq1.charAt(i) == seq2.charAt(j))
+                    ++identicals;
                 i = i - 1;
                 j = j - 1;
             } 
@@ -1239,6 +1249,10 @@ public class LocalSequenceAlignment {
             count = count_stack.pop();
             cigar.append(count).append(operation);
         }
+        for (; i > 0 && j > 0; --i, --j)
+             if (seq1.charAt(i-1) == seq2.charAt(j-1))
+                identicals++;
+        identity = ((double)identicals) / (seq1.length() + deletions); 
         return cigar.toString();
     }
     

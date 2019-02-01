@@ -8,6 +8,7 @@ package pangenome;
 import index.IndexDatabase;
 import sequence.SequenceDatabase;
 import index.IndexPointer;
+import index.IndexScanner;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -49,7 +50,6 @@ import static pantools.Pantools.PATH_TO_THE_ANNOTATIONS_FILE;
 import static pantools.Pantools.PATH_TO_THE_GENOME_NUMBERS_FILE;
 import static pantools.Pantools.PATH_TO_THE_PANGENOME_DATABASE;
 import static pantools.Pantools.annotation_label;
-import static pantools.Pantools.broken_protein_label;
 import static pantools.Pantools.coding_gene_label;
 import static pantools.Pantools.db_node;
 import static pantools.Pantools.exon_label;
@@ -67,9 +67,10 @@ import static pantools.Pantools.tRNA_label;
 import static pantools.Pantools.write_fasta;
 import sequence.SequenceScanner;
 import static pantools.Pantools.genomeDb;
-import static pantools.Pantools.genome_scanner;
+import static pantools.Pantools.genomeSc;
 import static pantools.Pantools.graphDb;
 import static pantools.Pantools.indexDb;
+import static pantools.Pantools.indexSc;
 
 /**
  * Implements all the functionalities related to the annotation layer of the pangenome
@@ -176,7 +177,8 @@ public class AnnotationLayer {
         startTime = System.currentTimeMillis();
         genomeDb = new SequenceDatabase(PATH_TO_THE_PANGENOME_DATABASE + GENOME_DATABASE_PATH);
         indexDb = new IndexDatabase(PATH_TO_THE_PANGENOME_DATABASE + INDEX_DATABASE_PATH, "sorted");
-        genome_scanner = new SequenceScanner(genomeDb, 1, 1, K_SIZE, indexDb.get_pre_len());
+        indexSc = new IndexScanner(indexDb);
+        genomeSc = new SequenceScanner(genomeDb, 1, 1, K_SIZE, indexDb.get_pre_len());
         num_proteins = 0;
         try{
             BufferedReader paths = new BufferedReader(new FileReader(PATH_TO_THE_ANNOTATIONS_FILE));
@@ -186,7 +188,7 @@ public class AnnotationLayer {
             System.out.println("genome\tgenes\tmRNAs\ttRNAs\trRNAs");
             while (paths.ready()) // for each gff file
             {
-                line = paths.readLine();
+                line = paths.readLine().trim();
                 if (line.equals(""))
                     continue;
                 fields = line.split("\\s+");
@@ -262,7 +264,7 @@ public class AnnotationLayer {
             {
                 try (Transaction tx2 = graphDb.beginTx()) {
                     for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && in.ready(); ++trsc) {
-                        line = in.readLine();
+                        line = in.readLine().trim();
                         if (line.equals("") || line.charAt(0) == '#') // if line is empty or a comment skip it
                             continue;
                         if (line.contains("\t")){
@@ -321,14 +323,14 @@ public class AnnotationLayer {
                         if (parent_node != null)
                             parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
                         if (CONNECT_ANNOTATIONS){
-                            start_ptr = locate(address);
+                            start_ptr = locate(graphDb, genomeSc, indexSc, address[0], address[1], address[2]);
                             offset = start_ptr.offset;
                             node = graphDb.getNodeById(start_ptr.node_id);
                             rel = feature_node.createRelationshipTo(node, RelTypes.starts);
                             rel.setProperty("offset", offset);
                             rel.setProperty("genomic_position", address[2]);
                             rel.setProperty("forward", start_ptr.canonical);
-                            stop_ptr = locate(new int[]{address[0], address[1], address[3]});
+                            stop_ptr = locate(graphDb, genomeSc, indexSc, address[0], address[1], address[3]);
                             rel = feature_node.createRelationshipTo(graphDb.getNodeById(stop_ptr.node_id), RelTypes.stops);
                             rel.setProperty("offset", stop_ptr.offset);
                             rel.setProperty("genomic_position", address[2] + feature_len - 1);
@@ -429,7 +431,7 @@ public class AnnotationLayer {
             while (in.ready()) {
                 try (Transaction tx2 = graphDb.beginTx()) {
                     for (trsc = 0; trsc < MAX_TRANSACTION_SIZE && in.ready(); ++trsc) {
-                        line = in.readLine();
+                        line = in.readLine().trim();
                         if (line.equals("") || line.charAt(0) == '#') // if line is empty or a comment skip it
                             continue;
                         if (line.startsWith("LOCUS")){
@@ -581,7 +583,7 @@ public class AnnotationLayer {
                         address[2] -= 1;
                         address[3] -= 1;
                         gene_builder.setLength(0);
-                        genome_scanner.get_sub_sequence(gene_builder, address, true);//(boolean)start_edge.getProperty("forward"));
+                        genomeSc.get_sub_sequence(gene_builder, address, true);//(boolean)start_edge.getProperty("forward"));
                         if (gene_builder.length() == 0)
                             continue;
                         isoforms_num =0;
@@ -620,8 +622,7 @@ public class AnnotationLayer {
                                     mrna_node.setProperty("protein_ID", mRNA_id);
                                     mrna_node.setProperty("protein_length", protein.length());
                                     if (protein.charAt(0) != 'M'  || protein.charAt(protein.length() - 1) != '*'){
-                                        log_file.write("Protein ID = " + mRNA_id + " miss-annotated!\n");
-                                        mrna_node.addLabel(broken_protein_label);
+                                        log_file.write("Protein ID = " + mRNA_id + " is not started/ended with start/stop codon.\n");
                                     }
                                 }  
                             }
@@ -708,14 +709,14 @@ public class AnnotationLayer {
         genomeDb = new SequenceDatabase(PATH_TO_THE_PANGENOME_DATABASE + GENOME_DATABASE_PATH);
         indexDb = new IndexDatabase(PATH_TO_THE_PANGENOME_DATABASE + INDEX_DATABASE_PATH, "sorted");
         K_SIZE = indexDb.get_K();
-        genome_scanner = new SequenceScanner(genomeDb, 1, 1, K_SIZE, indexDb.get_pre_len());
+        genomeSc = new SequenceScanner(genomeDb, 1, 1, K_SIZE, indexDb.get_pre_len());
         num_genomes = 0;
         feature_seq = new StringBuilder();
         BufferedWriter[] out = new BufferedWriter[genomeDb.num_genomes + 1];
         try {
             in = new BufferedReader(new FileReader(PATH_TO_THE_GENOME_NUMBERS_FILE));
             while (in.ready()) {
-                line = in.readLine();
+                line = in.readLine().trim();
                 if (line.equals("")) {
                     continue;
                 }
@@ -738,7 +739,7 @@ public class AnnotationLayer {
                 in = new BufferedReader(new FileReader(PATH_TO_THE_GENOME_NUMBERS_FILE));
                 // fill all the records in an array to be sorted    
                 for (i = 0; in.ready();) {
-                    line = in.readLine();
+                    line = in.readLine().trim();
                     if (line.equals("")) {
                         continue;
                     }
@@ -778,7 +779,7 @@ public class AnnotationLayer {
                             //extract_sequence(gene_seq, new IndexPointer(start.getId(), (boolean) rstart.getProperty("forward"), (int) rstart.getProperty("offset"),-1l), address, K);//
                             address[2] -= 1;
                             address[3] -= 1;
-                            genome_scanner.get_sub_sequence(feature_seq, address, forward);
+                            genomeSc.get_sub_sequence(feature_seq, address, forward);
                             //genomeDb=new sequence_database(pangenome_path+GENOME_DATABASE_PATH);
                             //if(gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, strand))
                             //|| gene_seq.toString().equals(genomeDb.get_sequence(genome, sequence, begin-1, end-begin+1, !strand)) )//gene_seq.length() == end-begin+1)//

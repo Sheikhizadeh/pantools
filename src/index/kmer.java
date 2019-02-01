@@ -41,7 +41,13 @@ public class kmer {
         shift = 2 * (prefix_length - 1);
         fwd_suffix=new byte[suffix_length / 4];
         rev_suffix=new byte[suffix_length / 4];
-        canonical = false;
+        fwd_prefix=0;
+        for(int i = 0;i < fwd_suffix.length; ++i)
+            fwd_suffix[i] = 0;
+        rev_prefix = 0;
+        for(int i = 0; i < rev_suffix.length; ++i)
+            rev_suffix[i] = 0;
+        canonical=false;
     }
 
     /**
@@ -193,9 +199,9 @@ public class kmer {
      */
     public void is_canonical()
     {
-        if(fwd_prefix<rev_prefix)
+        if(fwd_prefix < rev_prefix)
             canonical = true;
-        else if(fwd_prefix>rev_prefix)
+        else if(fwd_prefix > rev_prefix)
             canonical = false;
         else
             canonical = compare_suffix(fwd_suffix, rev_suffix) <= 0;

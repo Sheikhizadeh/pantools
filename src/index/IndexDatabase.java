@@ -43,37 +43,33 @@ import static pantools.Pantools.nucleotide_label;
  */
 public final class IndexDatabase {
 
-    private kmer key;
-    private int MAX_BYTE_COUNT = 1 << 24;// 16 MB 
-    private int header_pos;
-    private final String INFORMATION_FILE_EXTENTION = ".info";
-    private final String PREFIX_FILE_EXTENTION = ".kmc_pre";
-    private final String SUFFIX_FILE_EXTENTION = ".kmc_suf";
-    private final String POINTER_FILE_EXTENTION = ".pointer";
+    public int MAX_BYTE_COUNT = 1 << 24;// 16 MB 
+    public int header_pos;
+    public final String INFORMATION_FILE_EXTENTION = ".info";
+    public final String PREFIX_FILE_EXTENTION = ".kmc_pre";
+    public final String SUFFIX_FILE_EXTENTION = ".kmc_suf";
+    public final String POINTER_FILE_EXTENTION = ".pointer";
 
-    private static int K;
-    private int mode;
-    private int ctr_size;
-    private int pre_len;
-    private int min_count;
-    private int max_count;
-    private long kmers_num;
-    private int id_len;
-    private int offset_len;
+    public static int K;
+    public int mode;
+    public int ctr_size;
+    public int pre_len;
+    public int min_count;
+    public int max_count;
+    public long kmers_num;
+    public int id_len;
+    public int offset_len;
 
-    private int suf_len;
-    private  int POINTER_LENGTH;
-    private long[] prefix_ptr;
-    private RandomAccessFile suf_file;
-    private RandomAccessFile pre_file;
-    private MappedByteBuffer[] suf_buff;
-    private RandomAccessFile ptr_file;
-    private MappedByteBuffer[] ptr_buff;
-    private MappedByteBuffer pre_buff[];
-    private int suffix_record_size;
-    private int full_suffix_page_size;
-    private int full_pointer_page_size;
-    private String KMC = "kmc";
+    public int suf_len;
+    public  int poniter_length;
+    public long[] prefix_ptr;
+    public RandomAccessFile suf_file;
+    public RandomAccessFile pre_file;
+    public MappedByteBuffer[] suf_buff;
+    public RandomAccessFile ptr_file;
+    public MappedByteBuffer[] ptr_buff;
+    public MappedByteBuffer pre_buff[];
+    public String KMC = "kmc";
 
 
     /**
@@ -88,19 +84,18 @@ public final class IndexDatabase {
             //System.out.println("Mounting index " + index_path);
             pre_file = new RandomAccessFile(index_path + index_name + PREFIX_FILE_EXTENTION, "r");
             BufferedReader in = new BufferedReader(new FileReader(index_path + index_name + INFORMATION_FILE_EXTENTION));
-            K = Integer.parseInt(in.readLine().split(":")[1]);
-            mode = Integer.parseInt(in.readLine().split(":")[1]);
-            ctr_size = Integer.parseInt(in.readLine().split(":")[1]);
-            pre_len = Integer.parseInt(in.readLine().split(":")[1]);
-            min_count = Integer.parseInt(in.readLine().split(":")[1]);
-            max_count = Integer.parseInt(in.readLine().split(":")[1]);
-            kmers_num = Long.valueOf(in.readLine().split(":")[1]);
-            suf_len = Integer.parseInt(in.readLine().split(":")[1]);
-            id_len = Integer.parseInt(in.readLine().split(":")[1]);
-            offset_len = Integer.parseInt(in.readLine().split(":")[1]);
-            POINTER_LENGTH = Integer.parseInt(in.readLine().split(":")[1]);
+            K = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            mode = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            ctr_size = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            pre_len = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            min_count = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            max_count = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            kmers_num = Long.valueOf(in.readLine().trim().split(":")[1]);
+            suf_len = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            id_len = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            offset_len = Integer.parseInt(in.readLine().trim().split(":")[1]);
+            poniter_length = Integer.parseInt(in.readLine().trim().split(":")[1]);
             in.close();
-            key=new kmer(K,pre_len);
             //System.out.println("Indexing " + kmers_num + " kmers...                    ");
         // load the prefix file into the memory    
             //System.out.println("Loading existing prefixes in memory...                    ");
@@ -119,6 +114,7 @@ public final class IndexDatabase {
                 page_size = page_size == 0 ? full_page_size : page_size; // in bytes
                 //System.out.println("page_size  "+ page_size);
                 pre_buff[i] = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, ((long)full_page_size) * i + 4, page_size);
+                pre_buff[i].position(0);
                 for (j = 0; j < page_size / 8; ++j) 
                     prefix_ptr[(int)(((long)full_page_size) * i / 8 + j)] = read_prefix(pre_buff[i]);
                 pre_buff[i] = null;
@@ -127,8 +123,8 @@ public final class IndexDatabase {
             pre_file.close();
         // mapping suffix file into the memory
             //System.out.println("Mapping existing suffix file in memory...                    ");
-            suffix_record_size = record_size = ctr_size + suf_len / 4; // in bytes
-            full_suffix_page_size = full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
+            record_size = ctr_size + suf_len / 4; // in bytes
+            full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
             number_of_pages = (int) ((kmers_num * record_size) / full_page_size + ((kmers_num * record_size) % full_page_size == 0 ? 0 : 1));
             suf_file = new RandomAccessFile(index_path + index_name + SUFFIX_FILE_EXTENTION, "r");
             suf_buff = new MappedByteBuffer[number_of_pages];
@@ -139,8 +135,8 @@ public final class IndexDatabase {
             }
         // mapping pointers file into the memory
             //System.out.println("Mapping existing pointers file in memory...                    ");
-            record_size = POINTER_LENGTH; // in bytes
-            full_pointer_page_size = full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
+            record_size = poniter_length; // in bytes
+            full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
             number_of_pages = (int) ((kmers_num * record_size) / full_page_size + ((kmers_num * record_size) % full_page_size == 0 ? 0 : 1));
             ptr_file = new RandomAccessFile(index_path + index_name + POINTER_FILE_EXTENTION, "rw");
             ptr_buff = new MappedByteBuffer[number_of_pages];
@@ -234,8 +230,7 @@ public final class IndexDatabase {
                         longest_scaffold = genomeDb.sequence_length[i][j];
             id_len = (int)Math.round(Math.ceil( Math.log(kmers_num) / Math.log(2) / 8));
             offset_len = (int)Math.round(Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8));
-            POINTER_LENGTH = 2 * id_len + offset_len + 1;
-            key = new kmer(K, pre_len);
+            poniter_length = 2 * id_len + offset_len + 1;
             write_info(index_path, "sorted");
             System.out.println("Indexing kmers...                    ");
         // load the prefix file into the memory    
@@ -259,8 +254,8 @@ public final class IndexDatabase {
             pre_file.close();
         // mapping suffix file into the memory
             //System.out.println("Mapping suffixes file to memory...                    ");
-            suffix_record_size = record_size = ctr_size + suf_len / 4; // in bytes
-            full_suffix_page_size = full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
+            record_size = ctr_size + suf_len / 4; // in bytes
+            full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
             number_of_pages = (int) ((kmers_num * record_size) / full_page_size + ((kmers_num * record_size) % full_page_size == 0 ? 0 : 1));
             suf_file = new RandomAccessFile(index_path + "sorted" + SUFFIX_FILE_EXTENTION, "r");
             suf_buff = new MappedByteBuffer[number_of_pages];
@@ -271,8 +266,8 @@ public final class IndexDatabase {
             }
         // mapping pointers file into the memory
             //System.out.println("Mapping pointers file to memory...                    ");
-            record_size = POINTER_LENGTH; // in bytes
-            full_pointer_page_size = full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
+            record_size = poniter_length; // in bytes
+            full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
             number_of_pages = (int) ((kmers_num * record_size) / full_page_size + ((kmers_num * record_size) % full_page_size == 0 ? 0 : 1));
             ptr_file = new RandomAccessFile(index_path + "sorted" + POINTER_FILE_EXTENTION, "rw");
             ptr_buff = new MappedByteBuffer[number_of_pages];
@@ -280,25 +275,167 @@ public final class IndexDatabase {
                 page_size = (int) (i == number_of_pages - 1 ? (kmers_num * record_size) % full_page_size : full_page_size); // in bytes
                 page_size = page_size == 0 ? full_page_size : page_size; // in bytes
                 ptr_buff[i] = ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, ((long)full_page_size) * i + 4, page_size);
+                for (j = 0; j < page_size; ++j)
+                    ptr_buff[i].put((byte)-1);
             }
-            clear_pointer_database();
         } catch (IOException e) {
             System.out.println(e.getMessage());
             System.exit(1);
         }
     }
-    
-    public void clear_pointer_database(){
-        long p;
-        IndexPointer null_pointer = new IndexPointer();
-        for (p = 0; p < kmers_num; ++p) {
-            put_pointer(null_pointer, p);
+       
+    /**
+     * Updates an available index to include new genomes
+     * 
+     * @param index_path Path to the index database 
+     * @param genomes_path_file A text file containing path to the new genomes
+     * @param genomeDb The genome database
+     * @param graphDb The graph database
+     * @param previous_num_genomes Number of the genomes available in the index
+     */
+    public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb, GraphDatabaseService graphDb, int previous_num_genomes) {
+        int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
+        int i, j, p, number_of_pages, record_size, page_size, full_page_size;
+        long number_of_prefixes, longest_scaffold = 0;
+        long c_index, p_index, l;
+        Node node;
+        IndexDatabase old_darabase;
+        ResourceIterator<Node> nodes_iterator;
+        // move current index files to directory old_darabase
+        try{
+            Files.move(Paths.get(index_path + "sorted" + PREFIX_FILE_EXTENTION), Paths.get(index_path + "old" + PREFIX_FILE_EXTENTION));
+            Files.move(Paths.get(index_path + "sorted" + SUFFIX_FILE_EXTENTION), Paths.get(index_path + "old" + SUFFIX_FILE_EXTENTION));
+            Files.move(Paths.get(index_path + "sorted" + POINTER_FILE_EXTENTION), Paths.get(index_path + "old" + POINTER_FILE_EXTENTION));
+            Files.move(Paths.get(index_path + "sorted" + INFORMATION_FILE_EXTENTION), Paths.get(index_path + "old" + INFORMATION_FILE_EXTENTION));
+        // load old_darabase
+            old_darabase = new IndexDatabase(index_path, "old");
+        // make new index for new genomes
+            System.out.println("Running KMC with K = " + old_darabase.K + " ...                      ");
+            executeCommand(KMC + " -cs127 -r -k" + old_darabase.K + " -t" + cores + " -ci1 -fm " + (genomeDb.num_genomes - previous_num_genomes > 1 ? "@" + 
+                    genomes_path_file.trim() : genomeDb.genome_names[previous_num_genomes + 1]) + 
+                    " " + index_path + "new " + index_path);
+        // merge two indeces    
+            executeCommand(KMC + "_tools union " + index_path + "old " + index_path + "new " + index_path + "sorted");
+            pre_file = new RandomAccessFile(index_path + "sorted" + PREFIX_FILE_EXTENTION, "r");
+            pre_file.seek(pre_file.length() - 8);
+            header_pos = read_int(pre_file);
+            pre_file.seek(pre_file.length() - 8 - header_pos);
+        // read the merged index properties    
+            K = read_int(pre_file);
+            mode = read_int(pre_file);
+            ctr_size = read_int(pre_file);
+            pre_len = read_int(pre_file);
+            min_count = read_int(pre_file);
+            max_count = read_int(pre_file);
+            kmers_num = read_long(pre_file);
+            suf_len = K - pre_len;
+            for (i = 1; i <= genomeDb.num_genomes; ++i)
+                for (j = 1; j <= genomeDb.num_sequences[i]; ++j)
+                    if (genomeDb.sequence_length[i][j] > longest_scaffold)
+                        longest_scaffold = genomeDb.sequence_length[i][j];
+            id_len = (int)Math.round(Math.ceil( Math.log(kmers_num) / Math.log(2) / 8));
+            offset_len = (int)Math.round(Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8));
+            poniter_length = 2 * id_len + offset_len + 1;
+            write_info(index_path, "sorted");
+            System.out.println("number of available kmers:\t" + old_darabase.kmers_num);
+            System.out.println("number of new kmers:\t" + (kmers_num - old_darabase.kmers_num));
+            System.out.println("Total number of kmers:\t" + kmers_num);
+        // load the prefix file into the memory    
+            //System.out.println("loading new prefixes in memory...                    ");
+            number_of_prefixes = 1 << (2 * pre_len);
+            prefix_ptr = new long[(int)number_of_prefixes];
+            record_size = 8; // in bytes
+            full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
+            number_of_pages = (int) ((number_of_prefixes * record_size) / full_page_size + ((number_of_prefixes * record_size) % full_page_size == 0 ? 0 : 1));
+            pre_buff = new  MappedByteBuffer[number_of_pages];
+            for (i = 0; i < number_of_pages; ++i) {
+                page_size = (int) (i == number_of_pages - 1 ? (number_of_prefixes * record_size) % full_page_size : full_page_size); // in bytes
+                page_size = page_size == 0 ? full_page_size : page_size; // in bytes
+                pre_buff[i] = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, ((long)full_page_size) * i + 4, page_size);
+                for (j = 0; j < page_size / 8; ++j) 
+                    prefix_ptr[(int)(((long)full_page_size) * i / 8 + j)] = read_prefix(pre_buff[i]);
+                pre_buff[i] = null;
+            }
+            pre_buff = null;
+            pre_file.close();
+        // mapping suffix file into the memory
+            //System.out.println("Mapping new suffix file to memory...                    ");
+            record_size = ctr_size + suf_len / 4;
+            full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
+            number_of_pages = (int) ((kmers_num * record_size) / full_page_size + ((kmers_num * record_size) % full_page_size == 0 ? 0 : 1));
+            suf_file = new RandomAccessFile(index_path + "sorted" + SUFFIX_FILE_EXTENTION, "r");
+            suf_buff = new MappedByteBuffer[number_of_pages];
+            for (i = 0; i < number_of_pages; ++i) {
+                page_size = (int) (i == number_of_pages - 1 ? (kmers_num * record_size) % full_page_size : full_page_size); // in bytes
+                page_size = page_size == 0 ? full_page_size : page_size; // in bytes
+                suf_buff[i] = suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, ((long)full_page_size) * i + 4, page_size);
+            }
+        // mapping pointers file into the memory
+            //System.out.println("Mapping new pointer files to memory...                    ");
+            record_size = poniter_length; // in bytes
+            full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
+            number_of_pages = (int) ((kmers_num * record_size) / full_page_size + ((kmers_num * record_size) % full_page_size == 0 ? 0 : 1));
+            ptr_file = new RandomAccessFile(index_path + "sorted" + POINTER_FILE_EXTENTION, "rw");
+            ptr_buff = new MappedByteBuffer[number_of_pages];
+            for (i = 0; i < number_of_pages; ++i) {
+                page_size = (int) (i == number_of_pages - 1 ? (kmers_num * record_size) % full_page_size : full_page_size); // in bytes
+                page_size = page_size == 0 ? full_page_size : page_size; // in bytes
+                ptr_buff[i] = ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, ((long)full_page_size) * i + 4, page_size);
+                for (j = 0; j < page_size; ++j)
+                    ptr_buff[i].put((byte)-1);
+            }
+        // adjusting available pointers
+            System.out.println("Updating kmer index...                    ");
+            kmer old_kmer = new kmer(K, old_darabase.pre_len);
+            kmer new_kmer = new kmer(K, pre_len);
+            IndexScanner old_scanner = new IndexScanner(old_darabase);
+            IndexScanner new_scanner = new IndexScanner(this);
+            IndexPointer ptr = new IndexPointer();
+            try(Transaction tx = graphDb.beginTx()){
+                nodes_iterator = graphDb.findNodes(nucleotide_label);
+                for(;nodes_iterator.hasNext();){
+                    node = nodes_iterator.next();
+                    if (!node.hasLabel(degenerate_label)){
+                        l = (long)node.getProperty("first_kmer");
+                        old_scanner.get_kmer(old_kmer, l);
+                        adjust_fwd_kmer(new_kmer, old_kmer);
+                        p_index = new_scanner.find(new_kmer);
+                        old_scanner.get_pointer(ptr,l);
+                        new_scanner.put_pointer(ptr,p_index);
+                        node.setProperty("first_kmer", p_index);
+                        for(l = old_scanner.get_next_index(l); l != -1L; l = old_scanner.get_next_index(l)){
+                            old_scanner.get_kmer(old_kmer, l);
+                            adjust_fwd_kmer(new_kmer, old_kmer);
+                            c_index = new_scanner.find(new_kmer);
+                            old_scanner.get_pointer(ptr,l);
+                            new_scanner.put_pointer(ptr,c_index);
+                            new_scanner.put_next_index(c_index,p_index);
+                            p_index = c_index;
+                        }
+                        new_scanner.put_next_index(-1L,p_index);
+                        node.setProperty("last_kmer", p_index);
+                    }
+                }
+                nodes_iterator.close();
+                tx.success();
+            }
+            old_darabase.close();
+            Files.delete(Paths.get(index_path + "old" + PREFIX_FILE_EXTENTION));
+            Files.delete(Paths.get(index_path + "old" + SUFFIX_FILE_EXTENTION));
+            Files.delete(Paths.get(index_path + "old" + INFORMATION_FILE_EXTENTION));
+            Files.delete(Paths.get(index_path + "old" + POINTER_FILE_EXTENTION));
+            Files.delete(Paths.get(index_path + "new" + PREFIX_FILE_EXTENTION));
+            Files.delete(Paths.get(index_path + "new" + SUFFIX_FILE_EXTENTION));
+        } catch (IOException e) {
+            System.out.println("Failed to make index!\n" + e.getMessage());
+            System.exit(1);
         }
     }
-    
-    public void find_k(String index_path, String genomes_path_file, SequenceDatabase genomeDb, int k) throws IOException{
+
+    public void find_k(String index_path, String genomes_path_file, SequenceDatabase genomeDb, int k){
         double p = 0;
         String output;
+        try{
         Runtime.getRuntime().exec(KMC); // to check if kmc is reachable
         if (k > -1){ // K is not given by the user, then calculate the optimal K
             K = k;
@@ -383,151 +520,8 @@ public final class IndexDatabase {
             }
         }
         System.out.println("K = " +  K);
-    }
-
-    /**
-     * Updates an available index to include new genomes
-     * 
-     * @param index_path Path to the index database 
-     * @param genomes_path_file A text file containing path to the new genomes
-     * @param genomeDb The genome database
-     * @param graphDb The graph database
-     * @param previous_num_genomes Number of the genomes available in the index
-     */
-    public IndexDatabase(String index_path, String genomes_path_file, SequenceDatabase genomeDb, GraphDatabaseService graphDb, int previous_num_genomes) {
-        int cores = Runtime.getRuntime().availableProcessors() / 2 + 1;
-        int i, j, p, number_of_pages, record_size, page_size, full_page_size;
-        long number_of_prefixes, longest_scaffold = 0;
-        long c_index, p_index, l;
-        Node node;
-        IndexDatabase old_index;
-        ResourceIterator<Node> nodes_iterator;
-        // move current index files to directory old_index
-        try{
-            Files.move(Paths.get(index_path + "sorted" + PREFIX_FILE_EXTENTION), Paths.get(index_path + "old" + PREFIX_FILE_EXTENTION));
-            Files.move(Paths.get(index_path + "sorted" + SUFFIX_FILE_EXTENTION), Paths.get(index_path + "old" + SUFFIX_FILE_EXTENTION));
-            Files.move(Paths.get(index_path + "sorted" + POINTER_FILE_EXTENTION), Paths.get(index_path + "old" + POINTER_FILE_EXTENTION));
-            Files.move(Paths.get(index_path + "sorted" + INFORMATION_FILE_EXTENTION), Paths.get(index_path + "old" + INFORMATION_FILE_EXTENTION));
-        // load old_index
-            old_index = new IndexDatabase(index_path, "old");
-        // make new index for new genomes
-            System.out.println("Running KMC with K = " + old_index.K + " ...                      ");
-            executeCommand(KMC + " -cs127 -r -k" + old_index.K + " -t" + cores + " -ci1 -fm " + (genomeDb.num_genomes - previous_num_genomes > 1 ? "@" + 
-                    genomes_path_file.trim() : genomeDb.genome_names[previous_num_genomes + 1]) + 
-                    " " + index_path + "new " + index_path);
-        // merge two indeces    
-            executeCommand(KMC + "_tools union " + index_path + "old " + index_path + "new " + index_path + "sorted");
-            pre_file = new RandomAccessFile(index_path + "sorted" + PREFIX_FILE_EXTENTION, "r");
-            pre_file.seek(pre_file.length() - 8);
-            header_pos = read_int(pre_file);
-            pre_file.seek(pre_file.length() - 8 - header_pos);
-        // read the merged index properties    
-            K = read_int(pre_file);
-            mode = read_int(pre_file);
-            ctr_size = read_int(pre_file);
-            pre_len = read_int(pre_file);
-            min_count = read_int(pre_file);
-            max_count = read_int(pre_file);
-            kmers_num = read_long(pre_file);
-            suf_len = K - pre_len;
-            for (i = 1; i <= genomeDb.num_genomes; ++i)
-                for (j = 1; j <= genomeDb.num_sequences[i]; ++j)
-                    if (genomeDb.sequence_length[i][j] > longest_scaffold)
-                        longest_scaffold = genomeDb.sequence_length[i][j];
-            id_len = (int)Math.round(Math.ceil( Math.log(kmers_num) / Math.log(2) / 8));
-            offset_len = (int)Math.round(Math.ceil( Math.log(longest_scaffold) / Math.log(2) / 8));
-            POINTER_LENGTH = 2 * id_len + offset_len + 1;
-            write_info(index_path, "sorted");
-            System.out.println("number of available kmers:\t" + old_index.kmers_num);
-            System.out.println("number of new kmers:\t" + (kmers_num - old_index.kmers_num));
-            System.out.println("Total number of kmers:\t" + kmers_num);
-            key = new kmer(K, pre_len);
-        // load the prefix file into the memory    
-            //System.out.println("loading new prefixes in memory...                    ");
-            number_of_prefixes = 1 << (2 * pre_len);
-            prefix_ptr = new long[(int)number_of_prefixes];
-            record_size = 8; // in bytes
-            full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
-            number_of_pages = (int) ((number_of_prefixes * record_size) / full_page_size + ((number_of_prefixes * record_size) % full_page_size == 0 ? 0 : 1));
-            pre_buff = new  MappedByteBuffer[number_of_pages];
-            for (i = 0; i < number_of_pages; ++i) {
-                page_size = (int) (i == number_of_pages - 1 ? (number_of_prefixes * record_size) % full_page_size : full_page_size); // in bytes
-                page_size = page_size == 0 ? full_page_size : page_size; // in bytes
-                pre_buff[i] = pre_file.getChannel().map(FileChannel.MapMode.READ_ONLY, ((long)full_page_size) * i + 4, page_size);
-                for (j = 0; j < page_size / 8; ++j) 
-                    prefix_ptr[(int)(((long)full_page_size) * i / 8 + j)] = read_prefix(pre_buff[i]);
-                pre_buff[i] = null;
-            }
-            pre_buff = null;
-            pre_file.close();
-        // mapping suffix file into the memory
-            //System.out.println("Mappinf new suffix file to memory...                    ");
-            suffix_record_size = record_size = ctr_size + suf_len / 4; // in bytes
-            full_suffix_page_size = full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
-            number_of_pages = (int) ((kmers_num * record_size) / full_page_size + ((kmers_num * record_size) % full_page_size == 0 ? 0 : 1));
-            suf_file = new RandomAccessFile(index_path + "sorted" + SUFFIX_FILE_EXTENTION, "r");
-            suf_buff = new MappedByteBuffer[number_of_pages];
-            for (i = 0; i < number_of_pages; ++i) {
-                page_size = (int) (i == number_of_pages - 1 ? (kmers_num * record_size) % full_page_size : full_page_size); // in bytes
-                page_size = page_size == 0 ? full_page_size : page_size; // in bytes
-                suf_buff[i] = suf_file.getChannel().map(FileChannel.MapMode.READ_ONLY, ((long)full_page_size) * i + 4, page_size);
-            }
-        // mapping pointers file into the memory
-            //System.out.println("Mappinf new pointer files to memory...                    ");
-            record_size = POINTER_LENGTH; // in bytes
-            full_pointer_page_size = full_page_size = MAX_BYTE_COUNT / record_size * record_size; // in bytes
-            number_of_pages = (int) ((kmers_num * record_size) / full_page_size + ((kmers_num * record_size) % full_page_size == 0 ? 0 : 1));
-            ptr_file = new RandomAccessFile(index_path + "sorted" + POINTER_FILE_EXTENTION, "rw");
-            ptr_buff = new MappedByteBuffer[number_of_pages];
-            for (i = 0; i < number_of_pages; ++i) {
-                page_size = (int) (i == number_of_pages - 1 ? (kmers_num * record_size) % full_page_size : full_page_size); // in bytes
-                page_size = page_size == 0 ? full_page_size : page_size; // in bytes
-                ptr_buff[i] = ptr_file.getChannel().map(FileChannel.MapMode.READ_WRITE, ((long)full_page_size) * i + 4, page_size);
-            }
-            clear_pointer_database();
-        // adjusting available pointers
-            System.out.println("Updating kmer index...                    ");
-            kmer old_kmer = new kmer(K, old_index.pre_len);
-            kmer new_kmer = new kmer(K, pre_len);
-            IndexPointer ptr = new IndexPointer();
-            try(Transaction tx = graphDb.beginTx()){
-                nodes_iterator = graphDb.findNodes(nucleotide_label);
-                for(;nodes_iterator.hasNext();){
-                    node = nodes_iterator.next();
-                    if (!node.hasLabel(degenerate_label)){
-                        l = (long)node.getProperty("first_kmer");
-                        old_index.get_kmer(old_kmer, l);
-                        adjust_fwd_kmer(new_kmer, old_kmer);
-                        p_index = find(new_kmer);
-                        old_index.get_pointer(ptr,l);
-                        put_pointer(ptr,p_index);
-                        node.setProperty("first_kmer", p_index);
-                        for(l = old_index.get_next_index(l); l != -1L; l = old_index.get_next_index(l)){
-                            old_index.get_kmer(old_kmer, l);
-                            adjust_fwd_kmer(new_kmer, old_kmer);
-                            c_index = find(new_kmer);
-                            old_index.get_pointer(ptr,l);
-                            put_pointer(ptr,c_index);
-                            put_next_index(c_index,p_index);
-                            p_index = c_index;
-                        }
-                        put_next_index(-1L,p_index);
-                        node.setProperty("last_kmer", p_index);
-                    }
-                }
-                nodes_iterator.close();
-                tx.success();
-            }
-            old_index.close();
-            Files.delete(Paths.get(index_path + "old" + PREFIX_FILE_EXTENTION));
-            Files.delete(Paths.get(index_path + "old" + SUFFIX_FILE_EXTENTION));
-            Files.delete(Paths.get(index_path + "old" + INFORMATION_FILE_EXTENTION));
-            Files.delete(Paths.get(index_path + "old" + POINTER_FILE_EXTENTION));
-            Files.delete(Paths.get(index_path + "new" + PREFIX_FILE_EXTENTION));
-            Files.delete(Paths.get(index_path + "new" + SUFFIX_FILE_EXTENTION));
-        } catch (IOException e) {
-            System.out.println("Failed to make index!\n" + e.getMessage());
-            System.exit(1);
+        } catch (IOException ex){
+            System.err.println("Failed to find K!");
         }
     }
 
@@ -544,7 +538,7 @@ public final class IndexDatabase {
             out.write("suf_len:" + suf_len + "\n");
             out.write("id_len:" + id_len + "\n");
             out.write("offset_len:" + offset_len + "\n");
-            out.write("POINTER_LENGTH:" + POINTER_LENGTH + "\n");
+            out.write("poniter_length:" + poniter_length + "\n");
             out.close();
         } catch (IOException ioe) {
             System.out.println(ioe.getMessage());
@@ -606,7 +600,7 @@ public final class IndexDatabase {
      * @return The long integer value
      * @throws IOException 
      */
-    private long read_prefix(MappedByteBuffer buff) throws IOException {
+    private long read_prefix(MappedByteBuffer buff){
         int i;
         long number = 0;
         for (i = 0; i < 8; ++i)
@@ -621,10 +615,14 @@ public final class IndexDatabase {
      * @return The integer value
      * @throws IOException 
      */
-    private int read_int(RandomAccessFile file) throws IOException {
+    private int read_int(RandomAccessFile file){
         int number = 0;
         for (int i = 0; i < 4; ++i) {
-            number += ((int)(file.readByte() & 0x00FF) << (8 * i));
+            try {
+                number += ((int)(file.readByte() & 0x00FF) << (8 * i));
+            } catch (IOException ex) {
+                Logger.getLogger(IndexDatabase.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
         return number;
     }
@@ -644,245 +642,6 @@ public final class IndexDatabase {
         return number;
     }
 
-    /**
-     * Reads a long integer from the memory mapped buffer.
-     * 
-     * @param buff The file associated to the byte stream
-     * @return The long integer value
-     * @throws IOException 
-     */
-    private int read_int(MappedByteBuffer buff, int n) {
-        int number = 0;
-            for (int i = 0; i < n; ++i) {
-                number = number << 8;
-                number = number | (int)(buff.get() & 0x00FF);
-            }
-        return number == (1l << 8 * n) - 1 ? -1 : number;
-    }
-    
-    /**
-     * Reads a long integer from the memory mapped buffer.
-     * 
-     * @param buff The file associated to the byte stream
-     * @return The long integer value
-     * @throws IOException 
-     */
-    private long read_long(MappedByteBuffer buff, int n) {
-        long number = 0;
-            for (int i = 0; i < n; ++i) {
-                number = number << 8;
-                number = number | (long)(buff.get() & 0x00FF);
-            }
-        return number == (1l << 8 * n) - 1 ? -1l : number;
-    }
-
-    /**
-     * Reads a long integer from the memory mapped buffer.
-     * 
-     * @param buff The file associated to the byte stream
-     * @return The long integer value
-     * @throws IOException 
-     */
-    private void write_int(MappedByteBuffer buff, int number, int n) {
-        for (int i = n - 1; i >= 0; --i) {
-            buff.put((byte)((number >> (8 * i)) & 0x00FF));
-        }
-    }
-    
-    /**
-     * Reads a long integer from the memory mapped buffer.
-     * 
-     * @param buff The file associated to the byte stream
-     * @return The long integer value
-     * @throws IOException 
-     */
-    private void write_long(MappedByteBuffer buff, long number, int n) {
-        for (int i = n - 1; i >= 0; --i) {
-            buff.put((byte)((number >> (8 * i)) & 0x00FF));
-        }
-    }    
-
-    /**
-     * Reads a kmer from th index database.
-     * 
-     * @param number The number of kmer in the index
-     * @return The kmer object
-     */
-    public void get_kmer(kmer key, long number) {
-        boolean found = false;
-        int low = 0, high = prefix_ptr.length - 1, mid = 0;
-        while (low <= high && !found) {
-            mid = (low + high) / 2;
-            if (number < prefix_ptr[mid]) {
-                high = mid - 1;
-            } else if (number > prefix_ptr[mid]) {
-                low = mid + 1;
-            } else {
-                found = true;
-            }
-        }
-        if (!found) {
-            mid = high;
-        } else {
-            for (; mid < prefix_ptr.length - 1 && prefix_ptr[mid + 1] == prefix_ptr[mid]; ++mid);
-        }
-        key.set_fwd_prefix(mid);
-        suf_buff[(int) (number * suffix_record_size / full_suffix_page_size)].position((int) (number * suffix_record_size % full_suffix_page_size));
-        suf_buff[(int) (number * suffix_record_size / full_suffix_page_size)].get(key.get_fwd_suffix(), 0, suf_len / 4);
-    }
-
-    public int get_kmer_count(long number) {
-        suf_buff[(int) (number * suffix_record_size / full_suffix_page_size)].position((int) (number * suffix_record_size % full_suffix_page_size) + suf_len / 4);
-        return suf_buff[(int) (number * suffix_record_size / full_suffix_page_size)].get() & 0x00FF;
-    }
-
-    /**
-     * Reads a pointer from the kmer index.
-     * @param poniter The pointer
-     * @param number Number of the pointer.
-     */
-    public void get_pointer(IndexPointer poniter, long number) throws IllegalArgumentException {
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int)(number * POINTER_LENGTH % full_pointer_page_size));
-        poniter.node_id = read_long(buff,id_len);
-        poniter.offset = read_int(buff,offset_len);
-        poniter.canonical = buff.get() == 0;
-        poniter.next_index=read_long(buff,id_len);
-    }
-    
-    /**
-     * Writes a pointer in the index database
-     * @param poniter The pointer
-     * @param number Number of the pointer.
-     */
-    public void put_pointer(IndexPointer poniter, long number){
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int)(number * POINTER_LENGTH % full_pointer_page_size));
-        write_long(buff, poniter.node_id, id_len);
-        write_int(buff, poniter.offset, offset_len);
-        buff.put((byte) (poniter.canonical ? 0 : 1));
-        write_long(buff, poniter.next_index, id_len);
-    }
-
-    public void put_pointer(long node_id, int offset, boolean canonical,long next_index, long number){
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int)(number * POINTER_LENGTH % full_pointer_page_size));
-        write_long(buff, node_id, id_len);
-        write_int(buff, offset, offset_len);
-        buff.put((byte) (canonical ? 0 : 1));
-        write_long(buff, next_index, id_len);
-    }
-    
-    /**
-     * Reads the node id of a kmer from the index database.
-     * @param number Number of the kmer in the index
-     * @return The id of node
-     */
-    public long get_node_id(long number) {
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int) (number * POINTER_LENGTH % full_pointer_page_size));
-        return read_long(buff, id_len);
-    }
-
-    /**
-     * Writes the node id of a kmer into the index database.
-     * @param node_id The node id to be written
-     * @param number Number of the kmer in the index
-     */
-    public void put_node_id(long node_id, long number) {
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int) (number * POINTER_LENGTH % full_pointer_page_size));
-        write_long(buff, node_id, id_len);
-    }
-
-    /**
-     * Reads the position of a kmer in the node where it occurs.
-     * @param number Number of the kmer in the index
-     * @return The position in the node
-     */
-    public int get_position(long number){
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int) (number * POINTER_LENGTH % full_pointer_page_size) + id_len);
-        return read_int(buff, offset_len);
-    }
-
-    /**
-     * Writes the position of a kmer in the node where it occurs.
-     * @param position The node id to be written
-     * @param number Number of the kmer in the index
-     */
-    public void put_position(int position, long number) {
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int) (number * POINTER_LENGTH % full_pointer_page_size) + id_len);
-        write_int(buff, position, offset_len);
-    }
-
-    /**
-     * Looks if a kmer has been canonical at the first visit.
-     * @param number Number of the kmer in the index
-     * @return The canonical status
-     */
-    public boolean get_canonical(long number) {
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int) (number * POINTER_LENGTH % full_pointer_page_size) + id_len + offset_len);
-        return buff.get() == 0;
-    }
-
-    /**
-     * Writes the canonical status of a kmer at the first visit.
-     * @param canonical The canonical status to be written ( 0 if it was canonical, 1 otherwise )
-     * @param number Number of the kmer in the index
-     */
-    public void put_canonical(boolean canonical, long number) {
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int) (number * POINTER_LENGTH % full_pointer_page_size) + id_len + offset_len);
-        buff.put((byte) (canonical ? 0 : 1));
-    }
-    
-    public long get_next_index(long number) {
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int) (number * POINTER_LENGTH % full_pointer_page_size) + id_len + offset_len + 1);
-        return read_long(buff, id_len);
-    }
-
-    public void put_next_index(long next_index, long number) {
-        MappedByteBuffer buff = ptr_buff[(int) (number * POINTER_LENGTH / full_pointer_page_size)];
-        buff.position((int) (number * POINTER_LENGTH % full_pointer_page_size) + id_len + offset_len + 1);
-        write_long(buff, next_index, id_len);
-    }  
-    /**
-     * Finds the number of a kmer in the database.
-     * 
-     * @param k_mer The kmer object
-     * @return The number of kmer
-     */
-    public long find(kmer k_mer) {
-        long low, mid, high;
-        int j, comp, prefix = k_mer.get_canonical_prefix();;
-        byte[] suffix = k_mer.get_canonical_suffix();
-        low = prefix_ptr[prefix];
-        if (prefix == prefix_ptr.length - 1) {
-            high = kmers_num - 1;
-        } else {
-            high = prefix_ptr[prefix + 1] - 1;
-        }
-        while (low <= high) {
-            mid = (low + high) / 2;
-            j = (int) (mid * suffix_record_size / full_suffix_page_size);
-            suf_buff[j].position((int) (mid * suffix_record_size % full_suffix_page_size));
-            suf_buff[j].get(key.get_canonical_suffix(), 0, suf_len / 4);
-            comp = compare_suffix(suffix, key.get_canonical_suffix());
-            if (comp == -1) {
-                high = mid - 1;
-            } else if (comp == 1) {
-                low = mid + 1;
-            } else {
-                return mid;
-            }
-        }
-        return -1L; // not found
-    }
-    
     /**
      * Converts the byte array to an integer value.
      * @param b The byte array
@@ -946,6 +705,6 @@ public final class IndexDatabase {
     }
     
     public int get_pointer_length(){
-        return POINTER_LENGTH;
+        return poniter_length;
     }
 }

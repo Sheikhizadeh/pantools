@@ -8,9 +8,13 @@
 package pantools;
 
 import index.IndexDatabase;
+import index.IndexScanner;
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
@@ -19,6 +23,8 @@ import java.lang.management.MemoryUsage;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.apache.commons.compress.compressors.CompressorInputStream;
+import org.apache.commons.compress.compressors.CompressorStreamFactory;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.Node;
@@ -43,8 +49,9 @@ public class Pantools {
 
     public static GraphDatabaseService graphDb;
     public static IndexDatabase indexDb;
+    public static IndexScanner indexSc;    
     public static SequenceDatabase genomeDb;
-    public static SequenceScanner genome_scanner;    
+    public static SequenceScanner genomeSc;    
 
     public static String PATH_TO_THE_PANGENOME_DATABASE;
     public static String PATH_TO_THE_GENOMES_FILE;
@@ -52,6 +59,7 @@ public class Pantools {
     public static String PATH_TO_THE_ANNOTATIONS_FILE;
     public static String PATH_TO_THE_REGIONS_FILE;
     public static String PATH_TO_THE_GENOME_NUMBERS_FILE;
+    public static String RAW_ABUNDANCE_FILE = "";
     public static String PATH_TO_THE_FIRST_SRA;
     public static String PATH_TO_THE_SECOND_SRA;
     public static String FEATURE = "gene";
@@ -64,9 +72,9 @@ public class Pantools {
     public static int MIN_PROTEIN_IDENTITY = 95;
 
     public static int K_SIZE = -1;
-    public static int MAX_ALIGNMENT_LENGTH = 1000;
+    public static int MAX_ALIGNMENT_LENGTH = 2000;
     public static int GAP_OPEN = -20;
-    public static int GAP_EXT = -2;
+    public static int GAP_EXT = -3;
     public static int ANCHORS_DISTANCE = 10000; // The distance between two anchor nodes
     public static int MAX_TRANSACTION_SIZE = 100;    //   The number of transactions to be committed in batch
     public static int cores = Runtime.getRuntime().availableProcessors();
@@ -75,21 +83,26 @@ public class Pantools {
     public static boolean SHOW_KMERS;
     public static int THREADS = 1;
     
-    public static double MIN_MAPPING_SCORE = 20.0;
-    public static int NUM_KMER_SAMPLES = 20;
-    public static int MAX_NUM_LOCATIONS = 20;
-    public static int MIN_HIT_LENGTH = 20;
+    public static double MIN_IDENTITY = 0.5;
+    public static int NUM_KMER_SAMPLES = 15;
+    public static int MAX_NUM_LOCATIONS = 15;
+    public static int MIN_HIT_LENGTH = 13;
     public static int MAX_FRAGMENT_LENGTH = 5000;
-    public static int ALIGNMENT_BOUND = 3;    
-    public static int ALIGNMENT_MODE = 2; // 0: Competitive only-best    
-                                          // 1: Competitive all_bests
-                                          // 2: Normal only_best
-                                          // 3: Normal all_bests
-    public static int CLIPPING_STRINGENCY = 0; // 0: no-clipping
+    public static int ALIGNMENT_BOUND = 5;    
+    public static int SHOULDER = 100;    
+    public static int ALIGNMENT_MODE = 2; // 0: all-hits    
+                                          // -1: pan-genomic unique_best
+                                          // -2: pan-genomic random_best
+                                          // -3: pan-genomic all_bests
+                                          // 1: genomic unique_best
+                                          // 2: genomic random_best
+                                          // 3: genomic all_bests
+    public static int CLIPPING_STRINGENCY = 1; // 0: no-clipping
                                                // 1: low
                                                // 2: medium
                                                // 3: high    
     public static boolean BAMFORMAT = false;
+    public static boolean INTERLEAVED = false;
     
     public static Label pangenome_label = Label.label("pangenome");
     public static Label genome_label = Label.label("genome");
@@ -107,9 +120,7 @@ public class Pantools {
     public static Label exon_label = Label.label("exon");
     public static Label intron_label = Label.label("intron");
     public static Label feature_label = Label.label("feature");
-    public static Label broken_protein_label = Label.label("broken_protein");
     public static Label homology_group_label = Label.label("homology_group");
-    public static Label low_complexity_label = Label.label("low_complexity");   
     
     public static enum RelTypes implements RelationshipType {
         FF, FR, RF, RR,
@@ -125,6 +136,10 @@ public class Pantools {
         varies
     }
 
+    public static char[] sym = new char[]{'A', 'C', 'G', 'T', 'M', 'R', 'W', 'S', 'Y', 'K', 'V', 'H', 'D', 'B', 'N'};
+    public static int[] complement = new int[]{3, 2, 1, 0, 9, 8, 6, 7, 5, 4, 13, 12, 11, 10, 14};
+    public static int[] binary = new int[256];
+   
     public static long startTime;
     public static long phaseTime;
     public static long num_nodes;
@@ -151,6 +166,21 @@ public class Pantools {
             print_help_message();
             System.exit(1);
         }
+        binary['A'] = 0;
+        binary['C'] = 1;
+        binary['G'] = 2;
+        binary['T'] = 3;
+        binary['M'] = 4;
+        binary['R'] = 5;
+        binary['W'] = 6;
+        binary['S'] = 7;
+        binary['Y'] = 8;
+        binary['K'] = 9;
+        binary['V'] = 10;
+        binary['H'] = 11;
+        binary['D'] = 12;
+        binary['B'] = 13;
+        binary['N'] = 14; 
         seqLayer = new GenomeLayer();
         annLayer = new AnnotationLayer();
         proLayer = new ProteomeLayer();
@@ -182,7 +212,12 @@ public class Pantools {
                         break;
                     case "--out-path": case "-op":
                         OUTPUT_PATH = args[i + 1];
-                        System.out.println("OUTPUT_PATH = " + OUTPUT_PATH);
+                        theDir = new File(OUTPUT_PATH);
+                        if (!theDir.exists()) {
+                                System.out.println(OUTPUT_PATH + " does not exist!");
+                                System.exit(1);
+                        } else
+                            System.out.println("OUTPUT_PATH = " + OUTPUT_PATH);
                         break;
                     case "--genomes-file": case "-gf":
                         PATH_TO_THE_GENOMES_FILE = args[i + 1];
@@ -368,20 +403,25 @@ public class Pantools {
                                 System.exit(1);
                         }
                         break;
+                    case "--interleaved": case "-il":
+                        INTERLEAVED = true;
+                        --i;
+                        System.out.println("INTERLEAVED = true");
+                        break;
                     case "--bam-format": case "-bf":
                         BAMFORMAT = true;
                         --i;
                         System.out.println("BAMFORMAT = true");
                         break;
-                    case "--min_mapping-score": case "-mms":
+                    case "--min_mapping-identity": case "-mmi":
                         x = Integer.parseInt(args[i + 1]);
                         if (x >= 0 && x < 100)
-                           MIN_MAPPING_SCORE = x;
+                           MIN_IDENTITY = x;
                         else {
-                            System.out.println("Choose MIN_MAPPING_SCORE in the range [0..100[ or do not specify it to use the default value.");
+                            System.out.println("Choose MIN_IDENTITY in the range [0..100[ or do not specify it to use the default value.");
                             System.exit(1);
                         }
-                        System.out.println("MIN_MAPPING_SCORE = " + MIN_MAPPING_SCORE);
+                        System.out.println("MIN_IDENTITY = " + MIN_IDENTITY);
                         break;
                     case "--num-kmer-samples": case "-nks":
                         x = Integer.parseInt(args[i + 1]);
@@ -447,21 +487,39 @@ public class Pantools {
                         ALIGNMENT_MODE = Integer.parseInt(args[i + 1]);
                         switch (ALIGNMENT_MODE){
                             case 0:
-                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : Competitive, only-best");
+                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : all-hits");
+                            break;
+                            case -1:
+                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : unique pangenomic-best");
+                            break;
+                            case -2:
+                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : random pangenomic-best");
+                            break;
+                            case -3:
+                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : all pangenomic-bests");
                             break;
                             case 1:
-                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : Competitive, all-bests");
+                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : unique genomic-best");
                             break;
                             case 2:
-                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : Normal, only-best");
+                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : random genomic-best");
                             break;
                             case 3:
-                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : Normal, all-bests");
+                                System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : all genomic-bests");
                             break;
                             default:    
-                                System.out.println("Choose ALIGNMENT_MODE 0 for best or 1 for all-bests mode, or do not specify it to use the default value.");
+                                System.out.println("Choose ALIGNMENT_MODE in range [-3..3] or leave it to use the default value.");
                                 System.exit(1);
                         }
+                        break;
+                    case "--raw-abundance-file": case "-raf":
+                        RAW_ABUNDANCE_FILE = args[i + 1];
+                        theDir = new File(RAW_ABUNDANCE_FILE);
+                        if (!theDir.exists()) {
+                                System.out.println(RAW_ABUNDANCE_FILE + " does not exist!");
+                                System.exit(1);
+                        }
+                        System.out.println("RAW_ABUNDANCE_FILE = " + RAW_ABUNDANCE_FILE);
                         break;
                     case "--help": case "-h":
                         print_help_message();
@@ -816,7 +874,7 @@ public class Pantools {
     public static void reverse_complement(StringBuilder s) {
         char ch;
         int i, j;
-        for ( i=0, j = s.length() - 1; i < j; ++i, --j) {
+        for (i = 0, j = s.length() - 1; i < j; ++i, --j) {
             ch = s.charAt(i);
             s.setCharAt(i, complement(s.charAt(j)));
             s.setCharAt(j, complement(ch));
@@ -889,4 +947,86 @@ public class Pantools {
         }
         return success;
     }
+    
+    public static boolean is_fasta(String file_name){
+        try{
+            BufferedReader in = open_file(file_name);
+            String line;
+            while ((line = in.readLine()) != null){
+                if (line.equals("")) 
+                    continue;
+                else {
+                    in.close();
+                    return line.charAt(0) == '>';
+                }            
+            }
+        } catch (IOException ex){
+            System.err.println(ex.getMessage());
+        }
+        return false;
+    }
+
+    public static boolean is_fastq(String file_name){
+        try{
+            BufferedReader in = open_file(file_name);
+            String line;
+            while ((line = in.readLine()) != null){
+                if (line.equals("")) 
+                    continue;
+                else {
+                    in.close();
+                    return line.charAt(0) == '@';
+                }
+            }
+        } catch (IOException ex){
+            System.err.println(ex.getMessage());
+        }
+        return false;
+    }
+    
+    public static BufferedReader open_file(String filename){
+        try{        
+            String[] fields = filename.split("\\.");
+            String file_type = fields[fields.length - 1].toLowerCase();
+            if (file_type.equals("gz") || file_type.equals("gzip") || file_type.equals("bz2") || file_type.equals("bzip2"))
+                return getBufferedReaderForCompressedFile(filename);//BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(filename)), "UTF-8"));                    
+            else 
+                return new BufferedReader(new BufferedReader(new FileReader(filename)));                    
+        } catch (IOException ex){
+            System.out.println(ex.getMessage());
+            return null;
+        }
+    }
+    
+    public static int get_lines_count(String file_name, boolean skip_empty){
+        int count = 0;
+        try{
+            BufferedReader in = open_file(file_name);
+            String line;
+            while ((line = in.readLine()) != null){
+                if (skip_empty && line.equals("")) 
+                    continue;
+                ++count;
+            }
+            in.close();
+        } catch (IOException ex){
+            System.err.println(ex.getMessage());
+        }
+        return count;
+    }
+    
+    public static BufferedReader getBufferedReaderForCompressedFile(String fileIn){
+        try{
+            FileInputStream fin = new FileInputStream(fileIn);
+            BufferedInputStream bis = new BufferedInputStream(fin);
+            CompressorInputStream input = new CompressorStreamFactory().createCompressorInputStream(bis);
+            BufferedReader br2 = new BufferedReader(new InputStreamReader(input));
+            return br2;
+        } catch (Exception ex){
+            System.err.println(ex.getMessage() + "\nFailed to open the compresse file!");
+            return null;
+        }
+    }    
+
+
 }

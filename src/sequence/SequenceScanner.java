@@ -6,8 +6,11 @@
 package sequence;
 
 import index.IndexDatabase;
+import index.IndexScanner;
 import index.kmer;
 import static pantools.Pantools.DEBUG;
+import static pantools.Pantools.complement;
+import static pantools.Pantools.sym;
 
 /**
  *
@@ -28,7 +31,7 @@ public class SequenceScanner {
         database = db;
         position = 0;
         K = k;
-        curr_kmer = new kmer(K,pre_len);
+        curr_kmer = new kmer(K, pre_len);
     }
     
     public int get_genome(){
@@ -202,9 +205,9 @@ public class SequenceScanner {
             long pos = database.sequence_start[g][s] + p / 2;
             b = database.genomes_buff[(int) (pos / database.MAX_BYTE_COUNT)].get((int) (pos % database.MAX_BYTE_COUNT));
             if (p % 2 == 0) {
-                return database.sym[(b >> 4) & 0x0f];
+                return sym[(b >> 4) & 0x0f];
             } else {
-                return database.sym[b & 0x0f];
+                return sym[b & 0x0f];
             }
         } else {
             return 0;
@@ -224,9 +227,9 @@ public class SequenceScanner {
             long pos = database.sequence_start[g][s] + p / 2;
             b = database.genomes_buff[(int) (pos / database.MAX_BYTE_COUNT)].get((int) (pos % database.MAX_BYTE_COUNT));
             if (p % 2 == 0) {
-                return database.sym[database.complement[(b >> 4) & 0x0f]];
+                return sym[complement[(b >> 4) & 0x0f]];
             } else {
-                return database.sym[database.complement[(b & 0x0f)]];
+                return sym[complement[(b & 0x0f)]];
             }
         } else {
             return 0;
@@ -269,9 +272,9 @@ public class SequenceScanner {
             long pos = database.sequence_start[g][s] + p / 2;
             b = database.genomes_buff[(int) (pos / database.MAX_BYTE_COUNT)].get((int) (pos % database.MAX_BYTE_COUNT));
             if (p % 2 == 0) {
-                return database.complement[(b >> 4) & 0x0f];
+                return complement[(b >> 4) & 0x0f];
             } else {
-                return database.complement[(b & 0x0f)];
+                return complement[(b & 0x0f)];
             }
         } else {
             return -1;
@@ -284,9 +287,9 @@ public class SequenceScanner {
             long pos = database.sequence_start[genome][sequence] + (position + offset) / 2;
             b = database.genomes_buff[(int) (pos / database.MAX_BYTE_COUNT)].get((int) (pos % database.MAX_BYTE_COUNT));
             if ((position + offset) % 2 == 0) {
-                return database.complement[(b >> 4) & 0x0f];
+                return complement[(b >> 4) & 0x0f];
             } else {
-                return database.complement[(b & 0x0f)];
+                return complement[(b & 0x0f)];
             }
         } else {
             return -1;
@@ -432,7 +435,7 @@ public class SequenceScanner {
         return tmp_kmer;             
     }   
     
-    public long find_curr_kmer(IndexDatabase inx){
+    public long find_curr_kmer(IndexScanner inx){
         curr_index = inx.find(curr_kmer);
         return curr_index;
     }
