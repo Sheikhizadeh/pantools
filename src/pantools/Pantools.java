@@ -754,11 +754,11 @@ public class Pantools {
 "   --database_path or -dp\n" +
 "      path to the pangenome database. \n" +
 "   -1 \n" +
-"      a text file containing path to the first short-read archive in FASTQ\n" +
-"      or FASTA format. \n" +
+"      the first short-read archive in FASTQ format, which can be \n" +
+"      gz/bz2 compressed. This file can be precessed interleaved by -il option.\n" +
 "   -2 \n" +
-"      optionally, a text file containing path to the second short-read \n" +
-"      archive in FASTQ or FASTA format. \n" +
+"      optionally, the second short-read archive in FASTQ format, which can be \n" +
+"      gz/bz2 compressed. \n" +
 "   --genome-numbers or -gn\n" +
 "      a text file containing genome_numbers to map reads against in \n" +
 "      each line. \n" +
@@ -766,34 +766,41 @@ public class Pantools {
 "      path to the output files.\n" +
 "   --threads-number or -tn (default = 1) \n" +
 "      the number of parallel working threads\n" +
-"   --min-mapping-score or -mms (default = 20)\n" +
-"      the minimum of read mapping score\n" +
-"   --num-kmer-samples or -nks (default = 20)\n" +
+"   --min-mapping-identity or -mm1 (default = 0.5)\n" +
+"      the minimum acceptable identity of the alignment\n" +
+"   --num-kmer-samples or -nks (default = 15)\n" +
 "      the number of kmers sampled from read\n" +
-"   --min-hit-length or -mhl (default = 17)\n" +
+"   --min-hit-length or -mhl (default = 13)\n" +
 "      the minimum acceptable length of alignment after soft-clipping\n" +
 "   --max-alignment-length or -mal (default = 1000)\n" +
 "      the maximum acceptable length of alignment\n" +
 "   --max-fragment-length or -mfl (default = 2000)\n" +
 "      the maximum acceptable length of fragment\n" +
-"   --max-num-locations or -mnl (default = 20)\n" +
+"   --max-num-locations or -mnl (default = 15)\n" +
 "      the maximum number of location of candidate hits to examine\n" +
-"   --alignment-bound or -ab (default = 7)\n" +
+"   --alignment-bound or -ab (default = 5)\n" +
 "      the length of bound of banded alignment\n" +
-"   --clipping-stringency or -ci (default = 2)\n" +
+"   --clipping-stringency or -ci (default = 1)\n" +
 "      the stringency of soft-clipping  \n" +
 "      0 : no soft clipping\n" +
 "      1 : low\n" +
 "      2 : medium\n" +
 "      3 : high\n" +
-"   --bam-format or -bf (default = FALSE)\n" +
-"      the alignment format (.sam or .bam)\n" +
-"   --alignment-mode or -am (default = 0)\n" +
+"   --bam-format or -bf \n" +
+"      the alignment file in .BAM format \n" +
+"   --alignment-mode or -am (default = 2)\n" +
 "      the alignment mode\n" +
-"      0 : Competitive, only-best\n" +
-"      1 : Competitive, all-bests\n" +
-"      2 : Normal, only-best\n" +
+"      -1 : Competitive, unique-bests\n" +
+"      -2 : Competitive, random-best\n" +
+"      -3 : Competitive, all-bests\n" +
+"      1 : Normal, unique-bests\n" +
+"      2 : Normal, random-best\n" +
 "      3 : Normal, all-bests\n" +
+"      0 : Normal, all-hits\n" +
+"\n" +
+"   --interleaved or -i\n" +
+"      precess the fastq file as interleaved paired-end reads\n" +
+"\n" +
 "<version or v>\n" +
 "   To show the versions of PanTools and Neo4j.\n" +
 "   \n" +
