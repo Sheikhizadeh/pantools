@@ -194,10 +194,11 @@ public class Pantools {
             labels.put(label_strings[i], Label.label(label_strings[i]));
         System.out.println("\n------------------------------- PanTools ------------------------------");
         try{
-            for (i = 1; i < args.length; i += 2){
+            for (i = 1; i < args.length;){
                 switch (args[i]){
                     case "--kmer-size": case "-ks":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= 6 && x <= 255)
                             K_SIZE = x;
                         else {
@@ -208,10 +209,12 @@ public class Pantools {
                         break;
                     case "--db-path": case "-dp":
                         PATH_TO_THE_PANGENOME_DATABASE = args[i + 1];
+                        i += 2;
                         System.out.println("PATH_TO_THE_PANGENOME_DATABASE = " + PATH_TO_THE_PANGENOME_DATABASE);
                         break;
                     case "--out-path": case "-op":
                         OUTPUT_PATH = args[i + 1];
+                        i += 2;
                         theDir = new File(OUTPUT_PATH);
                         if (!theDir.exists()) {
                                 System.out.println(OUTPUT_PATH + " does not exist!");
@@ -221,6 +224,7 @@ public class Pantools {
                         break;
                     case "--genomes-file": case "-gf":
                         PATH_TO_THE_GENOMES_FILE = args[i + 1];
+                        i += 2;
                         theDir = new File(PATH_TO_THE_GENOMES_FILE);
                         if (!theDir.exists()) {
                                 System.out.println(PATH_TO_THE_GENOMES_FILE + " does not exist!");
@@ -230,6 +234,7 @@ public class Pantools {
                         break;
                     case "--proteomes-file": case "-pf":
                         PATH_TO_THE_PROTEOMES_FILE = args[i + 1];
+                        i += 2;
                         theDir = new File(PATH_TO_THE_PROTEOMES_FILE);
                         if (!theDir.exists()) {
                                 System.out.println(PATH_TO_THE_PROTEOMES_FILE + " does not exist!");
@@ -239,6 +244,7 @@ public class Pantools {
                         break;
                     case "--annotations-file": case "-af":
                         PATH_TO_THE_ANNOTATIONS_FILE = args[i + 1];
+                        i += 2;
                         theDir = new File(PATH_TO_THE_ANNOTATIONS_FILE);
                         if (!theDir.exists()) {
                                 System.out.println(PATH_TO_THE_ANNOTATIONS_FILE + " does not exist!");
@@ -248,11 +254,12 @@ public class Pantools {
                         break;
                     case "--connect-annotations": case "-ca":
                         CONNECT_ANNOTATIONS = true;
-                        --i;
+                        i += 1;
                         System.out.println("CONNECT_ANNOTATIONS = true");
                         break;
                     case "--regions-file": case "-rf":
                         PATH_TO_THE_REGIONS_FILE = args[i + 1];
+                        i += 2;
                         theDir = new File(PATH_TO_THE_REGIONS_FILE);
                         if (!theDir.exists()) {
                                 System.out.println(PATH_TO_THE_REGIONS_FILE + " does not exist!");
@@ -262,6 +269,7 @@ public class Pantools {
                         break;
                     case "--genome-numbers": case "-gn":
                         PATH_TO_THE_GENOME_NUMBERS_FILE = args[i + 1];
+                        i += 2;
                         theDir = new File(PATH_TO_THE_GENOME_NUMBERS_FILE);
                         if (!theDir.exists()) {
                                 System.out.println(PATH_TO_THE_GENOME_NUMBERS_FILE + " does not exist!");
@@ -271,6 +279,7 @@ public class Pantools {
                         break;
                     case "--intersection-rate": case "-ir": 
                         y = Double.parseDouble(args[i + 1]);
+                        i += 2;
                         if (y >= 0.001 && y <= 0.1)
                             INTERSECTION_RATE = y;
                         else {
@@ -281,6 +290,7 @@ public class Pantools {
                         break;
                     case "--similarity-threshold": case "-st": 
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x > 0 && x < 100)
                             MIN_PROTEIN_IDENTITY = x;
                         else {
@@ -291,6 +301,7 @@ public class Pantools {
                         break;
                     case "--mcl-inflation": case "-mi": 
                         y = Double.parseDouble(args[i + 1]);
+                        i += 2;
                         if (y > 1 && y < 19)
                             MCL_INFLATION = y;
                         else {
@@ -301,6 +312,7 @@ public class Pantools {
                         break;
                     case "--contrast": case "-ct": 
                         y = Double.parseDouble(args[i + 1]);
+                        i += 2;
                         if (y > 0 && y < 10)
                             CONTRAST = y;
                         else {
@@ -311,6 +323,7 @@ public class Pantools {
                         break;
                     case "--relaxation": case "-rn": 
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= 1 && x <= 8){
                             INTERSECTION_RATE = new double[] {0, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01}[x];
                             MIN_PROTEIN_IDENTITY = new int[]   {0,95, 85, 75, 65, 55, 45, 35, 25}[x];
@@ -328,6 +341,7 @@ public class Pantools {
                         break;
                     case "--threads_number": case "-tn":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x < cores)
                             THREADS = x;
                         else {
@@ -338,6 +352,7 @@ public class Pantools {
                         break;
                     case "--gap-open": case "-go":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= -50 && x <= -1)
                             GAP_OPEN = x;
                         else {
@@ -348,6 +363,7 @@ public class Pantools {
                         break;
                     case "--gap-extention": case "-ge":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= -5 && x <= -1)
                             GAP_EXT = x;
                         else {
@@ -363,10 +379,12 @@ public class Pantools {
                             System.out.println(args[i + 1] + " is an unknown feature.");
                             System.exit(1);
                         }
+                        i += 2;
                         System.out.println("FEATURE = " + FEATURE);
                         break;
                     case "--first_sra": case "-1":
                         PATH_TO_THE_FIRST_SRA = args[i + 1];
+                        i += 2;
                         theDir = new File(PATH_TO_THE_FIRST_SRA);
                         if (!theDir.exists()) {
                                 System.out.println(PATH_TO_THE_FIRST_SRA + " does not exist!");
@@ -376,6 +394,7 @@ public class Pantools {
                         break;
                     case "--second_sra": case "-2":
                         PATH_TO_THE_SECOND_SRA = args[i + 1];
+                        i += 2;
                         theDir = new File(PATH_TO_THE_SECOND_SRA);
                         if (!theDir.exists()) {
                                 System.out.println(PATH_TO_THE_SECOND_SRA + " does not exist!");
@@ -385,6 +404,7 @@ public class Pantools {
                         break;
                     case "--clip_strigency": case "-cs":
                         CLIPPING_STRINGENCY = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         switch (CLIPPING_STRINGENCY){
                             case 0:
                             System.out.println("CLIPPING_STRINGENCY = " + CLIPPING_STRINGENCY + " : no-clipping");
@@ -405,26 +425,28 @@ public class Pantools {
                         break;
                     case "--interleaved": case "-il":
                         INTERLEAVED = true;
-                        --i;
+                        i += 1;
                         System.out.println("INTERLEAVED = true");
                         break;
                     case "--bam-format": case "-bf":
                         BAMFORMAT = true;
-                        --i;
+                        i += 1;
                         System.out.println("BAMFORMAT = true");
                         break;
                     case "--min_mapping-identity": case "-mmi":
-                        x = Integer.parseInt(args[i + 1]);
-                        if (x >= 0 && x < 100)
-                           MIN_IDENTITY = x;
+                        y = Double.parseDouble(args[i + 1]);
+                        i += 2;
+                        if (y >= 0 && y < 1)
+                           MIN_IDENTITY = y;
                         else {
-                            System.out.println("Choose MIN_IDENTITY in the range [0..100[ or do not specify it to use the default value.");
+                            System.out.println("Choose MIN_IDENTITY in the range [0..1[ or do not specify it to use the default value.");
                             System.exit(1);
                         }
                         System.out.println("MIN_IDENTITY = " + MIN_IDENTITY);
                         break;
                     case "--num-kmer-samples": case "-nks":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= 1)
                            NUM_KMER_SAMPLES = x;
                         else {
@@ -435,6 +457,7 @@ public class Pantools {
                         break;
                     case "--max-alignment-length": case "-mal":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= 50 && x<=5000)
                            MAX_ALIGNMENT_LENGTH = x;
                         else {
@@ -445,6 +468,7 @@ public class Pantools {
                         break;
                     case "--max-fragment-length": case "-mfl":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= 50 && x<=5000)
                            MAX_FRAGMENT_LENGTH = x;
                         else {
@@ -455,6 +479,7 @@ public class Pantools {
                         break;
                     case "--min-hit_length": case "-mhl":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= 10 && x <= 100)
                            MIN_HIT_LENGTH = x;
                         else {
@@ -465,6 +490,7 @@ public class Pantools {
                         break;
                     case "--alignment_bound": case "-ab":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= 1 && x <= 100)
                            ALIGNMENT_BOUND = x;
                         else {
@@ -475,6 +501,7 @@ public class Pantools {
                         break;
                     case "--max-num-locations": case "-mnl":
                         x = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         if (x >= 1 && x <= 100)
                            MAX_NUM_LOCATIONS = x;
                         else {
@@ -485,6 +512,7 @@ public class Pantools {
                         break;
                     case "--alignment-mode": case "-am":
                         ALIGNMENT_MODE = Integer.parseInt(args[i + 1]);
+                        i += 2;
                         switch (ALIGNMENT_MODE){
                             case 0:
                                 System.out.println("ALIGNMENT_MODE = " + ALIGNMENT_MODE + " : all-hits");
@@ -514,6 +542,7 @@ public class Pantools {
                         break;
                     case "--raw-abundance-file": case "-raf":
                         RAW_ABUNDANCE_FILE = args[i + 1];
+                        i += 2;
                         theDir = new File(RAW_ABUNDANCE_FILE);
                         if (!theDir.exists()) {
                                 System.out.println(RAW_ABUNDANCE_FILE + " does not exist!");
