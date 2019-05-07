@@ -323,14 +323,14 @@ public class AnnotationLayer {
                         if (parent_node != null)
                             parent_node.createRelationshipTo(feature_node, RelTypes.is_parent_of);
                         if (CONNECT_ANNOTATIONS){
-                            start_ptr = locate(graphDb, genomeSc, indexSc, address[0], address[1], address[2]);
+                            start_ptr = locate(graphDb, genomeSc, indexSc, address[0], address[1], address[2] - 1);
                             offset = start_ptr.offset;
                             node = graphDb.getNodeById(start_ptr.node_id);
                             rel = feature_node.createRelationshipTo(node, RelTypes.starts);
                             rel.setProperty("offset", offset);
                             rel.setProperty("genomic_position", address[2]);
                             rel.setProperty("forward", start_ptr.canonical);
-                            stop_ptr = locate(graphDb, genomeSc, indexSc, address[0], address[1], address[3]);
+                            stop_ptr = locate(graphDb, genomeSc, indexSc, address[0], address[1], address[3] - 1);
                             rel = feature_node.createRelationshipTo(graphDb.getNodeById(stop_ptr.node_id), RelTypes.stops);
                             rel.setProperty("offset", stop_ptr.offset);
                             rel.setProperty("genomic_position", address[2] + feature_len - 1);
